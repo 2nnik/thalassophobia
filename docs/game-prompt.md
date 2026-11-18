@@ -1,6 +1,6 @@
 # Thalassophobia: build prompt
 
-You are building **Thalassophobia**, a 1–4 player online co-op horror game. The players share a small submersible cage and descend to the ocean floor, retrieve an artifact, and ascend alive. They survive by keeping the cage's stations running and responding correctly to four kinds of sea monster. Mistakes get the whole crew killed.
+You are building **Thalassophobia**, a 1–4 player online co-op horror game. The players share a small submersible cage and descend to the ocean floor, retrieve an artifact, and ascend alive. They survive by keeping the cage's stations running and responding correctly to five kinds of sea monster. Mistakes get the whole crew killed.
 
 ## Platform and design decisions
 - **Engine**: built in **Roblox Studio** (Luau). Use Roblox matchmaking/teleport services for queues, private servers for parties, and the built-in voice chat for communication. Game state is server-authoritative (server scripts own stations, battery, monsters, cracks; clients only send inputs).
@@ -14,7 +14,7 @@ You are building **Thalassophobia**, a 1–4 player online co-op horror game. Th
 2. **Descent**: the cage sinks. Threat frequency rises with depth. Players tend stations and react to monsters.
 3. **Bottom**: the cage reaches the sea floor. One player (or the crew) picks up the **artifact**. This triggers the ascent.
 4. **Ascent**: monsters are **much more active and aggressive** than on the way down. Power is already low and the cage is probably damaged.
-5. **Results**: surviving with the artifact pays out money. Dying pays out a reduced amount (or nothing; see open questions).
+5. **Results**: surviving with the artifact pays out money. Dying still pays out **money per depth reached**.
 6. **Meta-progression**: spend money on **traits** (perks) that help in later runs. Traits are bought between runs and equipped before launch.
 
 ## The cage and its stations
@@ -54,8 +54,8 @@ The cage is a cramped, cage-like submersible with distinct sections that each ho
 ### 4. The Hull Swarm ("Barnacle Cloud")
 - A swarm of small creatures that sticks to the outside of the cage and gradually damages or blinds it (for example blocking light or draining power).
 - **Counter**: one player must **leave the cage through the airlock** and clear the swarm by hand. This is the riskiest job in the game.
-- The player outside is on a **tether** with **limited oxygen** and a **short view distance**, so the crew inside has to call out when it is safe.
-- **Risk**: leaving at the wrong time, while another monster is near, means that player **dies**. The crew inside must call out when it is safe, for example by watching sonar and the other monsters.
+- The player outside is on a **tether** with **limited oxygen** and a **short view distance**.
+- **Risk**: leaving at the wrong time, while another monster is near, means that player **dies**. The crew inside must call out when it is safe to go, for example by watching sonar and the other monsters.
 - It needs cooperation: the outside player cannot see everything, and the inside crew cannot reach the swarm.
 
 ### 5. The Pursuer ("Stillness Hunter", ascent only)
