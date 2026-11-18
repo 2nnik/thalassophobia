@@ -1,0 +1,1830 @@
+<?xml version="1.0" encoding="utf-8"?>
+<roblox version="4"><Item class="Workspace" referent="RBX26"><Properties><string name="Name">Workspace</string></Properties></Item><Item class="ReplicatedStorage" referent="RBX27"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX3"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX1"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[-- All tunable numbers live here. Pure data, no Roblox APIs, so the simulation can be tested outside Studio.
+local Config = {}
+
+-- Fill these in after publishing the two places. 0 = Studio test mode (run directly, no lobby).
+Config.Places = { Lobby = 0, Run = 0 }
+
+Config.MaxPlayers = 4
+
+-- The cage is a line of sections: Bow - Midship - Stern - Airlock
+Config.Sections = { "Bow", "Midship", "Stern", "Airlock" }
+Config.CrackSections = { "Bow", "Midship", "Stern" }
+Config.Adjacent = {
+	Bow = { "Midship" },
+	Midship = { "Bow", "Stern" },
+	Stern = { "Midship", "Airlock" },
+	Airlock = { "Stern" },
+}
+
+Config.Difficulties = {
+	Easy      = { monsterRate = 0.7,  monsterSpeed = 0.8, reaction = 1.4,  battery = 0.8, crack = 0.7, ascent = 1.4, money = 0.75 },
+	Normal    = { monsterRate = 1.0,  monsterSpeed = 1.0, reaction = 1.0,  battery = 1.0, crack = 1.0, ascent = 1.8, money = 1.0 },
+	Hard      = { monsterRate = 1.35, monsterSpeed = 1.2, reaction = 0.75, battery = 1.2, crack = 1.4, ascent = 2.2, money = 1.6 },
+	Nightmare = { monsterRate = 1.7,  monsterSpeed = 1.4, reaction = 0.55, battery = 1.4, crack = 1.8, ascent = 2.8, money = 2.5 },
+}
+Config.DifficultyOrder = { "Easy", "Normal", "Hard", "Nightmare" }
+
+-- Index = number of living players. Fewer players => less active monsters.
+Config.PlayerScale = {
+	rate  = { 0.6, 0.75, 0.9, 1.0 },
+	speed = { 0.8, 0.9, 0.95, 1.0 },
+}
+
+Config.Cage = {
+	MaxDepth = 1500,      -- metres
+	DescentSpeed = 5,     -- m/s with engine on
+	DriftDescent = 1.5,   -- m/s with engine off (gravity)
+	AscentSpeed = 5,      -- m/s with engine on
+	ArtifactSpeedMult = 0.75,
+	CoastTime = 4,        -- seconds of momentum after the engine is killed on the ascent
+	SinkSpeed = 1,        -- m/s sinking once momentum is gone
+	Hull = 100,
+}
+
+Config.Battery = { Max = 300, Base = 0.08, Engine = 0.2, Light = 0.5, SwarmDrain = 0.3, ArtifactMult = 1.15 }
+Config.Light = { Cone = 30 } -- half angle, degrees
+Config.Cracks = { FirstDelay = 30, Interval = 45, Max = 6, RepairTime = 4 }
+Config.Extinguisher = { Sections = { "Bow", "Midship", "Stern" }, Capacity = 100, SprayDrain = 20, RefillRate = 40 }
+Config.Outside = { Oxygen = 45, DangerGrace = 2 }
+
+Config.Shark   = { Warning = 6, NearTime = 14, Reaction = 4, Damage = 50, CracksOnHit = 2, AttackCooldown = 5 }
+Config.Squid   = { StartDist = 100, CloseSpeed = 3.5, PushSpeed = 12, RetreatDist = 110, Drift = 15,
+                   Far = 70, Near = 40, VeryNear = 15 }
+Config.Crawler = { MinCrackAge = 15, Warning = 8, KillTime = 25, MoveTime = 10, SprayNeeded = 4, SprayDecay = 0.5 }
+Config.Swarm   = { GrowTime = 60, ClearTime = 12 }
+Config.Pursuer = { MinSpeedFrac = 0.4, FillRate = 8, DrainRate = 6 }
+
+Config.Director = {
+	BaseRate = 0.02, MinGap = 8, MaxConcurrent = 3, MaxConcurrentAscent = 4,
+	OverlapChance = 0.25, AscentSpeedMult = 1.25,
+	Unlock = { Shark = 100, Squid = 250, Crawler = 150, Swarm = 400 },
+	Weights = { Shark = 3, Squid = 3, Crawler = 2, Swarm = 1.5 },
+}
+
+Config.Money = { PerMeter = 0.5, SurviveBonus = 250, ArtifactBonus = 250 }
+Config.Shop = { EquipSlots = 3 }
+Config.Match = { WaitSeconds = 15 }
+Config.Run = { JoinWait = 20, EndDelay = 12 }
+
+-- Traits apply crew-wide, each trait id counts once. Effects multiply; `flicker` adds.
+Config.Traits = {
+	battery_cell    = { name = "Extended Battery", cost = 400, effects = { battery = 1.3, flicker = 1 },
+	                    drawback = "Light flickers" },
+	wide_beam       = { name = "Wide Beam", cost = 300, effects = { lightCone = 1.4, lightDrain = 1.2 },
+	                    drawback = "Light drains 20% more" },
+	quick_hands     = { name = "Quick Hands", cost = 250, effects = { repair = 1.5 } },
+	muffled_engine  = { name = "Muffled Engine", cost = 350, effects = { sharkReaction = 1.5, thrust = 0.85 },
+	                    drawback = "15% less thrust" },
+	big_extinguisher = { name = "Big Extinguisher", cost = 200, effects = { extCapacity = 1.6 } },
+	rebreather      = { name = "Rebreather", cost = 250, effects = { oxygen = 1.5 } },
+}
+
+return Config
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX2"><Properties><string name="Name">Remotes</string><ProtectedString name="Source"><![CDATA[-- Creates (server) or waits for (client) all RemoteEvents under ReplicatedStorage.Remotes.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local NAMES = { "State", "Events", "LightAim", "Spray", "Scrub", "LobbyAction", "LobbyState" }
+
+local folder
+if RunService:IsServer() then
+	folder = ReplicatedStorage:FindFirstChild("Remotes")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "Remotes"
+		folder.Parent = ReplicatedStorage
+	end
+	for _, name in ipairs(NAMES) do
+		if not folder:FindFirstChild(name) then
+			local remote = Instance.new("RemoteEvent")
+			remote.Name = name
+			remote.Parent = folder
+		end
+	end
+else
+	folder = ReplicatedStorage:WaitForChild("Remotes")
+end
+
+local Remotes = {}
+for _, name in ipairs(NAMES) do
+	Remotes[name] = folder:WaitForChild(name)
+end
+return Remotes
+]]></ProtectedString></Properties></Item></Item></Item><Item class="ServerScriptService" referent="RBX28"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Folder" referent="RBX19"><Properties><string name="Name">Server</string></Properties><Item class="Script" referent="RBX4"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[-- Entry point. The same build is published to two places: a lobby and the run place.
+-- With Config.Places left at 0 (Studio testing) it just starts a run.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Services = script.Parent.Services
+
+local isLobby = Config.Places.Lobby ~= 0 and game.PlaceId == Config.Places.Lobby
+if isLobby then
+	require(Services.Lobby).start()
+else
+	require(Services.RunController).start()
+end
+]]></ProtectedString></Properties></Item><Item class="Folder" referent="RBX9"><Properties><string name="Name">Services</string></Properties><Item class="ModuleScript" referent="RBX5"><Properties><string name="Name">CageBuilder</string><ProtectedString name="Source"><![CDATA[-- Builds the cage procedurally so the prototype needs no hand-made map. Replace with a real model later:
+-- the controller only needs zones (Zone_<Section> parts), prompts (with Kind/Id attributes) and a light part.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local CageBuilder = {}
+
+local ORIGIN = Vector3.new(0, 300, 0)
+local LEN, WIDTH, HEIGHT = 9, 12, 9 -- per section
+local FLOOR_Y = -HEIGHT / 2
+
+local function make(parent, name, size, cf, color, extra)
+	local p = Instance.new("Part")
+	p.Name, p.Size, p.CFrame, p.Anchored = name, size, cf, true
+	p.Color = color or Color3.fromRGB(60, 62, 66)
+	p.Material = Enum.Material.Metal
+	p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
+	for k, v in pairs(extra or {}) do p[k] = v end
+	p.Parent = parent
+	return p
+end
+
+local function prompt(part, kind, text, hold, id)
+	local pp = Instance.new("ProximityPrompt")
+	pp.ActionText, pp.ObjectText = text, ""
+	pp.HoldDuration = hold or 0
+	pp.MaxActivationDistance = 9
+	pp.RequiresLineOfSight = false
+	pp:SetAttribute("Kind", kind)
+	if id then pp:SetAttribute("Id", id) end
+	pp.Parent = part
+	return pp
+end
+
+function CageBuilder.sectionCenter(section)
+	for i, name in ipairs(Config.Sections) do
+		if name == section then
+			return ORIGIN + Vector3.new(0, 0, -18 + (i - 1) * LEN + LEN / 2)
+		end
+	end
+end
+
+local function atmosphere()
+	Lighting.Ambient = Color3.fromRGB(8, 12, 18)
+	Lighting.OutdoorAmbient = Color3.fromRGB(8, 12, 18)
+	Lighting.Brightness = 0
+	Lighting.ClockTime = 0
+	Lighting.FogColor = Color3.fromRGB(2, 8, 12)
+	Lighting.FogStart, Lighting.FogEnd = 5, 160
+	local a = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere")
+	a.Density, a.Color, a.Parent = 0.55, Color3.fromRGB(10, 30, 40), Lighting
+end
+
+-- Returns { model, zones, prompts, lightPart, claw, ledge, airlockCFrame, addCrack(id, section), removeCrack(id) }
+function CageBuilder.build()
+	atmosphere()
+	local old = Workspace:FindFirstChild("Cage")
+	if old then old:Destroy() end
+	local model = Instance.new("Model")
+	model.Name = "Cage"
+	local cage = { model = model, zones = {}, cracks = {}, prompts = {} }
+
+	make(model, "Floor", Vector3.new(WIDTH, 1, LEN * 4), CFrame.new(ORIGIN + Vector3.new(0, FLOOR_Y - 0.5, 0)))
+	make(model, "Roof", Vector3.new(WIDTH, 1, LEN * 4), CFrame.new(ORIGIN + Vector3.new(0, HEIGHT / 2 + 0.5, 0)))
+	-- vertical bars on both sides, every 3 studs
+	for zi = 0, 12 do
+		for _, x in ipairs({ -WIDTH / 2, WIDTH / 2 }) do
+			make(model, "Bar", Vector3.new(0.4, HEIGHT, 0.4),
+				CFrame.new(ORIGIN + Vector3.new(x, 0, -18 + zi * 3)), Color3.fromRGB(40, 42, 46))
+		end
+	end
+	for _, z in ipairs({ -18, 18 }) do -- end walls
+		make(model, "EndWall", Vector3.new(WIDTH, HEIGHT, 0.6), CFrame.new(ORIGIN + Vector3.new(0, 0, z)))
+	end
+
+	for _, name in ipairs(Config.Sections) do
+		local c = CageBuilder.sectionCenter(name)
+		cage.zones[name] = make(model, "Zone_" .. name, Vector3.new(WIDTH, HEIGHT + 4, LEN), CFrame.new(c),
+			nil, { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+		local lamp = make(model, "Lamp_" .. name, Vector3.new(1, 0.3, 1), CFrame.new(c + Vector3.new(0, HEIGHT / 2 - 0.3, 0)),
+			Color3.fromRGB(90, 40, 30), { Material = Enum.Material.Neon })
+		local light = Instance.new("PointLight")
+		light.Brightness, light.Range, light.Color = 0.7, 14, Color3.fromRGB(255, 120, 90)
+		light.Parent = lamp
+	end
+
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Anchored, spawn.Neutral, spawn.Transparency, spawn.CanCollide = true, true, 1, false
+	spawn.Size, spawn.Duration = Vector3.new(6, 1, 6), 0
+	spawn.CFrame = CFrame.new(CageBuilder.sectionCenter("Midship") + Vector3.new(0, FLOOR_Y + 0.5, 0))
+	spawn.Parent = model
+
+	-- Stern: engine switch + extinguisher refill
+	local sternC = CageBuilder.sectionCenter("Stern")
+	local engine = make(model, "Engine", Vector3.new(2, 3, 2), CFrame.new(sternC + Vector3.new(-4, FLOOR_Y + 1.5, 0)),
+		Color3.fromRGB(150, 60, 40))
+	cage.prompts.Engine = prompt(engine, "Engine", "Toggle engine", 0)
+	local refill = make(model, "Refill", Vector3.new(2, 3, 2), CFrame.new(sternC + Vector3.new(4, FLOOR_Y + 1.5, 0)),
+		Color3.fromRGB(40, 110, 150))
+	cage.prompts.Refill = prompt(refill, "Refill", "Refill extinguisher (hold)", 1)
+
+	-- Bow: light console + claw
+	local bowC = CageBuilder.sectionCenter("Bow")
+	local console = make(model, "LightConsole", Vector3.new(3, 3, 1.5), CFrame.new(bowC + Vector3.new(-3, FLOOR_Y + 1.5, -2)),
+		Color3.fromRGB(200, 190, 90))
+	cage.prompts.Light = prompt(console, "Light", "Toggle light (aim with camera)", 0)
+	local claw = make(model, "Claw", Vector3.new(3, 3, 1.5), CFrame.new(bowC + Vector3.new(3, FLOOR_Y + 1.5, -2)),
+		Color3.fromRGB(90, 200, 120))
+	cage.prompts.Claw = prompt(claw, "Claw", "Grab artifact", 0)
+	cage.prompts.Claw.Enabled = false
+
+	cage.lightPart = make(model, "Spotlight", Vector3.new(1, 1, 1), CFrame.new(bowC + Vector3.new(0, 1, -4)),
+		Color3.fromRGB(255, 255, 220), { Material = Enum.Material.Neon, CanCollide = false })
+	local spot = Instance.new("SpotLight")
+	spot.Face, spot.Range, spot.Angle, spot.Brightness, spot.Enabled = Enum.NormalId.Front, 140, 50, 8, false
+	spot.Parent = cage.lightPart
+	cage.spot = spot
+
+	-- Extinguishers on the wall mounts
+	for i, section in ipairs(Config.Extinguisher.Sections) do
+		local c = CageBuilder.sectionCenter(section)
+		local ext = make(model, "Extinguisher" .. i, Vector3.new(1, 2.5, 1),
+			CFrame.new(c + Vector3.new(WIDTH / 2 - 1, FLOOR_Y + 3, 3)), Color3.fromRGB(190, 30, 30))
+		prompt(ext, "Ext", "Take extinguisher", 0, i)
+	end
+
+	-- Airlock: hatch out, with a ledge outside for the diver
+	local airC = CageBuilder.sectionCenter("Airlock")
+	local hatch = make(model, "Hatch", Vector3.new(4, 6, 0.5), CFrame.new(airC + Vector3.new(0, FLOOR_Y + 3, LEN / 2 - 0.5)),
+		Color3.fromRGB(110, 110, 120))
+	prompt(hatch, "HatchOut", "Exit cage", 0)
+	cage.ledge = make(model, "Ledge", Vector3.new(10, 1, 8), CFrame.new(airC + Vector3.new(0, FLOOR_Y - 0.5, LEN / 2 + 4.5)))
+	local back = make(model, "HatchBack", Vector3.new(3, 3, 0.5), CFrame.new(airC + Vector3.new(0, FLOOR_Y + 2, LEN / 2 + 1)),
+		Color3.fromRGB(110, 110, 120))
+	prompt(back, "HatchIn", "Enter cage", 0)
+	cage.ledgeCFrame = CFrame.new(airC + Vector3.new(0, FLOOR_Y + 3.5, LEN / 2 + 5))
+	cage.airlockCFrame = CFrame.new(airC + Vector3.new(0, FLOOR_Y + 3.5, 0))
+
+	model.PrimaryPart = cage.zones.Midship
+	model.Parent = Workspace
+
+	function cage.sectionOf(position)
+		for name, zone in pairs(cage.zones) do
+			local rel = zone.CFrame:PointToObjectSpace(position)
+			local s = zone.Size
+			if math.abs(rel.X) <= s.X / 2 and math.abs(rel.Y) <= s.Y / 2 and math.abs(rel.Z) <= s.Z / 2 then
+				return name
+			end
+		end
+		return nil
+	end
+
+	function cage.addCrack(id, section)
+		local c = CageBuilder.sectionCenter(section)
+		local side = (id % 2 == 0) and 1 or -1
+		local z = (math.random() - 0.5) * (LEN - 2)
+		local part = make(model, "Crack" .. id, Vector3.new(0.3, 3, 1.4),
+			CFrame.new(c + Vector3.new(side * (WIDTH / 2 - 0.2), FLOOR_Y + 3, z)), Color3.fromRGB(20, 120, 160),
+			{ Material = Enum.Material.Neon, CanCollide = false })
+		prompt(part, "Repair", "Repair crack (hold)", Config.Cracks.RepairTime, id)
+		cage.cracks[id] = part
+	end
+
+	function cage.removeCrack(id)
+		if cage.cracks[id] then cage.cracks[id]:Destroy() end
+		cage.cracks[id] = nil
+	end
+
+	return cage
+end
+
+return CageBuilder
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX6"><Properties><string name="Name">Economy</string><ProtectedString name="Source"><![CDATA[-- Persistent money and traits. All writes go through here so the rules (cost, equip slots) live in one place.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local Economy = {}
+local store = DataStoreService:GetDataStore("Thalassophobia_v1")
+local profiles = {}
+
+local function default()
+	return { money = 0, owned = {}, equipped = {} }
+end
+
+local function retry(fn)
+	for attempt = 1, 3 do
+		local ok, result = pcall(fn)
+		if ok then return true, result end
+		task.wait(attempt)
+	end
+	return false, nil
+end
+
+function Economy.Load(player)
+	if profiles[player] then return profiles[player] end
+	local ok, data = retry(function() return store:GetAsync("u_" .. player.UserId) end)
+	local profile = default()
+	if ok and type(data) == "table" then
+		profile.money = tonumber(data.money) or 0
+		profile.owned = type(data.owned) == "table" and data.owned or {}
+		profile.equipped = type(data.equipped) == "table" and data.equipped or {}
+	end
+	profile.loaded = ok -- never overwrite saved data if the load failed
+	profiles[player] = profile
+	return profile
+end
+
+function Economy.Get(player)
+	return profiles[player]
+end
+
+function Economy.Save(player)
+	local profile = profiles[player]
+	if not profile or not profile.loaded then return false end
+	local payload = { money = profile.money, owned = profile.owned, equipped = profile.equipped }
+	return (retry(function()
+		store:UpdateAsync("u_" .. player.UserId, function() return payload end)
+	end))
+end
+
+function Economy.Award(player, amount)
+	local profile = Economy.Load(player)
+	profile.money = profile.money + math.max(0, math.floor(amount))
+	Economy.Save(player)
+end
+
+local function has(list, id)
+	for _, v in ipairs(list) do if v == id then return true end end
+	return false
+end
+
+function Economy.Buy(player, id)
+	local profile, trait = Economy.Load(player), Config.Traits[id]
+	if not trait then return false, "Unknown trait" end
+	if has(profile.owned, id) then return false, "Already owned" end
+	if profile.money < trait.cost then return false, "Not enough money" end
+	profile.money = profile.money - trait.cost
+	table.insert(profile.owned, id)
+	Economy.Save(player)
+	return true
+end
+
+function Economy.Equip(player, id, on)
+	local profile = Economy.Load(player)
+	if not Config.Traits[id] or not has(profile.owned, id) then return false, "Not owned" end
+	for i, v in ipairs(profile.equipped) do
+		if v == id then table.remove(profile.equipped, i) break end
+	end
+	if on then
+		if #profile.equipped >= Config.Shop.EquipSlots then return false, "No free slots" end
+		table.insert(profile.equipped, id)
+	end
+	Economy.Save(player)
+	return true
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	Economy.Save(player)
+	profiles[player] = nil
+end)
+
+game:BindToClose(function()
+	for player in pairs(profiles) do Economy.Save(player) end
+end)
+
+return Economy
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX7"><Properties><string name="Name">Lobby</string><ProtectedString name="Source"><![CDATA[-- Lobby place: shop, solo start and cross-server matchmaking (max 4 per run).
+-- UNTESTED in Studio: MemoryStore/MessagingService/Teleport only work in a published experience.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
+local MemoryStoreService = game:GetService("MemoryStoreService")
+local MessagingService = game:GetService("MessagingService")
+local HttpService = game:GetService("HttpService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local Economy = require(script.Parent.Economy)
+
+local Lobby = {}
+
+local function validDifficulty(d)
+	return type(d) == "string" and Config.Difficulties[d] ~= nil
+end
+
+local function sendState(player, message)
+	local profile = Economy.Load(player)
+	Remotes.LobbyState:FireClient(player, {
+		money = profile.money, owned = profile.owned, equipped = profile.equipped, message = message,
+	})
+end
+
+local function teleportGroup(players, code, difficulty, expected)
+	local options = Instance.new("TeleportOptions")
+	options.ReservedServerAccessCode = code
+	options:SetTeleportData({ difficulty = difficulty, expected = expected })
+	pcall(function() TeleportService:TeleportAsync(Config.Places.Run, players, options) end)
+end
+
+function Lobby.start()
+	-- every lobby server listens for finished matches and teleports its own players
+	pcall(function()
+		MessagingService:SubscribeAsync("ThalassoMatch", function(message)
+			local data = HttpService:JSONDecode(message.Data)
+			local mine = {}
+			for _, userId in ipairs(data.users) do
+				local player = Players:GetPlayerByUserId(userId)
+				if player then mine[#mine + 1] = player end
+			end
+			if #mine > 0 then teleportGroup(mine, data.code, data.difficulty, #data.users) end
+		end)
+	end)
+
+	Remotes.LobbyAction.OnServerEvent:Connect(function(player, action, arg1, arg2)
+		if action == "Sync" then
+			sendState(player)
+		elseif action == "Buy" then
+			local ok, msg = Economy.Buy(player, arg1)
+			sendState(player, ok and "Purchased" or msg)
+		elseif action == "Equip" then
+			local ok, msg = Economy.Equip(player, arg1, arg2 == true)
+			sendState(player, ok and "Updated loadout" or msg)
+		elseif action == "Solo" and validDifficulty(arg1) then
+			Economy.Save(player)
+			teleportGroup({ player }, TeleportService:ReserveServer(Config.Places.Run), arg1, 1)
+		elseif action == "Queue" and validDifficulty(arg1) then
+			local queue = MemoryStoreService:GetQueue("Match_" .. arg1, 60)
+			local ok = pcall(function()
+				queue:AddAsync({ userId = player.UserId, t = os.time() }, 120)
+			end)
+			sendState(player, ok and "Searching for a crew..." or "Matchmaking unavailable")
+		end
+	end)
+
+	-- Matcher loop: collect waiting players per difficulty, launch at 4 or after the wait time.
+	local pending = {}
+	for _, difficulty in ipairs(Config.DifficultyOrder) do
+		pending[difficulty] = { items = {}, first = nil, queue = MemoryStoreService:GetQueue("Match_" .. difficulty, 60) }
+	end
+	task.spawn(function()
+		while true do
+			task.wait(3)
+			for difficulty, group in pairs(pending) do
+				local ok, items, readId = pcall(function()
+					return group.queue:ReadAsync(Config.MaxPlayers - #group.items, false, 0)
+				end)
+				if ok and items and #items > 0 then
+					for _, item in ipairs(items) do group.items[#group.items + 1] = item end
+					group.first = group.first or os.clock()
+					group.readIds = group.readIds or {}
+					table.insert(group.readIds, readId)
+				end
+				local ready = #group.items >= Config.MaxPlayers
+					or (#group.items > 0 and group.first and os.clock() - group.first >= Config.Match.WaitSeconds)
+				if ready then
+					local users = {}
+					for _, item in ipairs(group.items) do users[#users + 1] = item.userId end
+					for _, id in ipairs(group.readIds or {}) do pcall(function() group.queue:RemoveAsync(id) end) end
+					local okReserve, code = pcall(function() return TeleportService:ReserveServer(Config.Places.Run) end)
+					if okReserve then
+						pcall(function()
+							MessagingService:PublishAsync("ThalassoMatch", HttpService:JSONEncode(
+								{ users = users, code = code, difficulty = difficulty }))
+						end)
+					end
+					pending[difficulty] = { items = {}, first = nil, queue = group.queue }
+				end
+			end
+		end
+	end)
+
+	Players.PlayerAdded:Connect(function(player) task.defer(sendState, player) end)
+end
+
+return Lobby
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX8"><Properties><string name="Name">RunController</string><ProtectedString name="Source"><![CDATA[-- Glue between Roblox and the pure simulation: players, prompts, remotes, cage visuals, run lifecycle.
+-- The simulation owns all game state; this file only forwards validated input and publishes state.
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local TeleportService = game:GetService("TeleportService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local Session = require(script.Parent.Parent.Sim.Session)
+local CageBuilder = require(script.Parent.CageBuilder)
+local Economy = require(script.Parent.Economy)
+
+local RunController = {}
+
+local function waitForCrew()
+	local t0 = os.clock()
+	while true do
+		local list = Players:GetPlayers()
+		local data = #list > 0 and list[1]:GetJoinData().TeleportData or nil
+		local expected = (type(data) == "table" and tonumber(data.expected)) or 1
+		if #list > 0 and (#list >= expected or os.clock() - t0 > Config.Run.JoinWait) then
+			return list, type(data) == "table" and data.difficulty or nil
+		end
+		task.wait(0.5)
+	end
+end
+
+local function moveCharacter(player, cf)
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if hrp then hrp.CFrame = cf end
+end
+
+function RunController.start()
+	Players.RespawnTime = 1000 -- the dead spectate until the run ends
+	local cage = CageBuilder.build()
+	local crew, difficulty = waitForCrew()
+
+	local list = {}
+	for _, player in ipairs(crew) do
+		local profile = Economy.Load(player)
+		list[#list + 1] = { id = player.UserId, traits = profile.equipped }
+	end
+	local session = Session.new(Config, { difficulty = difficulty, players = list })
+	local byId = {}
+	for _, player in ipairs(crew) do byId[player.UserId] = player end
+
+	local holds, spraying, scrubbing = {}, {}, {}
+	local lightOperator = nil
+	local ended = false
+
+	-- ------------------------------------------------------------ input
+	ProximityPromptService.PromptTriggered:Connect(function(prompt, player)
+		local kind, uid = prompt:GetAttribute("Kind"), player.UserId
+		if kind == "Engine" then
+			session:SetEngine(not session.engineOn)
+		elseif kind == "Light" then
+			lightOperator = uid
+			session:SetLight(not session.lightOn, session.lightYaw)
+		elseif kind == "Claw" then
+			session:PickUpArtifact(uid)
+		elseif kind == "Ext" then
+			session:GrabExtinguisher(uid, prompt:GetAttribute("Id"))
+		elseif kind == "HatchOut" then
+			if session:ExitAirlock(uid) then moveCharacter(player, cage.ledgeCFrame) end
+		elseif kind == "HatchIn" then
+			if session:EnterAirlock(uid) then moveCharacter(player, cage.airlockCFrame) end
+		end
+	end)
+	ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt, player)
+		local kind = prompt:GetAttribute("Kind")
+		if kind == "Repair" or kind == "Refill" then
+			holds[player.UserId] = { kind = kind, id = prompt:GetAttribute("Id") }
+		end
+	end)
+	ProximityPromptService.PromptButtonHoldEnded:Connect(function(_, player)
+		holds[player.UserId] = nil
+	end)
+
+	Remotes.LightAim.OnServerEvent:Connect(function(player, yaw)
+		local p = session.players[player.UserId]
+		if type(yaw) == "number" and yaw == yaw and math.abs(yaw) < 1e6 and p and p.alive and p.section == "Bow" then
+			session.lightYaw = yaw % 360
+		end
+	end)
+	Remotes.Spray.OnServerEvent:Connect(function(player, on)
+		spraying[player.UserId] = on == true or nil
+	end)
+	Remotes.Scrub.OnServerEvent:Connect(function(player, on)
+		scrubbing[player.UserId] = on == true or nil
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		local uid = player.UserId
+		session:RemovePlayer(uid)
+		holds[uid], spraying[uid], scrubbing[uid] = nil, nil, nil
+	end)
+
+	-- ------------------------------------------------------------ simulation events -> world
+	local function onEvent(e)
+		local d = e.data
+		if e.name == "CrackAppeared" then
+			cage.addCrack(d.id, d.section)
+		elseif e.name == "CrackRepaired" then
+			cage.removeCrack(d.id)
+		elseif e.name == "ReachedBottom" then
+			cage.prompts.Claw.Enabled = true
+		elseif e.name == "ArtifactTaken" then
+			cage.prompts.Claw.Enabled = false
+		elseif e.name == "PlayerDied" then
+			local player = byId[d.id]
+			local hum = player and player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if hum then hum.Health = 0 end
+		end
+		Remotes.Events:FireAllClients(e.name, d)
+	end
+
+	-- ------------------------------------------------------------ run end
+	local function endRun()
+		ended = true
+		local result = session:Result()
+		for uid, player in pairs(byId) do
+			local p = session.players[uid]
+			if player.Parent and p and not p.left then Economy.Award(player, result.money) end
+		end
+		Remotes.Events:FireAllClients("RunEnded", result)
+		task.wait(Config.Run.EndDelay)
+		if Config.Places.Lobby ~= 0 then
+			pcall(function() TeleportService:TeleportAsync(Config.Places.Lobby, Players:GetPlayers()) end)
+		else
+			print("[Thalassophobia] run over:", result.survived and "survived" or ("died: " .. tostring(result.reason)), result.money)
+		end
+	end
+
+	-- ------------------------------------------------------------ main loop
+	local sinceState = 0
+	RunService.Heartbeat:Connect(function(dt)
+		if ended then return end
+		for uid, p in pairs(session.players) do
+			local player = byId[uid]
+			local hrp = player and player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			if hrp and p.alive and not p.outside then
+				local section = cage.sectionOf(hrp.Position)
+				if section then session:SetPlayerSection(uid, section) end
+			end
+		end
+		for uid, h in pairs(holds) do
+			if h.kind == "Repair" then session:Repair(uid, h.id, dt) else session:Refill(uid, dt) end
+		end
+		for uid in pairs(spraying) do session:Spray(uid, dt) end
+		for uid in pairs(scrubbing) do session:Scrub(uid, dt) end
+
+		session:Tick(dt)
+		for _, e in ipairs(session:TakeEvents()) do onEvent(e) end
+
+		-- the spotlight follows the sim (server-side so everyone sees the same beam)
+		cage.spot.Enabled = session:LightEffective()
+		local bow = cage.lightPart.Position
+		cage.lightPart.CFrame = CFrame.new(bow) * CFrame.Angles(0, math.rad(session.lightYaw), 0)
+
+		sinceState = sinceState + dt
+		if sinceState >= 0.1 then
+			sinceState = 0
+			Remotes.State:FireAllClients(session:Snapshot())
+		end
+		if session.phase == "Won" or session.phase == "Dead" then task.spawn(endRun) end
+	end)
+end
+
+return RunController
+]]></ProtectedString></Properties></Item></Item><Item class="Folder" referent="RBX18"><Properties><string name="Name">Sim</string></Properties><Item class="ModuleScript" referent="RBX10"><Properties><string name="Name">Director</string><ProtectedString name="Source"><![CDATA[-- Decides when monsters spawn. Tension builds over time (faster when deeper, on the ascent, with more players
+-- and on harder difficulties); spawns may stack so several monsters attack at once.
+local Monsters = script.Parent.Monsters
+local KINDS = {
+	Shark = require(Monsters.Shark),
+	Squid = require(Monsters.Squid),
+	Crawler = require(Monsters.CrackCrawler),
+	Swarm = require(Monsters.Swarm),
+}
+local Pursuer = require(Monsters.Pursuer)
+
+local Director = {}
+Director.__index = Director
+Director.Kinds = KINDS
+
+function Director.new(session)
+	return setmetatable({ session = session, tension = 0, sinceLast = 0, pursuerSpawned = false }, Director)
+end
+
+function Director:Rate()
+	local s = self.session
+	local depthFrac = math.min(s.depth / s.cfg.Cage.MaxDepth, 1)
+	local rate = s.cfg.Director.BaseRate * (0.5 + depthFrac) * s.diff.monsterRate * s:PlayerScale()
+	if s.phase == "Ascent" then rate = rate * s.diff.ascent end
+	return rate
+end
+
+function Director:Active(kind)
+	for _, m in ipairs(self.session.monsters) do
+		if m.kind == kind then return true end
+	end
+	return false
+end
+
+function Director:CountActive()
+	local n = 0
+	for _, m in ipairs(self.session.monsters) do
+		if m.kind ~= "Pursuer" then n = n + 1 end
+	end
+	return n
+end
+
+function Director:Pick()
+	local s = self.session
+	local cfg = s.cfg.Director
+	local options, total = {}, 0
+	for kind, module in pairs(KINDS) do
+		local allowed = s.maxDepth >= cfg.Unlock[kind] and not self:Active(kind)
+		if allowed and module.canSpawn and not module.canSpawn(s) then allowed = false end
+		if allowed then
+			options[#options + 1] = { kind = kind, w = cfg.Weights[kind] }
+			total = total + cfg.Weights[kind]
+		end
+	end
+	if total == 0 then return nil end
+	local roll = s.rng() * total
+	for _, o in ipairs(options) do
+		roll = roll - o.w
+		if roll <= 0 then return o.kind end
+	end
+	return options[#options].kind
+end
+
+function Director:Spawn(kind)
+	local s = self.session
+	s.monsters[#s.monsters + 1] = KINDS[kind].new(s)
+end
+
+function Director:Update(dt)
+	local s = self.session
+	local cfg = s.cfg.Director
+	if s.phase == "Ascent" and not self.pursuerSpawned then
+		self.pursuerSpawned = true
+		s.monsters[#s.monsters + 1] = Pursuer.new(s)
+	end
+	self.sinceLast = self.sinceLast + dt
+	self.tension = self.tension + self:Rate() * dt
+	local cap = (s.phase == "Ascent") and cfg.MaxConcurrentAscent or cfg.MaxConcurrent
+	if self.tension >= 1 and self.sinceLast >= cfg.MinGap and self:CountActive() < cap then
+		local kind = self:Pick()
+		if kind then
+			self:Spawn(kind)
+			self.tension, self.sinceLast = 0, 0
+			if s.rng() < cfg.OverlapChance and self:CountActive() < cap then
+				local second = self:Pick()
+				if second then self:Spawn(second) end
+			end
+		end
+	end
+end
+
+return Director
+]]></ProtectedString></Properties></Item><Item class="Folder" referent="RBX16"><Properties><string name="Name">Monsters</string></Properties><Item class="ModuleScript" referent="RBX11"><Properties><string name="Name">CrackCrawler</string><ProtectedString name="Source"><![CDATA[-- Crack Crawler: squeezes in through an unrepaired crack. Spray it with an extinguisher in whichever
+-- section it is in. If it is not driven out it kills someone.
+local Crawler = {}
+Crawler.__index = Crawler
+
+local function oldestUnclaimed(s)
+	local best
+	for _, crack in pairs(s.cracks) do
+		if not crack.claimed and crack.age >= s.cfg.Crawler.MinCrackAge and (not best or crack.age > best.age) then
+			best = crack
+		end
+	end
+	return best
+end
+
+function Crawler.canSpawn(s)
+	return oldestUnclaimed(s) ~= nil
+end
+
+function Crawler.new(s)
+	local c = s.cfg.Crawler
+	local crack = oldestUnclaimed(s)
+	crack.claimed = true
+	local self = setmetatable({ session = s, kind = "Crawler", done = false, state = "Scratching", crackId = crack.id,
+		section = crack.section, timer = c.Warning * s.diff.reaction, killTimer = 0, moveTimer = 0, spray = 0 }, Crawler)
+	s:Emit("MonsterWarning", { kind = "Crawler", section = crack.section })
+	return self
+end
+
+function Crawler:_release()
+	local crack = self.session.cracks[self.crackId]
+	if crack then crack.claimed, crack.age = false, 0 end
+end
+
+function Crawler:Update(dt)
+	local s, c = self.session, self.session.cfg.Crawler
+	if self.state == "Scratching" then
+		if not s.cracks[self.crackId] then
+			s:Emit("CrawlerGaveUp", {})
+			self.done = true
+			return
+		end
+		self.timer = self.timer - dt
+		if self.timer <= 0 then
+			self.state = "Inside"
+			self.killTimer = c.KillTime * s.diff.reaction
+			self.moveTimer = c.MoveTime
+			s:Emit("CrawlerEntered", { section = self.section })
+		end
+	elseif self.state == "Inside" then
+		self.killTimer = self.killTimer - dt
+		self.moveTimer = self.moveTimer - dt
+		if not self.sprayedNow then self.spray = math.max(0, self.spray - c.SprayDecay * dt) end
+		self.sprayedNow = false
+		if self.moveTimer <= 0 then
+			local adj = s.cfg.Adjacent[self.section]
+			self.section = adj[math.floor(s.rng() * #adj) + 1]
+			self.moveTimer = c.MoveTime
+			s:Emit("CrawlerMoved", { section = self.section })
+		end
+		if self.killTimer <= 0 then
+			local here, any = {}, {}
+			for id, p in pairs(s.players) do
+				if p.alive and not p.outside then
+					any[#any + 1] = id
+					if p.section == self.section then here[#here + 1] = id end
+				end
+			end
+			local pool = #here > 0 and here or any
+			if #pool > 0 then s:KillPlayer(pool[math.floor(s.rng() * #pool) + 1], "Crawler") end
+			self.killTimer = c.KillTime * s.diff.reaction
+		end
+	else
+		self.timer = self.timer - dt
+		if self.timer <= 0 then
+			self:_release()
+			self.done = true
+		end
+	end
+end
+
+function Crawler:OnSpray(section, dt)
+	if self.state ~= "Inside" or section ~= self.section then return end
+	self.spray = self.spray + dt
+	self.sprayedNow = true
+	if self.spray >= self.session.cfg.Crawler.SprayNeeded then
+		self.state, self.timer = "Leaving", 2
+		self.session:Emit("CrawlerLeft", {})
+	end
+end
+
+function Crawler:Snapshot()
+	return { kind = "Crawler", state = self.state, section = self.section,
+		progress = self.spray / self.session.cfg.Crawler.SprayNeeded }
+end
+
+return Crawler
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX12"><Properties><string name="Name">Pursuer</string><ProtectedString name="Source"><![CDATA[-- The Pursuer (ascent only): closes in whenever the cage is not rising fast enough. Keep moving.
+local Pursuer = {}
+Pursuer.__index = Pursuer
+
+function Pursuer.new(s)
+	local self = setmetatable({ session = s, kind = "Pursuer", done = false, meter = 0, stage = 0 }, Pursuer)
+	s:Emit("MonsterWarning", { kind = "Pursuer" })
+	return self
+end
+
+function Pursuer:Update(dt)
+	local s, c = self.session, self.session.cfg.Pursuer
+	local minSpeed = c.MinSpeedFrac * s.cfg.Cage.AscentSpeed
+	local v = s.verticalSpeed
+	if v < minSpeed then
+		local deficit = (minSpeed - math.max(v, 0)) / minSpeed
+		self.meter = self.meter + c.FillRate * deficit * s.diff.monsterSpeed * s:SpeedScale(true) * dt
+	else
+		self.meter = math.max(0, self.meter - c.DrainRate * dt)
+	end
+	local stage = self.meter >= 66 and 2 or (self.meter >= 33 and 1 or 0)
+	if stage ~= self.stage then
+		self.stage = stage
+		s:Emit("PursuerStage", { stage = stage })
+	end
+	if self.meter >= 100 then s:Kill("Pursuer") end
+end
+
+function Pursuer:OutsideDanger()
+	return self.meter > 60
+end
+
+function Pursuer:Snapshot()
+	return { kind = "Pursuer", state = tostring(self.stage), dist = 100 - self.meter, bearing = 180,
+		progress = self.meter / 100 }
+end
+
+return Pursuer
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX13"><Properties><string name="Name">Shark</string><ProtectedString name="Source"><![CDATA[-- Leviathan Shark: hunts by sound. Kill the engine while it is near.
+local Shark = {}
+Shark.__index = Shark
+
+function Shark.new(s)
+	local c = s.cfg.Shark
+	local self = setmetatable({ session = s, kind = "Shark", done = false, state = "Warning",
+		timer = c.Warning * s.diff.reaction, nearTimer = 0, engineOnTimer = 0 }, Shark)
+	s:Emit("MonsterWarning", { kind = "Shark" })
+	return self
+end
+
+function Shark:Update(dt)
+	local s, c = self.session, self.session.cfg.Shark
+	if self.state == "Warning" then
+		self.timer = self.timer - dt
+		if self.timer <= 0 then
+			self.state, self.nearTimer, self.engineOnTimer = "Near", c.NearTime, 0
+			s:Emit("SharkNear", {})
+		end
+	elseif self.state == "Near" then
+		self.nearTimer = self.nearTimer - dt
+		if s.engineOn then
+			self.engineOnTimer = self.engineOnTimer + dt
+			if self.engineOnTimer >= c.Reaction * s.diff.reaction * s.stats.sharkReaction then
+				s:DamageHull(c.Damage, "Shark")
+				s:AddCracks(c.CracksOnHit)
+				s:Emit("SharkAttack", {})
+				self.engineOnTimer = -c.AttackCooldown
+			end
+		else
+			self.engineOnTimer = 0
+		end
+		if self.nearTimer <= 0 then
+			self.state, self.timer = "Leaving", 3
+			s:Emit("SharkLeft", {})
+		end
+	else
+		self.timer = self.timer - dt
+		if self.timer <= 0 then self.done = true end
+	end
+end
+
+function Shark:OutsideDanger()
+	return self.state == "Near"
+end
+
+function Shark:Snapshot()
+	local c = self.session.cfg.Shark
+	local dist = 15
+	if self.state == "Warning" then
+		dist = 15 + 65 * math.max(self.timer, 0) / (c.Warning * self.session.diff.reaction)
+	elseif self.state == "Leaving" then
+		dist = 15 + 20 * (3 - math.max(self.timer, 0))
+	end
+	return { kind = "Shark", state = self.state, dist = dist, bearing = (self.session.time * 30) % 360 }
+end
+
+return Shark
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX14"><Properties><string name="Name">Squid</string><ProtectedString name="Source"><![CDATA[-- Giant Squid: creeps closer in the dark. Keep the light on it to push it back; too close and the cage is crushed.
+local Squid = {}
+Squid.__index = Squid
+
+function Squid.new(s)
+	local c = s.cfg.Squid
+	local self = setmetatable({ session = s, kind = "Squid", done = false, dist = c.StartDist,
+		bearing = s.rng() * 360, stage = "Far" }, Squid)
+	s:Emit("MonsterWarning", { kind = "Squid" })
+	return self
+end
+
+function Squid:_stageFor(d)
+	local c = self.session.cfg.Squid
+	if d > c.Far then return "Far" elseif d > c.Near then return "Near" elseif d > c.VeryNear then return "VeryNear" end
+	return "Lethal"
+end
+
+function Squid:Update(dt)
+	local s, c = self.session, self.session.cfg.Squid
+	if s:IsLit(self.bearing) then
+		self.dist = self.dist + c.PushSpeed * dt
+	else
+		self.dist = self.dist - c.CloseSpeed * s.diff.monsterSpeed * s:SpeedScale() * dt
+	end
+	self.bearing = (self.bearing + (s.rng() - 0.5) * 2 * c.Drift * dt) % 360
+	local stage = self:_stageFor(self.dist)
+	if stage ~= self.stage then
+		self.stage = stage
+		s:Emit("SquidStage", { stage = stage })
+	end
+	if self.dist <= 0 then
+		s:Kill("Squid")
+	elseif self.dist >= c.RetreatDist then
+		s:Emit("SquidLeft", {})
+		self.done = true
+	end
+end
+
+function Squid:OutsideDanger()
+	return self.dist < self.session.cfg.Squid.Near + 5
+end
+
+function Squid:Snapshot()
+	return { kind = "Squid", state = self.stage, dist = self.dist, bearing = self.bearing }
+end
+
+return Squid
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX15"><Properties><string name="Name">Swarm</string><ProtectedString name="Source"><![CDATA[-- Hull Swarm: clings to the outside, blinding the light and draining power. A diver must go out and scrub it off.
+local Swarm = {}
+Swarm.__index = Swarm
+
+function Swarm.new(s)
+	local self = setmetatable({ session = s, kind = "Swarm", done = false, coverage = 0.05 }, Swarm)
+	s.swarmCoverage = self.coverage
+	s:Emit("MonsterWarning", { kind = "Swarm" })
+	return self
+end
+
+function Swarm:Update(dt)
+	local s, c = self.session, self.session.cfg.Swarm
+	if not self.scrubbedNow then -- it stops spreading while a diver is scrubbing
+		self.coverage = math.min(1, self.coverage + dt / (c.GrowTime / (s.diff.monsterSpeed * s:SpeedScale())))
+	end
+	self.scrubbedNow = false
+	s.swarmCoverage = self.coverage
+	self:_checkDone()
+end
+
+function Swarm:OnScrub(dt)
+	self.scrubbedNow = true
+	self.coverage = self.coverage - dt / self.session.cfg.Swarm.ClearTime
+	self.session.swarmCoverage = math.max(self.coverage, 0)
+	self:_checkDone()
+end
+
+function Swarm:_checkDone()
+	if self.coverage <= 0 and not self.done then
+		self.coverage = 0
+		self.session.swarmCoverage = 0
+		self.session:Emit("SwarmCleared", {})
+		self.done = true
+	end
+end
+
+function Swarm:Snapshot()
+	return { kind = "Swarm", state = "Attached", coverage = self.coverage, dist = 0, bearing = 0 }
+end
+
+return Swarm
+]]></ProtectedString></Properties></Item></Item><Item class="ModuleScript" referent="RBX17"><Properties><string name="Name">Session</string><ProtectedString name="Source"><![CDATA[-- Pure game simulation for one run. No Roblox APIs: the server drives it with Tick(dt) and player actions,
+-- and reads Snapshot()/TakeEvents(). Everything here is server-authoritative.
+local Session = {}
+Session.__index = Session
+
+local function clamp(x, a, b)
+	if x < a then return a elseif x > b then return b end
+	return x
+end
+
+local function pick(rng, list)
+	return list[math.floor(rng() * #list) + 1]
+end
+
+function Session.computeStats(cfg, players)
+	local stats = { battery = 1, lightCone = 1, lightDrain = 1, repair = 1, sharkReaction = 1, thrust = 1,
+		extCapacity = 1, oxygen = 1, flicker = 0 }
+	local seen = {}
+	for _, p in ipairs(players or {}) do
+		for _, id in ipairs(p.traits or {}) do
+			local trait = cfg.Traits[id]
+			if trait and not seen[id] then
+				seen[id] = true
+				for key, value in pairs(trait.effects) do
+					if key == "flicker" then
+						stats.flicker = stats.flicker + value
+					else
+						stats[key] = (stats[key] or 1) * value
+					end
+				end
+			end
+		end
+	end
+	return stats
+end
+
+-- opts: difficulty, players = { {id=, traits={...}} }, rng, noDirector
+function Session.new(cfg, opts)
+	opts = opts or {}
+	local self = setmetatable({}, Session)
+	self.cfg = cfg
+	self.rng = opts.rng or math.random
+	self.diffName = cfg.Difficulties[opts.difficulty or ""] and opts.difficulty or "Normal"
+	self.diff = cfg.Difficulties[self.diffName]
+	self.stats = Session.computeStats(cfg, opts.players)
+
+	self.phase = "Descent" -- Descent | Bottom | Ascent | Won | Dead
+	self.time = 0
+	self.depth, self.maxDepth, self.verticalSpeed = 0, 0, 0
+	self.engineOn, self.lightOn, self.lightYaw = true, false, 0
+	self.coast = cfg.Cage.CoastTime
+	self.batteryMax = cfg.Battery.Max * self.stats.battery
+	self.battery = self.batteryMax
+	self.hull = cfg.Cage.Hull
+	self.hasArtifact = false
+	self.swarmCoverage = 0
+	self.flickerOut = 0
+	self.deathReason = nil
+
+	self.cracks, self.nextCrackId = {}, 1
+	self.crackTimer = cfg.Cracks.FirstDelay
+	self.monsters = {}
+	self.events = {}
+
+	self.players = {}
+	for _, p in ipairs(opts.players or {}) do
+		self.players[p.id] = { id = p.id, section = "Midship", alive = true, left = false, outside = false,
+			oxygen = 0, dangerTime = 0, heldExt = nil }
+	end
+
+	self.extinguishers = {}
+	local ec = cfg.Extinguisher
+	for i, section in ipairs(ec.Sections) do
+		self.extinguishers[i] = { id = i, section = section, holder = nil, charge = ec.Capacity * self.stats.extCapacity }
+	end
+
+	if not opts.noDirector then
+		self.director = require(script.Parent.Director).new(self)
+	end
+	return self
+end
+
+-- ---------------------------------------------------------------- helpers
+
+function Session:Emit(name, data)
+	self.events[#self.events + 1] = { name = name, data = data or {}, t = self.time }
+end
+
+function Session:TakeEvents()
+	local out = self.events
+	self.events = {}
+	return out
+end
+
+function Session:AliveCount()
+	local n = 0
+	for _, p in pairs(self.players) do
+		if p.alive then n = n + 1 end
+	end
+	return n
+end
+
+function Session:_scaleIndex()
+	return clamp(self:AliveCount(), 1, 4)
+end
+
+function Session:PlayerScale()
+	return self.cfg.PlayerScale.rate[self:_scaleIndex()]
+end
+
+-- How fast monsters move. Includes the ascent boost unless noAscent is set.
+function Session:SpeedScale(noAscent)
+	local s = self.cfg.PlayerScale.speed[self:_scaleIndex()]
+	if self.phase == "Ascent" and not noAscent then
+		s = s * self.cfg.Director.AscentSpeedMult
+	end
+	return s
+end
+
+function Session:LightEffective()
+	return self.lightOn and self.battery > 0 and self.flickerOut <= 0 and self.swarmCoverage < 0.99
+end
+
+function Session:LightCone()
+	return self.cfg.Light.Cone * self.stats.lightCone * (1 - 0.5 * self.swarmCoverage)
+end
+
+function Session:IsLit(bearing)
+	if not self:LightEffective() then return false end
+	local diff = math.abs((self.lightYaw - bearing + 180) % 360 - 180)
+	return diff <= self:LightCone()
+end
+
+function Session:CountCracks()
+	local n = 0
+	for _ in pairs(self.cracks) do n = n + 1 end
+	return n
+end
+
+function Session:AddCrack(section)
+	section = section or pick(self.rng, self.cfg.CrackSections)
+	local id = self.nextCrackId
+	self.nextCrackId = id + 1
+	self.cracks[id] = { id = id, section = section, age = 0, progress = 0, claimed = false }
+	self:Emit("CrackAppeared", { id = id, section = section })
+	return id
+end
+
+function Session:AddCracks(n)
+	for _ = 1, n do
+		if self:CountCracks() < self.cfg.Cracks.Max + 3 then self:AddCrack() end
+	end
+end
+
+function Session:DamageHull(amount, reason)
+	self.hull = self.hull - amount
+	self:Emit("HullHit", { amount = amount, hull = math.max(self.hull, 0) })
+	if self.hull <= 0 then
+		self.hull = 0
+		self:Kill(reason or "Hull")
+	end
+end
+
+function Session:Kill(reason)
+	if self.phase == "Dead" or self.phase == "Won" then return end
+	self.phase = "Dead"
+	self.deathReason = reason
+	self:Emit("RunDied", { reason = reason })
+end
+
+function Session:KillPlayer(id, reason)
+	local p = self.players[id]
+	if not p or not p.alive then return end
+	p.alive, p.outside = false, false
+	if p.heldExt then
+		self.extinguishers[p.heldExt].holder = nil
+		p.heldExt = nil
+	end
+	self:Emit("PlayerDied", { id = id, reason = reason })
+	if self:AliveCount() == 0 then self:Kill("Crew") end
+end
+
+-- A disconnect is not a death: the rest of the crew carries on.
+function Session:RemovePlayer(id)
+	local p = self.players[id]
+	if not p or p.left then return end
+	p.left, p.alive, p.outside = true, false, false
+	if p.heldExt then
+		self.extinguishers[p.heldExt].holder = nil
+		p.heldExt = nil
+	end
+	self:Emit("PlayerLeft", { id = id })
+	if self:AliveCount() == 0 then self:Kill("Crew") end
+end
+
+function Session:OutsideDanger()
+	for _, m in ipairs(self.monsters) do
+		if m.OutsideDanger and m:OutsideDanger() then return true end
+	end
+	return false
+end
+
+-- ---------------------------------------------------------------- tick
+
+function Session:Tick(dt)
+	if self.phase == "Dead" or self.phase == "Won" then return end
+	self.time = self.time + dt
+	self:_updateMovement(dt)
+	self:_updateBattery(dt)
+	self:_updateLight(dt)
+	self:_updateCracks(dt)
+
+	local list = {}
+	for i, m in ipairs(self.monsters) do list[i] = m end
+	for _, m in ipairs(list) do m:Update(dt) end
+	local kept = {}
+	for _, m in ipairs(self.monsters) do
+		if not m.done then kept[#kept + 1] = m end
+	end
+	self.monsters = kept
+
+	self:_updatePlayers(dt)
+	if self.director then self.director:Update(dt) end
+
+	if self.phase == "Ascent" and self.depth <= 0 then
+		self.depth = 0
+		self.phase = "Won"
+		self:Emit("RunWon", {})
+	end
+end
+
+function Session:_updateMovement(dt)
+	local c = self.cfg.Cage
+	if self.phase == "Descent" then
+		local rate = self.engineOn and (c.DescentSpeed * self.stats.thrust) or c.DriftDescent
+		self.verticalSpeed = -rate
+		self.depth = self.depth + rate * dt
+		if self.depth >= c.MaxDepth then
+			self.depth = c.MaxDepth
+			self.phase = "Bottom"
+			self.verticalSpeed = 0
+			self:Emit("ReachedBottom", {})
+		end
+	elseif self.phase == "Bottom" then
+		self.verticalSpeed = 0
+	elseif self.phase == "Ascent" then
+		local full = c.AscentSpeed * self.stats.thrust * (self.hasArtifact and c.ArtifactSpeedMult or 1)
+		if self.engineOn then
+			self.coast = c.CoastTime
+			self.verticalSpeed = full
+		else
+			self.coast = math.max(self.coast - dt, 0)
+			if self.coast > 0 then
+				self.verticalSpeed = full * (self.coast / c.CoastTime)
+			else
+				self.verticalSpeed = -c.SinkSpeed
+			end
+		end
+		self.depth = math.min(self.depth - self.verticalSpeed * dt, c.MaxDepth)
+	end
+	if self.depth > self.maxDepth then self.maxDepth = self.depth end
+end
+
+function Session:_updateBattery(dt)
+	local b = self.cfg.Battery
+	local drain = b.Base
+	if self.engineOn then drain = drain + b.Engine end
+	if self:LightEffective() then drain = drain + b.Light * self.stats.lightDrain end
+	drain = (drain + self.swarmCoverage * b.SwarmDrain) * self.diff.battery
+	if self.hasArtifact then drain = drain * b.ArtifactMult end
+	self.battery = self.battery - drain * dt
+	if self.battery <= 0 then
+		self.battery = 0
+		self.engineOn = false
+		self:Kill("Battery")
+	end
+end
+
+function Session:_updateLight(dt)
+	if self.flickerOut > 0 then
+		self.flickerOut = self.flickerOut - dt
+	elseif self.lightOn and self.stats.flicker > 0 and self.rng() < 0.1 * self.stats.flicker * dt then
+		self.flickerOut = 0.7
+	end
+end
+
+function Session:_updateCracks(dt)
+	local c = self.cfg.Cracks
+	for _, crack in pairs(self.cracks) do crack.age = crack.age + dt end
+	self.crackTimer = self.crackTimer - dt
+	if self.crackTimer <= 0 then
+		if self:CountCracks() < c.Max then self:AddCrack() end
+		local depthFrac = clamp(self.depth / self.cfg.Cage.MaxDepth, 0, 1)
+		self.crackTimer = c.Interval / (self.diff.crack * (1 + depthFrac)) * (0.7 + 0.6 * self.rng())
+	end
+end
+
+function Session:_updatePlayers(dt)
+	local oc = self.cfg.Outside
+	local danger = self:OutsideDanger()
+	for id, p in pairs(self.players) do
+		if p.alive and p.outside then
+			p.oxygen = p.oxygen - dt
+			if p.oxygen <= 0 then
+				self:KillPlayer(id, "Drowned")
+			elseif danger then
+				if p.dangerTime == 0 then self:Emit("OutsideDanger", { id = id }) end
+				p.dangerTime = p.dangerTime + dt
+				if p.dangerTime >= oc.DangerGrace * self.diff.reaction then
+					self:KillPlayer(id, "Eaten")
+				end
+			else
+				p.dangerTime = math.max(0, p.dangerTime - dt * 2)
+			end
+		end
+	end
+end
+
+-- ---------------------------------------------------------------- player actions (all validated)
+
+function Session:_player(id)
+	local p = self.players[id]
+	if p and p.alive then return p end
+	return nil
+end
+
+function Session:SetPlayerSection(id, section)
+	local p = self:_player(id)
+	if p and not p.outside and (section == "Bow" or section == "Midship" or section == "Stern" or section == "Airlock") then
+		p.section = section
+	end
+end
+
+function Session:SetEngine(on)
+	if self.phase == "Dead" or self.phase == "Won" then return false end
+	self.engineOn = on and self.battery > 0
+	return true
+end
+
+function Session:SetLight(on, yaw)
+	self.lightOn = on and true or false
+	if yaw then self.lightYaw = yaw % 360 end
+	return true
+end
+
+function Session:Repair(id, crackId, dt)
+	local p, crack = self:_player(id), self.cracks[crackId]
+	if not p or not crack or p.outside or p.section ~= crack.section then return false end
+	crack.progress = crack.progress + dt * self.stats.repair
+	if crack.progress >= self.cfg.Cracks.RepairTime then
+		self.cracks[crackId] = nil
+		self:Emit("CrackRepaired", { id = crackId })
+	end
+	return true
+end
+
+function Session:GrabExtinguisher(id, extId)
+	local p, ext = self:_player(id), self.extinguishers[extId]
+	if not p or not ext or ext.holder or p.outside or p.section ~= ext.section then return false end
+	self:DropExtinguisher(id)
+	ext.holder, p.heldExt = id, extId
+	return true
+end
+
+function Session:DropExtinguisher(id)
+	local p = self.players[id]
+	if not p or not p.heldExt then return false end
+	local ext = self.extinguishers[p.heldExt]
+	ext.holder = nil -- it returns to its wall mount
+	p.heldExt = nil
+	return true
+end
+
+function Session:Spray(id, dt)
+	local p = self:_player(id)
+	if not p or p.outside or not p.heldExt then return false end
+	local ext = self.extinguishers[p.heldExt]
+	if ext.charge <= 0 then return false end
+	ext.charge = math.max(0, ext.charge - self.cfg.Extinguisher.SprayDrain * dt)
+	for _, m in ipairs(self.monsters) do
+		if m.OnSpray then m:OnSpray(p.section, dt) end
+	end
+	return true
+end
+
+function Session:Refill(id, dt)
+	local p = self:_player(id)
+	if not p or p.outside or p.section ~= "Stern" or not p.heldExt then return false end
+	local ext = self.extinguishers[p.heldExt]
+	local cap = self.cfg.Extinguisher.Capacity * self.stats.extCapacity
+	ext.charge = math.min(cap, ext.charge + self.cfg.Extinguisher.RefillRate * dt)
+	return true
+end
+
+function Session:ExitAirlock(id)
+	local p = self:_player(id)
+	if not p or p.outside or p.section ~= "Airlock" then return false end
+	for _, other in pairs(self.players) do
+		if other.outside then return false end -- the hatch only fits one diver
+	end
+	p.outside = true
+	p.oxygen = self.cfg.Outside.Oxygen * self.stats.oxygen
+	p.dangerTime = 0
+	self:DropExtinguisher(id)
+	self:Emit("DiverOut", { id = id })
+	return true
+end
+
+function Session:EnterAirlock(id)
+	local p = self:_player(id)
+	if not p or not p.outside then return false end
+	p.outside, p.section, p.dangerTime = false, "Airlock", 0
+	self:Emit("DiverIn", { id = id })
+	return true
+end
+
+function Session:Scrub(id, dt)
+	local p = self:_player(id)
+	if not p or not p.outside then return false end
+	for _, m in ipairs(self.monsters) do
+		if m.OnScrub then m:OnScrub(dt) end
+	end
+	return true
+end
+
+function Session:PickUpArtifact(id)
+	local p = self:_player(id)
+	if not p or p.outside or self.phase ~= "Bottom" then return false end
+	self.hasArtifact = true
+	self.phase = "Ascent"
+	self.coast = 0
+	self:Emit("ArtifactTaken", {})
+	return true
+end
+
+-- ---------------------------------------------------------------- output
+
+function Session:Result()
+	local m = self.cfg.Money
+	local won = self.phase == "Won"
+	local money = math.floor(self.maxDepth * m.PerMeter * self.diff.money)
+	if won then
+		money = money + math.floor((m.SurviveBonus + m.ArtifactBonus) * self.diff.money)
+	end
+	return { survived = won, depth = math.floor(self.maxDepth), artifact = self.hasArtifact, money = money,
+		reason = self.deathReason, time = math.floor(self.time), difficulty = self.diffName }
+end
+
+function Session:Snapshot()
+	local monsters, cracks, players, exts = {}, {}, {}, {}
+	for _, m in ipairs(self.monsters) do monsters[#monsters + 1] = m:Snapshot() end
+	for _, c in pairs(self.cracks) do cracks[#cracks + 1] = { id = c.id, section = c.section } end
+	for _, p in pairs(self.players) do
+		players[#players + 1] = { id = p.id, section = p.section, alive = p.alive, outside = p.outside,
+			oxygen = p.oxygen, held = p.heldExt }
+	end
+	for _, e in ipairs(self.extinguishers) do
+		exts[#exts + 1] = { id = e.id, section = e.section, charge = e.charge, holder = e.holder }
+	end
+	return {
+		phase = self.phase, time = self.time, depth = self.depth, speed = self.verticalSpeed,
+		battery = self.battery / self.batteryMax, hull = self.hull / self.cfg.Cage.Hull,
+		engineOn = self.engineOn, lightOn = self:LightEffective(), lightYaw = self.lightYaw,
+		artifact = self.hasArtifact, monsters = monsters, cracks = cracks, players = players, extinguishers = exts,
+	}
+end
+
+return Session
+]]></ProtectedString></Properties></Item></Item></Item></Item><Item class="StarterPlayer" referent="RBX30"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX29"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX25"><Properties><string name="Name">Client</string></Properties><Item class="ModuleScript" referent="RBX20"><Properties><string name="Name">HUD</string><ProtectedString name="Source"><![CDATA[-- Sparse HUD: depth, hull, battery, a sonar scope and warning text.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
+
+local HUD = {}
+
+local WARNINGS = {
+	MonsterWarning = {
+		Shark = "Something huge is circling... get ready to kill the engine.",
+		Squid = "Movement in the dark. Find it with the light.",
+		Crawler = "Scratching on the hull.",
+		Swarm = "Something is clinging to the cage.",
+		Pursuer = "Don't stop. Don't ever stop.",
+	},
+	SharkNear = "KILL THE ENGINE", SharkAttack = "IT HIT US", SharkLeft = "It's gone. Engine back on.",
+	SquidStage = { Near = "It's getting closer.", VeryNear = "LIGHT IT UP", Lethal = "TOO CLOSE" },
+	CrawlerEntered = "It's inside!", CrawlerMoved = "It moved!", CrawlerLeft = "It fled.",
+	OutsideDanger = "DIVER: GET BACK IN", ArtifactTaken = "Artifact secured. Go up. Go up!",
+	ReachedBottom = "We're at the bottom. Grab it.", CrackAppeared = "Hull crack!", PlayerDied = "We lost someone.",
+	PursuerStage = { [1] = "It's gaining on us.", [2] = "KEEP MOVING" },
+}
+
+local function label(parent, text, pos, size)
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency, l.TextColor3, l.Font = 1, Color3.fromRGB(170, 220, 230), Enum.Font.Code
+	l.TextSize, l.TextXAlignment, l.Text = 18, Enum.TextXAlignment.Left, text
+	l.Position, l.Size, l.Parent = pos, size, parent
+	return l
+end
+
+local function bar(parent, y, color)
+	local back = Instance.new("Frame")
+	back.Position, back.Size, back.BackgroundColor3, back.BorderSizePixel = UDim2.new(0, 16, 0, y), UDim2.new(0, 200, 0, 10), Color3.fromRGB(15, 25, 30), 0
+	back.Parent = parent
+	local fill = Instance.new("Frame")
+	fill.Size, fill.BackgroundColor3, fill.BorderSizePixel, fill.Parent = UDim2.new(1, 0, 1, 0), color, 0, back
+	return fill
+end
+
+function HUD.start()
+	local gui = Instance.new("ScreenGui")
+	gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "HUD", false, true
+	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+	local depth = label(gui, "", UDim2.new(0, 16, 0, 14), UDim2.new(0, 300, 0, 22))
+	local status = label(gui, "", UDim2.new(0, 16, 0, 70), UDim2.new(0, 400, 0, 22))
+	label(gui, "HULL", UDim2.new(0, 224, 0, 32), UDim2.new(0, 60, 0, 14)).TextSize = 12
+	label(gui, "POWER", UDim2.new(0, 224, 0, 50), UDim2.new(0, 60, 0, 14)).TextSize = 12
+	local hull = bar(gui, 34, Color3.fromRGB(200, 90, 70))
+	local power = bar(gui, 52, Color3.fromRGB(230, 200, 90))
+
+	local warn = label(gui, "", UDim2.new(0.2, 0, 0.78, 0), UDim2.new(0.6, 0, 0, 40))
+	warn.TextXAlignment, warn.TextSize, warn.TextColor3 = Enum.TextXAlignment.Center, 26, Color3.fromRGB(235, 90, 80)
+
+	local sonar = Instance.new("Frame")
+	sonar.Size, sonar.Position, sonar.AnchorPoint = UDim2.new(0, 160, 0, 160), UDim2.new(1, -16, 1, -16), Vector2.new(1, 1)
+	sonar.BackgroundColor3, sonar.BackgroundTransparency, sonar.Parent = Color3.fromRGB(5, 25, 20), 0.2, gui
+	Instance.new("UICorner", sonar).CornerRadius = UDim.new(1, 0)
+	local blips = {}
+
+	local function say(text, secs)
+		if not text then return end
+		warn.Text = text
+		local mine = text
+		task.delay(secs or 3, function() if warn.Text == mine then warn.Text = "" end end)
+	end
+
+	Remotes.Events.OnClientEvent:Connect(function(name, data)
+		local entry = WARNINGS[name]
+		if name == "MonsterWarning" then say(entry[data.kind])
+		elseif name == "SquidStage" then say(entry[data.stage])
+		elseif name == "PursuerStage" then say(entry[data.stage])
+		elseif name == "RunDied" then say("The cage is lost: " .. tostring(data.reason), 30)
+		elseif name == "RunWon" then say("Surface reached.", 30)
+		elseif name == "RunEnded" then
+			say(string.format("%s  Depth %dm  +$%d", data.survived and "SURVIVED" or "LOST", data.depth, data.money), 30)
+		elseif type(entry) == "string" then say(entry) end
+	end)
+
+	local me = Players.LocalPlayer.UserId
+	Remotes.State.OnClientEvent:Connect(function(s)
+		depth.Text = string.format("DEPTH %dm  %s", s.depth, s.phase:upper())
+		hull.Size = UDim2.new(math.clamp(s.hull, 0, 1), 0, 1, 0)
+		power.Size = UDim2.new(math.clamp(s.battery, 0, 1), 0, 1, 0)
+		local where = ""
+		for _, p in ipairs(s.players) do if p.id == me then where = p.outside and "OUTSIDE" or p.section end end
+		status.Text = string.format("%s | engine %s | light %s", where, s.engineOn and "ON" or "OFF", s.lightOn and "ON" or "OFF")
+		for _, b in ipairs(blips) do b:Destroy() end
+		blips = {}
+		for _, m in ipairs(s.monsters) do
+			if m.bearing and m.dist then
+				local r = math.clamp(m.dist / 110, 0, 1) * 0.5
+				local a = math.rad(m.bearing)
+				local blip = Instance.new("Frame")
+				blip.Size, blip.AnchorPoint, blip.BorderSizePixel = UDim2.new(0, 8, 0, 8), Vector2.new(0.5, 0.5), 0
+				blip.BackgroundColor3 = Color3.fromRGB(120, 255, 170)
+				blip.Position = UDim2.new(0.5 - math.sin(a) * r, 0, 0.5 - math.cos(a) * r, 0)
+				blip.Parent = sonar
+				blips[#blips + 1] = blip
+			end
+		end
+	end)
+end
+
+return HUD
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX21"><Properties><string name="Name">Input</string><ProtectedString name="Source"><![CDATA[-- Sends raw input to the server. The server decides whether it does anything.
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
+
+local Input = {}
+
+function Input.start()
+	local camera = workspace.CurrentCamera
+	local acc = 0
+	RunService.RenderStepped:Connect(function(dt)
+		acc = acc + dt
+		if acc < 0.1 then return end
+		acc = 0
+		local look = camera.CFrame.LookVector
+		-- bearing 0 = -Z, matching the server's spotlight and the monster visuals
+		Remotes.LightAim:FireServer(math.deg(math.atan2(-look.X, -look.Z)) % 360)
+	end)
+
+	local function set(on)
+		Remotes.Spray:FireServer(on)
+		Remotes.Scrub:FireServer(on) -- the server applies whichever one makes sense (extinguisher inside, scrubbing outside)
+	end
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not processed and input.UserInputType == Enum.UserInputType.MouseButton1 then set(true) end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then set(false) end
+	end)
+end
+
+return Input
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX22"><Properties><string name="Name">LobbyUI</string><ProtectedString name="Source"><![CDATA[-- Minimal lobby: difficulty buttons (queue / solo) and a trait shop.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
+
+local LobbyUI = {}
+
+local function button(parent, text, order, onClick)
+	local b = Instance.new("TextButton")
+	b.Size, b.LayoutOrder, b.Text = UDim2.new(1, 0, 0, 30), order, text
+	b.BackgroundColor3, b.TextColor3, b.Font, b.TextSize = Color3.fromRGB(20, 45, 55), Color3.fromRGB(200, 235, 240), Enum.Font.Code, 16
+	b.Parent = parent
+	b.Activated:Connect(onClick)
+	return b
+end
+
+function LobbyUI.start()
+	local gui = Instance.new("ScreenGui")
+	gui.Name, gui.ResetOnSpawn = "Lobby", false
+	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local panel = Instance.new("Frame")
+	panel.Size, panel.Position, panel.BackgroundColor3 = UDim2.new(0, 360, 0.9, 0), UDim2.new(0, 20, 0.05, 0), Color3.fromRGB(5, 15, 20)
+	panel.Parent = gui
+	local list = Instance.new("UIListLayout")
+	list.SortOrder, list.Padding, list.Parent = Enum.SortOrder.LayoutOrder, UDim.new(0, 4), panel
+	local rows = {}
+
+	local difficulty = "Normal"
+	local order = 0
+	local function nextOrder() order = order + 1; return order end
+	local header = button(panel, "THALASSOPHOBIA", nextOrder(), function() end)
+	local diffButton = button(panel, "Difficulty: Normal (click to change)", nextOrder(), function() end)
+	diffButton.Activated:Connect(function()
+		for i, name in ipairs(Config.DifficultyOrder) do
+			if name == difficulty then
+				difficulty = Config.DifficultyOrder[i % #Config.DifficultyOrder + 1]
+				break
+			end
+		end
+		diffButton.Text = "Difficulty: " .. difficulty .. " (click to change)"
+	end)
+	button(panel, "Find a crew (up to 4)", nextOrder(), function() Remotes.LobbyAction:FireServer("Queue", difficulty) end)
+	button(panel, "Play solo", nextOrder(), function() Remotes.LobbyAction:FireServer("Solo", difficulty) end)
+
+	local ids = {}
+	for id in pairs(Config.Traits) do ids[#ids + 1] = id end
+	table.sort(ids)
+	for _, id in ipairs(ids) do
+		local t = Config.Traits[id]
+		local b = button(panel, "", nextOrder(), function() end)
+		rows[id] = b
+		b.TextSize, b.TextWrapped, b.Size = 13, true, UDim2.new(1, 0, 0, 44)
+	end
+
+	local state = { money = 0, owned = {}, equipped = {} }
+	local function contains(list, v) for _, x in ipairs(list) do if x == v then return true end end return false end
+	local function refresh(message)
+		header.Text = string.format("THALASSOPHOBIA   $%d   %s", state.money, message or "")
+		for id, b in pairs(rows) do
+			local t = Config.Traits[id]
+			local owned, equipped = contains(state.owned, id), contains(state.equipped, id)
+			local effect = t.drawback and (" | drawback: " .. t.drawback) or ""
+			b.Text = string.format("%s%s  [%s]%s", t.name, effect, equipped and "EQUIPPED" or (owned and "owned" or ("$" .. t.cost)), "")
+		end
+	end
+	for id, b in pairs(rows) do
+		b.Activated:Connect(function()
+			if contains(state.owned, id) then
+				Remotes.LobbyAction:FireServer("Equip", id, not contains(state.equipped, id))
+			else
+				Remotes.LobbyAction:FireServer("Buy", id)
+			end
+		end)
+	end
+	Remotes.LobbyState.OnClientEvent:Connect(function(s)
+		state = s
+		refresh(s.message)
+	end)
+	refresh()
+	Remotes.LobbyAction:FireServer("Sync")
+end
+
+return LobbyUI
+]]></ProtectedString></Properties></Item><Item class="LocalScript" referent="RBX23"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local player = Players.LocalPlayer
+player.CameraMode = Enum.CameraMode.LockFirstPerson -- first-person only
+
+local isLobby = Config.Places.Lobby ~= 0 and game.PlaceId == Config.Places.Lobby
+if isLobby then
+	require(script.Parent.LobbyUI).start()
+else
+	require(script.Parent.HUD).start()
+	require(script.Parent.Visuals).start()
+	require(script.Parent.Input).start()
+end
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX24"><Properties><string name="Name">Visuals</string><ProtectedString name="Source"><![CDATA[-- Monster silhouettes seen through the fog, placed from the server snapshot. Purely cosmetic.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
+
+local Visuals = {}
+local SCALE = 0.6 -- studs per sim metre
+
+local function dark(size, shape)
+	local p = Instance.new("Part")
+	p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch = true, false, false, false
+	p.Size, p.Shape = size, shape or Enum.PartType.Block
+	p.Color, p.Material = Color3.fromRGB(4, 8, 10), Enum.Material.SmoothPlastic
+	p.Parent = workspace
+	return p
+end
+
+function Visuals.start()
+	local parts, targets, swarm = {}, {}, {}
+	local cage = workspace:WaitForChild("Cage")
+	local origin = cage:GetPivot().Position
+
+	for i = 1, 40 do
+		local p = dark(Vector3.new(0.6, 0.6, 0.6), Enum.PartType.Ball)
+		p.Transparency = 1
+		swarm[i] = { part = p, offset = Vector3.new((math.random() - 0.5) * 14, (math.random() - 0.5) * 10, (math.random() - 0.5) * 40) }
+	end
+
+	local function place(kind, state)
+		local dir = Vector3.new(-math.sin(math.rad(state.bearing or 0)), 0, -math.cos(math.rad(state.bearing or 0)))
+		local dist = (state.dist or 50) * SCALE
+		if kind == "Shark" then
+			return CFrame.new(origin + dir * dist + Vector3.new(0, 4, 0), origin + Vector3.new(0, 4, 0)) * CFrame.Angles(0, math.rad(90), 0)
+		elseif kind == "Pursuer" then
+			return CFrame.new(origin + Vector3.new(0, -dist - 10, 0))
+		end
+		return CFrame.new(origin + dir * dist + Vector3.new(0, 2, 0))
+	end
+
+	Remotes.State.OnClientEvent:Connect(function(snap)
+		local seen = {}
+		for _, m in ipairs(snap.monsters) do
+			if m.kind == "Swarm" then
+				for _, s in ipairs(swarm) do s.part.Transparency = 1 - m.coverage * 0.95 end
+			elseif m.kind ~= "Crawler" then
+				seen[m.kind] = true
+				if not parts[m.kind] then
+					local size = ({ Shark = Vector3.new(7, 4, 24), Squid = Vector3.new(28, 28, 28), Pursuer = Vector3.new(20, 8, 20) })[m.kind]
+					parts[m.kind] = dark(size, m.kind == "Squid" and Enum.PartType.Ball or Enum.PartType.Block)
+				end
+				targets[m.kind] = place(m.kind, m)
+			end
+		end
+		local hasSwarm = false
+		for _, m in ipairs(snap.monsters) do if m.kind == "Swarm" then hasSwarm = true end end
+		if not hasSwarm then for _, s in ipairs(swarm) do s.part.Transparency = 1 end end
+		for kind, part in pairs(parts) do
+			if not seen[kind] then part:Destroy(); parts[kind], targets[kind] = nil, nil end
+		end
+	end)
+
+	RunService.RenderStepped:Connect(function(dt)
+		for kind, part in pairs(parts) do
+			if targets[kind] then part.CFrame = part.CFrame:Lerp(targets[kind], math.min(1, dt * 4)) end
+		end
+		for _, s in ipairs(swarm) do s.part.Position = origin + s.offset end
+	end)
+end
+
+return Visuals
+]]></ProtectedString></Properties></Item></Item></Item></Item></roblox>
