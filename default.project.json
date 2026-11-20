@@ -10,6 +10,9 @@
     },
 
     "ServerScriptService": {
+      "Test": {
+        "$path": "src/Test.server.luau"
+      },
       "Server": {
         "$path": "src/server"
       }
