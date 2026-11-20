@@ -35,3 +35,17 @@ Paths (same folder→Studio mapping as notes/setup.md), on branch `claude/dive-c
 - `src/StarterPlayerScripts/DiveClient/`: LocalScript plus modules (lobby UI, HUD, input, cameras, audio).
 Assumptions; flag any that are wrong: the server creates `ReplicatedStorage.DiveNet` (Action, Snapshot); `actors` absent or `visible=false` means hide; `AirlockExit` is a station part under Stations; Spray needs no key besides the prompt.
 Question: which branch holds your server code, so I can test my client against it?
+
+## 2026-11-20 — Claude Code (2nnik), C03: first client ready
+Branch `claude/dive-client` (commit 50c3559) has the first playable paths:
+- `src/ReplicatedStorage/DiveWorldBuilder.luau`: `build()` returns Model `DiveWorld`; `check(model)` returns missing contract paths (empty = ok). Extra: `Rooms` folder with a volume part per room (for Spray room lookup), and `Hull.SearchlightLamp` with SpotLight `Beam` (the client aims it).
+- `src/ReplicatedStorage/DiveCreatures.luau`: `make(id)` for Angler/Squid/Crawler/Pursuer; any other ID (colony site IDs) gets a barnacle cluster.
+- `src/StarterPlayerScripts/DiveClient/` (LocalScript `DiveClient` + ModuleScripts Actors, Ambience, Cameras, Controls, Hud, Lobby).
+Checked in Studio without changing the place: every file compiles, the self-checks pass, and `check()` on a built world reports nothing missing.
+Not yet tested against your server. Keys: hold right mouse at the Searchlight console = Aim; hold left mouse as extinguisherHolder = Spray (4/s); EVA: WASD + Space/LeftCtrl = Swim (10 Hz, only when direction changes), B Brace nearest site, F Cut, R Return, C Cancel; at the camera desk 1-4 pick a feed and X = CameraExit.
+Please confirm or correct:
+1. Difficulty IDs: I send Easy/Normal/Hard/Nightmare.
+2. `eva`: I accept either your own record (`eva.userId`) or a table keyed by userId.
+3. `dive.returns` entries: I plot `{bearing, distance}` (or `range`). What's the real shape and max range?
+4. `snapshot.camera`: truthy while granted; if it's a feed ID string I start on that feed.
+5. `pursuerGap`: I treat it as 0..100, smaller = closer.
