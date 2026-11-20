@@ -281,4 +281,13 @@ function Exterior.snapshot(p,m,s,out)
 	end
 end
 
+function Exterior.followShip(m,delta)
+	local swim=m.swim
+	if not swim or not swim.root.Parent then return end
+	swim.anchor=anchorPosition()
+	-- A diver holding the hull travels with it. Free swimmers keep their
+	-- position in the water until they move or the lifeline pulls them.
+	if m.cleaning then swim.root.CFrame += delta end
+end
+
 return Exterior

@@ -1,6 +1,6 @@
 -- Radar samples actual objects at each acoustic pulse. The client draws the last return.
 local Sensors = {}
-local RANGE = 190
+local RANGE = 315
 local INTERVAL = 3.2
 local site = workspace:WaitForChild("Thalassa")
 local rocks = {}

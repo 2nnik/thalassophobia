@@ -21,7 +21,7 @@ local positions = {}
 local meterColor = Color3.fromHex("72E8D0")
 local offColor = Color3.fromHex("445556")
 local amber = Color3.fromHex("F2B650")
-local lastDirection, lastFloorY, lastRender = nil, nil, -math.huge
+local lastDirection, lastRender = nil, -math.huge
 local activePhase = {Descent=true, Bottom=true, Ascent=true}
 for _,item in world:GetDescendants() do
  if item:IsA("ProximityPrompt") and item:GetAttribute("Action") then
@@ -48,6 +48,102 @@ end
 local envelope=world:WaitForChild("ShipEnvelope")
 local barnacles=world:WaitForChild("BarnacleSites")
 local center=envelope.Position
+local depthScale = .72
+local shipY = 0
+local targetY = 0
+local travelTime = 0
+local travelStep = .25
+local hullParts = {}
+local carried = {
+	"Bell • KESTREL 04", "Pressure hull • Survey refit", "Dive stage", "Stations", "BarnacleSites",
+	"CageSpawn", "InsideLockSpawn", "OutsideSpawn", "ShipEnvelope", "TetherAnchor",
+	"DiveCamera1", "DiveCamera2", "DiveCamera3", "DiveCamera4", "WormWindow1", "WormWindow2", "WormWindow3",
+}
+local function cachePart(part)
+	if part:IsA("BasePart") and part.Anchored then
+		table.insert(hullParts,part)
+	end
+end
+local function cacheAssembly(root)
+	cachePart(root)
+	for _,part in root:GetDescendants() do cachePart(part) end
+end
+for _,name in carried do cacheAssembly(world:WaitForChild(name)) end
+for _,name in {"Marine snow","Pelagic darkness","Pelagic current"} do
+	cacheAssembly(ocean:WaitForChild(name))
+end
+local driver = Instance.new("Part")
+driver.Name,driver.Size = "HullMotion",Vector3.one
+driver.CFrame,driver.Transparency = envelope.CFrame,1
+driver.Anchored,driver.CanCollide,driver.CanTouch,driver.CanQuery = true,false,false,false
+driver.Parent=world
+local home = driver.CFrame
+for _,part in hullParts do
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0,weld.Part1 = driver,part
+	weld.Parent=driver
+	part.Anchored=false
+end
+local baseplate = workspace:FindFirstChild("Baseplate")
+if baseplate and baseplate:IsA("BasePart") then
+	-- The starter plate crosses the water column. The authored dock and seabed are the playable surfaces.
+	baseplate.CanCollide,baseplate.CanTouch,baseplate.CanQuery,baseplate.Transparency=false,false,false,1
+end
+local starterSpawn = workspace:FindFirstChild("SpawnLocation")
+if starterSpawn and starterSpawn:IsA("SpawnLocation") then
+	local lobby = world.LobbySpawn
+	local deck = RaycastParams.new()
+	deck.FilterType = Enum.RaycastFilterType.Include
+	deck.FilterDescendantsInstances = {world["Launch dock"]}
+	local support = workspace:Raycast(lobby.Position + Vector3.yAxis * 5,-Vector3.yAxis * 20,deck)
+	local height = support and support.Position.Y + starterSpawn.Size.Y * .5 or lobby.Position.Y
+	starterSpawn.CFrame = CFrame.new(lobby.Position.X,height,lobby.Position.Z) * lobby.CFrame.Rotation
+	starterSpawn.CanCollide,starterSpawn.CanQuery,starterSpawn.Transparency=false,false,1
+	for _,mark in starterSpawn:GetDescendants() do
+		if mark:IsA("Decal") then mark.Transparency=1 end
+	end
+end
+floor:ScaleTo(2.6)
+floor:PivotTo(CFrame.new(0,-350,0))
+
+local leviathan = actors.Leviathan
+local _, anglerSize = leviathan:GetBoundingBox()
+local scale = (5 * math.max(envelope.Size.X,envelope.Size.Z)) / math.max(anglerSize.X,anglerSize.Y,anglerSize.Z)
+leviathan:ScaleTo(leviathan:GetScale() * scale)
+
+local function setShipY(y)
+	local delta = Vector3.new(0,y-shipY,0)
+	if delta.Y == 0 then return delta end
+	driver.CFrame=home+Vector3.new(0,y,0)
+	head.CFrame += delta
+	shipY=y
+	center=envelope.Position
+	return delta
+end
+
+function World.travel(dt)
+	if travelTime <= 0 then
+		driver.AssemblyLinearVelocity=Vector3.zero
+		return Vector3.zero
+	end
+	local slice = math.min(dt,travelTime)
+	local y = shipY+(targetY-shipY)*(slice/travelTime)
+	travelTime -= slice
+	local delta=setShipY(y)
+	driver.AssemblyLinearVelocity=delta/dt
+	return delta
+end
+
+function World.setDepth(depth)
+	local goal = -math.clamp(depth,0,600)*depthScale
+	if goal ~= targetY then targetY,travelTime = goal,travelStep end
+end
+
+function World.resetDepth()
+	targetY,travelTime = 0,0
+	driver.AssemblyLinearVelocity=Vector3.zero
+	setShipY(0)
+end
 local cameraHeads, windows, sites, joints, lighting = {}, {}, {}, {}, {}
 local labels={Leviathan="ANGLER",GiantSquid="GIANT SQUID",CrackCrawler="HULL CRAWLER",Pursuer="DEEP PURSUER"}
 local runService=game:GetService("RunService")
@@ -87,7 +183,8 @@ for name,label in labels do
  end
 end
 local phaseAngle={angler=-.14,squid=math.pi*.51}
-local anglerRange,squidRange=104,108
+local anglerCruise,squidCruise=368,328
+local anglerRange,squidRange=anglerCruise,squidCruise
 local oldElapsed
 local function bearing(pos)
  local delta=pos-center
@@ -96,6 +193,21 @@ local function bearing(pos)
 end
 function World.squidBearing()
  return bearing(actors.GiantSquid:GetPivot().Position)
+end
+
+function World.predatorNear(model,position,range)
+	local names = if model == leviathan then {"Arched cranium","Bulbous abdomen"}
+		else {"Cephalic lobe","Brachial crown"}
+	for _,name in names do
+		local part=model:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			local at=part.CFrame:PointToObjectSpace(position)
+			local half=part.Size*.5
+			local offset=at-Vector3.new(math.clamp(at.X,-half.X,half.X),math.clamp(at.Y,-half.Y,half.Y),math.clamp(at.Z,-half.Z,half.Z))
+			if offset.Magnitude<=range then return true end
+		end
+	end
+	return false
 end
 local function approach(value,target,speed,dt)
  return value+math.clamp(target-value,-speed*dt,speed*dt)
@@ -183,8 +295,6 @@ function World.update(state)
    em.Rate=active and 3.3 or .35
   end
  end
- local y=depth>480 and (102-(600-depth)*.62) or -350
- if lastFloorY~=y then floor:PivotTo(CFrame.new(0,y,0)) lastFloorY=y end
  local now=os.clock()
  if now-lastRender<.10 and active then return end
  lastRender=now
@@ -192,23 +302,23 @@ function World.update(state)
  local restarted=not oldElapsed or elapsed<oldElapsed
  if restarted then
   phaseAngle.angler, phaseAngle.squid=-.14,math.pi*.51
-  anglerRange,squidRange=104,108
+  anglerRange,squidRange=anglerCruise,squidCruise
  end
  local dt=math.clamp(elapsed-(oldElapsed or elapsed),0,.75)
  oldElapsed=active and elapsed or nil
- phaseAngle.angler+=.021*dt
- anglerRange=approach(anglerRange,104-32*shark,3.1,dt)
+ phaseAngle.angler+=(shark>0 and .022 or .011)*dt
+ anglerRange=approach(anglerRange,anglerCruise-(anglerCruise-142)*math.clamp(shark*1.4,0,1),23,dt)
  if squid>0 then
   local target=(sqSide-1)*math.pi/2
   local delta=math.atan2(math.sin(target-phaseAngle.squid),math.cos(target-phaseAngle.squid))
   phaseAngle.squid+=math.clamp(delta,-.062*dt,.062*dt)
  else
-  phaseAngle.squid-=.015*dt
+  phaseAngle.squid-=.012*dt
  end
- squidRange=approach(squidRange,108-28*squid,3.6,dt)
+ squidRange=approach(squidRange,squidCruise-(squidCruise-88)*math.clamp(squid*1.55,0,1),23,dt)
  -- Megafauna stay beyond the pressure hull even when the feeding tentacles pass broadside.
- megafauna(actors.Leviathan,phaseAngle.angler,anglerRange,7.5+4*math.sin(elapsed*.035),elapsed,Vector3.new(1,0,-.36*shark),aim,lit)
- megafauna(actors.GiantSquid,phaseAngle.squid,squidRange,12+4*math.sin(elapsed*.028+1.4),elapsed,Vector3.new(-1,0,-.26*squid),aim,lit)
+ megafauna(leviathan,phaseAngle.angler,anglerRange,7.5+18*math.sin(elapsed*.035),elapsed,Vector3.new(1,0,-.36*shark),aim,lit)
+ megafauna(actors.GiantSquid,phaseAngle.squid,squidRange,12+14*math.sin(elapsed*.028+1.4),elapsed,Vector3.new(-1,0,-.26*squid),aim,lit)
  local crawlerPresent=active and crawler>0
  actors.CrackCrawler:SetAttribute("Detectable",crawlerPresent)
  if crawlerPresent then

@@ -4,6 +4,8 @@ local RunService=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
 local CAS=game:GetService("ContextActionService")
 local GuiService=game:GetService("GuiService")
+local Lighting=game:GetService("Lighting")
+local SoundService=game:GetService("SoundService")
 local Client={}
 local net, controls, screen
 local overlay,card,dial,pivot,headline,progress,feedback,travel,rise,down,cancel,help,scale
@@ -37,6 +39,232 @@ local function button(parent,text,pos,size)
 end
 local function round(obj)
 	make("UICorner",obj,{CornerRadius=UDim.new(1,0)})
+end
+
+local REVEAL_RANGE, BLACKOUT_RANGE = 25, 52
+local WINDOW_REVEAL_RANGE, WINDOW_BLACKOUT_RANGE = 74, 110
+local BEAM_REVEAL_RANGE, BEAM_BLACKOUT_RANGE = 122, 182
+local contactNames = {"Leviathan","GiantSquid","CrackCrawler","Pursuer"}
+local waterGrade = {
+	Color=Color3.fromRGB(20,50,54), Decay=Color3.fromRGB(8,22,29),
+	Density=.73, Haze=2.8, Glare=0, Offset=.04,
+}
+local invisible = NumberSequence.new(1)
+local footsteps, contacts = {}, {}
+local observedCharacter, footstepAdded
+local atmosphere, originalAtmosphere
+local strokes, breathing, bubblePool
+local random = Random.new()
+local nextContactCheck, nextBubble, bubbleIndex = 0, 0, 0
+local inDive, searchlight = false, false
+
+local function muteFootstep(object)
+	if not (object:IsA("Sound") or object:IsA("AudioPlayer")) then return end
+	local name = object.Name:lower()
+	local asset = tostring(if object:IsA("Sound") then object.SoundId else object.AssetId)
+	if footsteps[object] or not (
+		name=="running" or name=="climbing" or name=="landing"
+		or name:find("footstep",1,true) or asset:find("action_footsteps",1,true)
+	) then return end
+	local original = object.Volume
+	object.Volume = 0
+	footsteps[object] = {
+		volume=original,
+		connection=object:GetPropertyChangedSignal("Volume"):Connect(function()
+			if object.Volume~=0 then object.Volume=0 end
+		end),
+	}
+end
+
+local function listenToCharacter(character)
+	if observedCharacter==character then return end
+	if footstepAdded then footstepAdded:Disconnect() footstepAdded=nil end
+	for object, state in footsteps do
+		state.connection:Disconnect()
+		if object.Parent then object.Volume=state.volume end
+	end
+	table.clear(footsteps)
+	observedCharacter=character
+	if character then
+		footstepAdded=character.DescendantAdded:Connect(muteFootstep)
+		for _,descendant in character:GetDescendants() do muteFootstep(descendant) end
+	end
+end
+
+-- A model's pivot can be hundreds of studs from the tip of a fin or tentacle.
+-- Use the nearest visible part's oriented bounds as the first surface contact.
+local function distanceToPart(point,part)
+	local p=part.CFrame:PointToObjectSpace(point)
+	local radius=part.Size*.5
+	local x=math.max(math.abs(p.X)-radius.X,0)
+	local y=math.max(math.abs(p.Y)-radius.Y,0)
+	local z=math.max(math.abs(p.Z)-radius.Z,0)
+	return math.sqrt(x*x+y*y+z*z)
+end
+
+local function contactObjects(record,object)
+	local property, hidden
+	if object:IsA("BasePart") then
+		property="LocalTransparencyModifier"
+	elseif object:IsA("Light") then
+		property,hidden="Range",0
+	elseif object:IsA("ParticleEmitter") then
+		property,hidden="Rate",0
+	elseif object:IsA("Beam") or object:IsA("Trail") then
+		property,hidden="Transparency",invisible
+	end
+	if property then
+		record.objects[object]={property=property,original=object[property],hidden=hidden}
+		record.alpha=nil
+	end
+end
+
+local function releaseContact(record)
+	record.added:Disconnect()
+	record.removing:Disconnect()
+	for object,entry in record.objects do
+		if object.Parent then object[entry.property]=entry.original end
+	end
+end
+
+local function updateContacts(cameraPosition)
+	local world=workspace:FindFirstChild("Thalassa")
+	local models=world and world:FindFirstChild("Contacts")
+	local ocean=searchlight and world and world:FindFirstChild("Ocean")
+	local beam=ocean and ocean:FindFirstChild("SearchlightHead")
+	for _,name in contactNames do
+		local model=models and models:FindFirstChild(name)
+		local record=contacts[name]
+		if record and record.model~=model then
+			releaseContact(record)
+			contacts[name],record=nil,nil
+		end
+		if model and not record then
+			record={model=model,objects={}}
+			contacts[name]=record
+			record.added=model.DescendantAdded:Connect(function(object) contactObjects(record,object) end)
+			record.removing=model.DescendantRemoving:Connect(function(object)
+				local entry=record.objects[object]
+				if entry then object[entry.property]=entry.original record.objects[object]=nil end
+			end)
+			for _,object in model:GetDescendants() do contactObjects(record,object) end
+		end
+		if not record then continue end
+		local reveal,blackout=REVEAL_RANGE,BLACKOUT_RANGE
+		if not active then
+			reveal,blackout=WINDOW_REVEAL_RANGE,WINDOW_BLACKOUT_RANGE
+			local direction=beam and model:GetPivot().Position-beam.Position
+			if direction and direction.Magnitude>0 and beam.CFrame.LookVector:Dot(direction.Unit)>.68 then
+				reveal,blackout=BEAM_REVEAL_RANGE,BEAM_BLACKOUT_RANGE
+			end
+		end
+		local nearest=blackout
+		for object,entry in record.objects do
+			if entry.property=="LocalTransparencyModifier" and object.Transparency<.98 then
+				nearest=math.min(nearest,distanceToPart(cameraPosition,object))
+				if nearest<=reveal then break end
+			end
+		end
+		local ratio=math.clamp((nearest-reveal)/(blackout-reveal),0,1)
+		local alpha=math.round(ratio*12)/12
+		if record.alpha~=alpha then
+			record.alpha=alpha
+			for object,entry in record.objects do
+				if entry.property=="LocalTransparencyModifier" then
+					object.LocalTransparencyModifier=1-(1-entry.original)*(1-alpha)
+				elseif entry.property=="Range" then
+					-- Range is not animated by the server. Preserve its ownership
+					-- of Brightness and Enabled while cutting distant glow.
+					object.Range=entry.original*(1-alpha)
+				else
+					object[entry.property]=if alpha==1 then entry.hidden else entry.original
+					if alpha==1 and object:IsA("ParticleEmitter") then object:Clear() end
+				end
+			end
+		end
+	end
+end
+
+local function swimSound(name,speed,volume)
+	local sound=make("Sound",SoundService,{Name=name,SoundId="rbxasset://sounds/action_swim.mp3",
+		PlaybackSpeed=speed,Volume=volume,Looped=true})
+	make("EqualizerSoundEffect",sound,{LowGain=1,MidGain=-8,HighGain=-24})
+	return sound
+end
+
+local function beginEffects()
+	listenToCharacter(Players.LocalPlayer.Character)
+	strokes=swimSound("EVAStrokes",1.13,0)
+	breathing=swimSound("EVABubbles",.68,.065)
+	breathing:Play()
+	atmosphere=Lighting:FindFirstChildOfClass("Atmosphere")
+	if atmosphere then
+		originalAtmosphere={}
+		for property,value in waterGrade do
+			originalAtmosphere[property]=atmosphere[property]
+			atmosphere[property]=value
+		end
+	end
+	bubblePool={}
+	nextContactCheck,nextBubble,bubbleIndex=0,0,0
+	for i=1,16 do
+		bubblePool[i]={part=make("Part",nil,{Name="LocalAirBubble",Anchored=true,CanCollide=false,CanTouch=false,
+			CanQuery=false,CastShadow=false,Shape=Enum.PartType.Ball,Material=Enum.Material.Glass,
+			Color=Color3.fromRGB(128,187,193),Reflectance=.3,Transparency=1})}
+	end
+end
+
+local function endEffects()
+	listenToCharacter(nil)
+	if atmosphere and atmosphere.Parent then
+		for property,value in originalAtmosphere do atmosphere[property]=value end
+	end
+	atmosphere,originalAtmosphere=nil,nil
+	if strokes then strokes:Destroy() strokes=nil end
+	if breathing then breathing:Destroy() breathing=nil end
+	if bubblePool then
+		for _,bubble in bubblePool do bubble.part:Destroy() end
+		bubblePool=nil
+	end
+end
+
+local function stepEffects(camera,dt)
+	local character=Players.LocalPlayer.Character
+	listenToCharacter(character)
+	local root=character and character:FindFirstChild("HumanoidRootPart")
+	local swim=root and root:FindFirstChild("SwimVelocity")
+	local speed=swim and swim:IsA("LinearVelocity") and not challenge and swim.VectorVelocity.Magnitude or 0
+	local moving=speed>1
+	local amount=math.clamp(speed/13,0,1)
+	local now=os.clock()
+	if moving and not strokes.IsPlaying then strokes:Play() end
+	if not moving and strokes.IsPlaying then strokes:Stop() end
+	strokes.Volume=.09+.23*amount
+	strokes.PlaybackSpeed=.88+.44*amount
+	breathing.Volume=moving and .035 or .065
+	if now>=nextBubble then
+		nextBubble=now+random:NextNumber(.23,.48)*(moving and 1 or 2)
+		bubbleIndex=bubbleIndex%#bubblePool+1
+		local bubble=bubblePool[bubbleIndex]
+		local size=random:NextNumber(.085,.22)
+		bubble.part.Size=Vector3.one*size
+		bubble.position=camera.CFrame:PointToWorldSpace(Vector3.new(random:NextNumber(.45,1.10),-.70,-1.9))
+		bubble.age,bubble.duration=0,random:NextNumber(.8,1.65)
+		bubble.velocity=Vector3.new(random:NextNumber(-.9,.9),random:NextNumber(1.8,3.2),.1)
+		bubble.part.Parent=camera
+	end
+	for _,bubble in bubblePool do
+		if not bubble.age then continue end
+		bubble.age+=dt
+		if bubble.age>=bubble.duration then
+			bubble.part.Parent=nil
+			bubble.age=nil
+		else
+			bubble.position+=bubble.velocity*dt
+			bubble.part.Position=bubble.position
+			bubble.part.Transparency=.42+.57*(bubble.age/bubble.duration)
+		end
+	end
 end
 
 local function hit()
@@ -212,8 +440,16 @@ function Client.init(network,rootGui)
 	end
 	if world then for _,item in world:GetDescendants() do register(item) end end
 	workspace.DescendantAdded:Connect(register)
-	RunService.RenderStepped:Connect(function()
+	RunService.RenderStepped:Connect(function(dt)
+		if not inDive then return end
+		local camera=workspace.CurrentCamera
+		if not camera then return end
+		if os.clock()>=nextContactCheck then
+			nextContactCheck=os.clock()+.10
+			updateContacts(camera.CFrame.Position)
+		end
 		if not active then return end
+		stepEffects(camera,dt)
 		if challenge then
 			local t=math.max(0,workspace:GetServerTimeNow()-challenge.started)
 			pivot.Rotation=(challenge.startAngle+challenge.sign*t*360/challenge.period)%360
@@ -222,8 +458,6 @@ function Client.init(network,rootGui)
 		local now=os.clock()
 		if now-lastSend<0.13 then return end
 		lastSend=now
-		local camera=workspace.CurrentCamera
-		if not camera then return end
 		local move=Vector3.zero
 		local vertical=0
 		if not UIS:GetFocusedTextBox() and not GuiService.MenuIsOpen then
@@ -245,8 +479,11 @@ end
 function Client.update(s)
 	local oldActive,oldChallenge=active,challenge~=nil
 	local previousId=challenge and challenge.id
+	inDive,searchlight=true,s.light==true and (s.battery or 100)>0
 	active=s.outside==true and s.alive~=false
 	challenge=active and s.cleaning or nil
+	if active and not oldActive then beginEffects()
+	elseif oldActive and not active then endEffects() end
 	if challenge and previousId~=challenge.id then
 		pending=nil
 		populate(challenge,s)
@@ -258,7 +495,12 @@ end
 function Client.reset()
 	if not overlay then return end
 	local oldActive,oldChallenge=active,challenge~=nil
+	inDive,searchlight=false,false
+	for _,record in contacts do releaseContact(record) end
+	table.clear(contacts)
+	nextContactCheck=0
 	active,challenge,pending=false,nil,nil
+	if oldActive then endEffects() end
 	refreshBindings(oldActive,oldChallenge)
 end
 

@@ -39,7 +39,7 @@ local function releaseTether(p,m)
 	if m.beam then m.beam:Destroy() end
 	if m.anchor then m.anchor:Destroy() end
 	if m.attach then m.attach:Destroy() end
-	m.beam, m.anchor, m.attach, m.outside = nil, nil, nil, false
+	m.beam, m.anchor, m.attach, m.tetherMarker, m.outside = nil, nil, nil, nil, false
 end
 
 local function tether(p, m)
@@ -58,6 +58,7 @@ local function tether(p, m)
 	beam.FaceCamera = true
 	beam.Parent = attach
 	m.beam, m.anchor, m.attach, m.outside = beam, anchor, attach, true
+	m.tetherMarker = site.TetherAnchor
 	m.oxygen = m.maxOxygen
 	relocate(p, "OutsideSpawn")
 	Exterior.startSwim(p,m,active)
@@ -148,6 +149,7 @@ settle = function(s)
 		end
 	end
 	members, active, settling = {}, nil, false
+	World.resetDepth()
 	World.update(sceneIdle)
 end
 
@@ -284,11 +286,11 @@ local function handleCrew(s,dt)
 			if m.oxygen <= 0 then down(p,"The diver exhausted their oxygen.")
 			elseif root then
 				local actors=site.Contacts
-				local anglerNear=s.shark>0.82 and (actors.Leviathan:GetPivot().Position-root.Position).Magnitude<75
-				local squidNear=s.squid>0.86 and (actors.GiantSquid:GetPivot().Position-root.Position).Magnitude<74
+				local anglerNear=s.shark>0.82 and World.predatorNear(actors.Leviathan,root.Position,22)
+				local squidNear=s.squid>0.86 and World.predatorNear(actors.GiantSquid,root.Position,18)
 				if anglerNear or squidNear then down(p,"A nearby predator took the exposed diver.") end
 			end
-		elseif root and root.Position.Y < 112 then
+		elseif root and root.Position.Y < site.CageSpawn.Position.Y-11 then
 			relocate(p,"CageSpawn")
 		end
 		if active ~= s then return end
@@ -359,18 +361,32 @@ net.Input.OnServerEvent:Connect(function(p, action, arg)
 end)
 
 local accumulator = 0
+local function carryCrew(delta)
+	if delta.Y == 0 then return end
+	for p,m in members do
+		if not m.alive then continue end
+		if m.tetherMarker and m.anchor then m.anchor.WorldPosition = m.tetherMarker.Position end
+		if m.outside then
+			Exterior.followShip(m,delta)
+		else
+			if m.cameraOrigin then m.cameraOrigin += delta end
+		end
+	end
+end
 RunService.Heartbeat:Connect(function(dt)
+	local s = active
+	if not s or settling then accumulator=0 return end
+	carryCrew(World.travel(math.min(0.5,dt)))
 	accumulator += math.min(0.5,dt)
 	if accumulator < 0.25 then return end
 	local step = accumulator
 	accumulator = 0
-	local s = active
-	if not s or settling then return end
 	local hadSwarm = s.swarm > 0
 	s.patrolSquidSide = World.squidBearing()
 	Dive.step(s,step)
 	if s.swarm>0 and not hadSwarm then Exterior.newSwarm(s) end
 	if s.phase == "Results" then settle(s) return end
+	World.setDepth(s.depth)
 	handleCrew(s,step)
 	if active == s then sync(s) end
 end)
