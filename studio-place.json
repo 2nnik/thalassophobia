@@ -1,0 +1,98 @@
+{
+  "placeId": 133428803360145,
+  "universeId": 10777975725,
+  "placeName": "Untitled Experience",
+  "workspaceModel": "Workspace.Thalassa",
+  "remotes": [
+    "ReplicatedStorage.DiveNet.Input",
+    "ReplicatedStorage.DiveNet.Feed"
+  ],
+  "scripts": [
+    {
+      "group": "ServerScriptService",
+      "class": "ModuleScript",
+      "name": "DiveLobbyProfiles",
+      "path": "src/ServerScriptService/DiveLobbyProfiles.luau"
+    },
+    {
+      "group": "ServerScriptService",
+      "class": "ModuleScript",
+      "name": "DiveLobbyQueue",
+      "path": "src/ServerScriptService/DiveLobbyQueue.luau"
+    },
+    {
+      "group": "ServerScriptService",
+      "class": "ModuleScript",
+      "name": "DiveSimulation",
+      "path": "src/ServerScriptService/DiveSimulation.luau"
+    },
+    {
+      "group": "ServerScriptService",
+      "class": "ModuleScript",
+      "name": "DiveLobby",
+      "path": "src/ServerScriptService/DiveLobby.luau"
+    },
+    {
+      "group": "ServerScriptService",
+      "class": "Script",
+      "name": "DiveController",
+      "path": "src/ServerScriptService/DiveController.server.luau",
+      "enabled": true
+    },
+    {
+      "group": "ServerScriptService",
+      "class": "ModuleScript",
+      "name": "DiveWorld",
+      "path": "src/ServerScriptService/DiveWorld.luau"
+    },
+    {
+      "group": "ServerScriptService",
+      "class": "ModuleScript",
+      "name": "DiveSensors",
+      "path": "src/ServerScriptService/DiveSensors.luau"
+    },
+    {
+      "group": "ServerScriptService",
+      "class": "ModuleScript",
+      "name": "DiveExterior",
+      "path": "src/ServerScriptService/DiveExterior.luau"
+    },
+    {
+      "group": "StarterPlayerScripts",
+      "class": "ModuleScript",
+      "name": "DiveClientStyle",
+      "path": "src/StarterPlayerScripts/DiveClientStyle.luau"
+    },
+    {
+      "group": "StarterPlayerScripts",
+      "class": "ModuleScript",
+      "name": "DiveClientTerminal",
+      "path": "src/StarterPlayerScripts/DiveClientTerminal.luau"
+    },
+    {
+      "group": "StarterPlayerScripts",
+      "class": "ModuleScript",
+      "name": "DiveClientInstruments",
+      "path": "src/StarterPlayerScripts/DiveClientInstruments.luau"
+    },
+    {
+      "group": "StarterPlayerScripts",
+      "class": "LocalScript",
+      "name": "DiveClient",
+      "path": "src/StarterPlayerScripts/DiveClient.client.luau",
+      "enabled": true
+    },
+    {
+      "group": "StarterPlayerScripts",
+      "class": "ModuleScript",
+      "name": "DiveClientOptics",
+      "path": "src/StarterPlayerScripts/DiveClientOptics.luau"
+    },
+    {
+      "group": "StarterPlayerScripts",
+      "class": "ModuleScript",
+      "name": "DiveExteriorClient",
+      "path": "src/StarterPlayerScripts/DiveExteriorClient.luau"
+    }
+  ]
+}
