@@ -24,15 +24,20 @@ local pendingLobby=nil
 local controls=nil
 local received=false
 local terminal
+local cinematics
+local promptEligible=false
 local function dockControls()
+    local sequence=cinematics and cinematics:isPlaying()
     player.CameraMode=if mode=="Dive" then Enum.CameraMode.LockFirstPerson else Enum.CameraMode.Classic
     screen.IgnoreGuiInset=mode~="Dive"
     if controls then
-        if mode=="Dive" and not viewing then controls:Enable() else controls:Disable() end
+        if mode=="Dive" and not viewing and not sequence then controls:Enable() else controls:Disable() end
     end
     InputService.MouseIconEnabled=mode~="Dive" or viewing
     if mode~="Dive" then InputService.MouseBehavior=Enum.MouseBehavior.Default end
+    PromptService.Enabled=mode=="Dive" and promptEligible and not sequence
 end
+cinematics=require(script.Parent:WaitForChild("DiveCinematics")).new(screen,dockControls)
 local function send(action,arg)
     if action=="InviteFriends" then
         task.spawn(function()
@@ -47,6 +52,7 @@ local function send(action,arg)
     end
     if action=="DismissResults" then
         mode="Lobby"
+        cinematics:reset()
         dockControls()
         if pendingLobby then terminal.lobby(pendingLobby) end
     end
@@ -87,6 +93,7 @@ feed.OnClientEvent:Connect(function(kind,payload)
         received=true
         pendingLobby=payload
         if mode=="Lobby" then
+            cinematics:reset()
             instruments.reset()
             optics.reset()
             exterior.reset()
@@ -99,18 +106,25 @@ feed.OnClientEvent:Connect(function(kind,payload)
         if mode~="Dive" then
             mode="Dive"
             terminal.show(false)
-            dockControls()
+            cinematics:play({kind="Wake",duration=2.7})
         end
         applyOutside(payload.outside==true)
         local camera=payload.cameraView==true and payload.alive~=false and not payload.outside
-        if camera~=viewing then viewing=camera dockControls() end
-        optics.update(payload)
+        viewing=camera
+        promptEligible=payload.alive~=false and not camera and not payload.cleaning
+        if not cinematics:isPlaying() then optics.update(payload) end
         exterior.update(payload)
-        PromptService.Enabled=payload.alive~=false and not camera and not payload.cleaning
         instruments.update(payload)
+        dockControls()
+    elseif kind=="Cinematic" and mode=="Dive" and type(payload)=="table" then
+        viewing=false
+        optics.reset()
+        cinematics:play(payload)
+        dockControls()
     elseif kind=="Results" and type(payload)=="table" then
         received=true
         mode="Results"
+        cinematics:reset()
         viewing=false
         optics.reset()
         exterior.reset()

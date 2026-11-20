@@ -3,6 +3,7 @@ local World = {}
 local world = workspace:WaitForChild("Thalassa")
 local stations = world.Stations
 local actors = world.Contacts
+local WormFigure = require(script.Parent:WaitForChild("DiveWormFigure"))
 local ocean = world.Ocean
 local floor = ocean["Trench floor"]
 local head = ocean.SearchlightHead
@@ -108,18 +109,10 @@ floor:PivotTo(CFrame.new(0,-350,0))
 
 local leviathan = actors.Leviathan
 local _, anglerSize = leviathan:GetBoundingBox()
-local scale = (10 * math.max(envelope.Size.X,envelope.Size.Z)) / math.max(anglerSize.X,anglerSize.Y,anglerSize.Z)
+local scale = (20 * math.max(envelope.Size.X,envelope.Size.Z)) / math.max(anglerSize.X,anglerSize.Y,anglerSize.Z)
 leviathan:ScaleTo(leviathan:GetScale() * scale)
 
--- Preserve the crawler's existing joints while making its elongated segments visible.
-for _,part in actors.CrackCrawler:GetDescendants() do
-	if part:IsA("Part") and part.Name=="Vermiform segment" and part.Shape==Enum.PartType.Ball and not part.CanCollide then
-		part.Shape=Enum.PartType.Block
-		local surface=Instance.new("SpecialMesh")
-		surface.MeshType=Enum.MeshType.Sphere
-		surface.Parent=part
-	end
-end
+WormFigure.build(actors.CrackCrawler)
 
 local function setShipY(y)
 	local delta = Vector3.new(0,y-shipY,0)
@@ -193,7 +186,7 @@ for name,label in labels do
  end
 end
 local phaseAngle={angler=-.14,squid=math.pi*.51}
-local anglerCruise,squidCruise=515,328
+local anglerCruise,squidCruise=740,328
 local anglerRange,squidRange=anglerCruise,squidCruise
 local oldElapsed
 local function bearing(pos)
@@ -317,7 +310,7 @@ function World.update(state)
  local dt=math.clamp(elapsed-(oldElapsed or elapsed),0,.75)
  oldElapsed=active and elapsed or nil
  phaseAngle.angler+=(shark>0 and .022 or .011)*dt
- anglerRange=approach(anglerRange,anglerCruise-(anglerCruise-192)*math.clamp(shark*1.4,0,1),35,dt)
+ anglerRange=approach(anglerRange,anglerCruise-(anglerCruise-294)*math.clamp(shark*1.4,0,1),48,dt)
  if squid>0 then
   local target=(sqSide-1)*math.pi/2
   local delta=math.atan2(math.sin(target-phaseAngle.squid),math.cos(target-phaseAngle.squid))
@@ -327,14 +320,14 @@ function World.update(state)
  end
  squidRange=approach(squidRange,squidCruise-(squidCruise-88)*math.clamp(squid*1.55,0,1),23,dt)
  -- Megafauna stay beyond the pressure hull even when the feeding tentacles pass broadside.
- megafauna(leviathan,phaseAngle.angler,anglerRange,7.5+18*math.sin(elapsed*.035),elapsed,Vector3.new(1,0,-.14*shark),aim,lit)
+ megafauna(leviathan,phaseAngle.angler,anglerRange,7.5+18*math.sin(elapsed*.035),elapsed,Vector3.new(1,0,-.08*shark),aim,lit)
  megafauna(actors.GiantSquid,phaseAngle.squid,squidRange,12+14*math.sin(elapsed*.028+1.4),elapsed,Vector3.new(-1,0,-.26*squid),aim,lit)
  local crawlerPresent=active and crawler>0
  actors.CrackCrawler:SetAttribute("Detectable",crawlerPresent)
  if crawlerPresent then
   local glass=windows[section].CFrame
   local at=glass.Position+glass.LookVector*(state.boarded and -1.65 or .21)
-  local cf=CFrame.lookAt(at,at-glass.LookVector)*CFrame.Angles(0,0,.12*math.sin(elapsed*.43))
+  local cf=(state.crawlerGrip or CFrame.lookAt(at,at-glass.LookVector))*CFrame.Angles(0,0,.12*math.sin(elapsed*.43))
   face(actors.CrackCrawler,cf)
   animate(actors.CrackCrawler,elapsed,1.64)
  else face(actors.CrackCrawler,hidden) end

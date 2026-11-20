@@ -38,9 +38,10 @@ local function crack(s)
 	Dive.warn(s, "Hull fracture in section 0" .. index .. ". Seal the leak.")
 end
 
-function Dive.endRun(s, survived, reason)
+function Dive.endRun(s, survived, reason, sequence)
 	if s.phase == "Results" then return end
 	s.phase, s.survived, s.reason = "Results", survived, reason
+	s.sequence = sequence
 end
 
 function Dive.spawn(s, name)
@@ -60,6 +61,7 @@ function Dive.spawn(s, name)
 		s.crawlerSection = #open>0 and open[s.rng:NextInteger(1,#open)] or s.rng:NextInteger(1,3)
 		Dive.warn(s, "Scraping on the hull. Seal open fractures.", 5)
 	elseif name == "swarm" then
+		s.foulingExposure, s.floodWarned = 0, false
 		Dive.warn(s, "Barnacles spreading across four hull faces. Check sonar before exiting.", 6)
 	end
 	return true
@@ -87,6 +89,10 @@ local function contacts(s, dt, pace)
 		if s.shark >= 0.93 then
 			if s.engine then
 				s.hull -= 34 * s.rules.damage
+				if s.hull <= 0 then
+					Dive.endRun(s,false,"The angler swallowed the damaged cage.","Angler")
+					return
+				end
 				crack(s)
 				s.shark = 0
 				Dive.warn(s, "Angler impact. Inspect the hull.", 5)
@@ -110,10 +116,13 @@ local function contacts(s, dt, pace)
 		else
 			s.squid += dt * pace / 24
 			s.repelled = math.max(0, s.repelled - dt / 2)
-			if s.squid >= 1 then Dive.endRun(s, false, "The giant squid crushed the cage.") end
+			if s.squid >= 1 then
+				Dive.endRun(s,false,"The giant squid split the cage.","Squid")
+				return
+			end
 		end
 	end
-	if s.crawler > 0 then
+	if s.crawler > 0 and not s.victim then
 		s.crawler += dt * pace / (s.boarded and 26 or 17)
 		if not s.boarded and s.crawler >= 0.47 then
 			if not s.cracks[s.crawlerSection] then
@@ -136,6 +145,17 @@ local function contacts(s, dt, pace)
 		for _,cuts in s.cleanSites or {} do remaining -= cuts/12 end
 		s.battery -= dt * remaining * s.swarm * 0.22 * s.rules.power
 		s.hull -= dt * remaining * s.swarm * 0.17 * s.rules.damage
+		s.foulingExposure = (s.foulingExposure or 0) + dt * remaining * s.swarm * pace
+		if s.foulingExposure >= 36 then
+			Dive.endRun(s,false,"Barnacle growth tore open the hull. The angler followed the wreck.","Flood")
+			return
+		elseif s.foulingExposure >= 24 and not s.floodWarned then
+			s.floodWarned = true
+			Dive.warn(s,"Hull buckling under growth. Clear the colonies before it ruptures.",8)
+		elseif s.hull <= 0 then
+			Dive.endRun(s,false,"The fouled hull ruptured. The angler followed the wreck.","Flood")
+			return
+		end
 	end
 end
 

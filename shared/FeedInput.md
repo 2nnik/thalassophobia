@@ -10,6 +10,7 @@ Both remotes are under `ReplicatedStorage.DiveNet`. The client calls `Input:Fire
 | Dive | `DiveController` sends shared phase, depth, battery, hull, propulsion, light, damage and threat state. It adds private crew state such as outside, oxygen, extinguisher and cameraView. `DiveExterior` adds the cleaning and swimming fields. With sonar active inside the ship, the payload also carries echoes and pingAt. |
 | Results | `DiveController` sends the run receipt. `DismissResults` clears the receipt and asks the lobby for fresh state. |
 | Notice | A string for player-facing feedback. |
+| Cinematic | `DiveController` sends a presentation cue with kind, duration, startedAt and optionally section/position. WormGrab holds only the targeted crewmate. WormRescue and WormDeath replace that cue. Angler, Squid and Flood play before Results. The client owns the wake-up sequence on the first Dive snapshot. |
 
 The server sends Dive updates about four times per second during a run, with additional updates for interactions. The `Sync` action requests the current view. Lobby actions include `Launch`, `Queue`, `CancelQueue`, `PublicLobby`, `LeaveParty`, `Invite` and `Accept` with a numeric user ID, and `Difficulty` with a string argument.
 

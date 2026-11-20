@@ -18,6 +18,14 @@ local members, receipts, throttles, held = {}, {}, {}, {}
 local sceneIdle = Dive.new("Normal", 1, {})
 sceneIdle.phase, sceneIdle.engine = "Lobby", false
 local settle, down
+local cueDuration = {WormRescue=.95,WormDeath=2.8,Angler=5,Squid=6.4,Flood=7.2}
+
+local function cue(p,kind,duration,section,position)
+	if p.Parent == Players then
+		feed:FireClient(p,"Cinematic",{kind=kind,duration=duration,section=section,position=position,
+			startedAt=workspace:GetServerTimeNow()})
+	end
+end
 
 local function notice(p, msg)
 	if p.Parent == Players then feed:FireClient(p, "Notice", msg) end
@@ -40,6 +48,17 @@ local function releaseTether(p,m)
 	if m.anchor then m.anchor:Destroy() end
 	if m.attach then m.attach:Destroy() end
 	m.beam, m.anchor, m.attach, m.tetherMarker, m.outside = nil, nil, nil, nil, false
+end
+
+local function releaseGrab(p,m,s)
+	local grip=m.grab
+	if not grip then return end
+	m.grab=nil
+	grip.weld:Destroy()
+	if grip.humanoid.Parent and grip.root:IsDescendantOf(p.Character or workspace) then
+		grip.humanoid.WalkSpeed,grip.humanoid.AutoRotate=grip.speed,grip.autoRotate
+	end
+	if s.victim==p then s.victim,s.crawlerGrip=nil,nil end
 end
 
 local function tether(p, m)
@@ -124,11 +143,11 @@ local function start(party, difficulty)
 	return true
 end
 
-settle = function(s)
-	if active ~= s or settling then return end
-	settling = true
+local function finishResults(s)
+	if active ~= s then return end
 	local groups = {{},{}}
 	for p,m in members do
+		releaseGrab(p,m,s)
 		releaseTether(p,m)
 		if p.Parent == Players then
 			table.insert(groups[(s.survived and m.alive) and 1 or 2],p)
@@ -153,10 +172,27 @@ settle = function(s)
 	World.update(sceneIdle)
 end
 
+settle = function(s)
+	if active ~= s or settling then return end
+	settling=true
+	local kind=s.sequence
+	if kind then
+		local model=site.Contacts[if kind=="Squid" then "GiantSquid" else "Leviathan"]
+		for p,m in members do
+			releaseGrab(p,m,s)
+			if m.alive then cue(p,kind,cueDuration[kind],s.crawlerSection,model:GetPivot().Position) end
+		end
+		task.delay(cueDuration[kind]+.2,function() finishResults(s) end)
+	else
+		finishResults(s)
+	end
+end
+
 down = function(p, reason)
 	local s,m = active,members[p]
 	if not s or settling or not m or not m.alive then return end
 	m.alive, m.death = false, reason
+	releaseGrab(p,m,s)
 	releaseTether(p,m)
 	notice(p, reason)
 	relocate(p,"LobbySpawn")
@@ -170,7 +206,7 @@ end
 
 local function validPrompt(p, prompt)
 	local m = members[p]
-	if not active or settling or not m or not m.alive or not prompt.Enabled or not prompt:IsDescendantOf(site) then return end
+	if not active or active.elapsed<2.7 or settling or not m or not m.alive or m.grab or not prompt.Enabled or not prompt:IsDescendantOf(site) then return end
 	local base = prompt:FindFirstAncestorWhichIsA("BasePart")
 	local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
 	if not base or not root then return end
@@ -205,7 +241,7 @@ end
 
 local function interact(p, action)
 	local m,s = members[p],active
-	if not m or not s then return end
+	if not m or not s or settling or not m.alive or m.grab then return end
 	if m.cleaning or m.cameraOrigin then return end
 	local cleanIndex = tonumber(action:match("^Clean([1-4])$"))
 	local exterior = cleanIndex ~= nil or action == "Return"
@@ -231,8 +267,15 @@ local function interact(p, action)
 	elseif string.match(action,"^Spray[1-3]$") then
 		if not s.boarded or s.crawlerSection ~= tonumber(action:sub(-1)) then return end
 		if m.charges == 0 then notice(p,"Collect a charged extinguisher from the rack.") return end
+		local victim=s.victim
+		local trapped=victim and members[victim]
+		if trapped and trapped.grab and trapped.grab.fatal then return end
 		m.charges -= 1
 		sprayFoam(p,s.crawlerSection)
+		if trapped then
+			releaseGrab(victim,trapped,s)
+			cue(victim,"WormRescue",cueDuration.WormRescue,s.crawlerSection)
+		end
 		s.crawler, s.boarded = 0, false
 		Dive.warn(s,"The crawler fled through the grate.")
 	elseif action == "Airlock" then
@@ -258,6 +301,59 @@ local function interact(p, action)
 		return
 	end
 	sync(s)
+end
+
+local function updateCrawler(s)
+	if not s.boarded then return end
+	if s.victim then
+		local p,m=s.victim,members[s.victim]
+		local grab=m and m.grab
+		if not grab or not grab.root.Parent then
+			if m then releaseGrab(p,m,s) end
+			s.victim,s.crawlerGrip=nil,nil
+			return
+		end
+		if grab.fatal or s.elapsed<grab.deadline then return end
+		grab.fatal=true
+		cue(p,"WormDeath",cueDuration.WormDeath,s.crawlerSection)
+		task.delay(cueDuration.WormDeath+.15,function()
+			if active~=s or settling or members[p]~=m or m.grab~=grab then return end
+			releaseGrab(p,m,s)
+			s.crawler,s.boarded=0,false
+			down(p,"The worm creature overwhelmed the crew member.")
+		end)
+		return
+	end
+	if s.crawler<.57 then return end
+	local outlet=site.Stations["Section"..s.crawlerSection]["Spray point"]
+	local victim,distance,root,humanoid=nil,13,nil,nil
+	for p,m in members do
+		local c=p.Character
+		local r=c and c:FindFirstChild("HumanoidRootPart")
+		local h=c and c:FindFirstChildOfClass("Humanoid")
+		if m.alive and not m.outside and r and h and h.Health>0 then
+			local d=(r.Position-outlet.Position).Magnitude
+			if d<distance then victim,distance,root,humanoid=p,d,r,h end
+		end
+	end
+	if not victim then return end
+	local m=members[victim]
+	local toward=Vector3.new(outlet.Position.X-root.Position.X,0,outlet.Position.Z-root.Position.Z)
+	local direction=if toward.Magnitude>.2 then toward.Unit else Vector3.zAxis
+	local spot=Vector3.new(root.Position.X,outlet.Position.Y+1.7,root.Position.Z)+direction*2.35
+	local face=Vector3.new(root.Position.X,spot.Y,root.Position.Z)
+	if (face-spot).Magnitude<.2 then face=spot+Vector3.zAxis end
+	local duration=if s.crewCount==1 then 4.2 else 13
+	local weld=Instance.new("WeldConstraint")
+	weld.Name,weld.Part0,weld.Part1="CrawlerGrip",site.HullMotion,root
+	weld.Parent=root
+	m.grab={weld=weld,root=root,humanoid=humanoid,speed=humanoid.WalkSpeed,autoRotate=humanoid.AutoRotate,
+		deadline=s.elapsed+duration}
+	humanoid.WalkSpeed,humanoid.AutoRotate=0,false
+	m.cameraOrigin=nil
+	s.victim,s.crawlerGrip=victim,CFrame.lookAt(spot,face)
+	Dive.warn(s,"Crew member restrained. Use the extinguisher in section 0"..s.crawlerSection..".",duration)
+	cue(victim,"WormGrab",duration+1,s.crawlerSection,spot)
 end
 
 Prompts.PromptTriggered:Connect(function(prompt,p)
@@ -324,6 +420,7 @@ for _,p in Players:GetPlayers() do joined(p) end
 Players.PlayerRemoving:Connect(function(p)
 	local m,s = members[p],active
 	if m then
+		if s then releaseGrab(p,m,s) end
 		releaseTether(p,m)
 		members[p] = nil
 		if s and not settling and recalculate(s) == 0 then
@@ -363,6 +460,7 @@ end)
 local accumulator = 0
 local function carryCrew(delta)
 	if delta.Y == 0 then return end
+	if active.crawlerGrip then active.crawlerGrip += delta end
 	for p,m in members do
 		if not m.alive then continue end
 		if m.tetherMarker and m.anchor then m.anchor.WorldPosition = m.tetherMarker.Position end
@@ -387,6 +485,7 @@ RunService.Heartbeat:Connect(function(dt)
 	if s.swarm>0 and not hadSwarm then Exterior.newSwarm(s) end
 	if s.phase == "Results" then settle(s) return end
 	World.setDepth(s.depth)
+	updateCrawler(s)
 	handleCrew(s,step)
 	if active == s then sync(s) end
 end)
