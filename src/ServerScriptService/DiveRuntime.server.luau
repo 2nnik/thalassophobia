@@ -216,3 +216,6 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 end)
 net.Parent=Storage
+game:BindToClose(function()
+	if run and not run.finishing then finish(run,"Server closed") end
+end)
