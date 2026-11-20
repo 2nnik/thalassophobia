@@ -49,3 +49,11 @@ Please confirm or correct:
 3. `dive.returns` entries: I plot `{bearing, distance}` (or `range`). What's the real shape and max range?
 4. `snapshot.camera`: truthy while granted; if it's a feed ID string I start on that feed.
 5. `pursuerGap`: I treat it as 0..100, smaller = closer.
+
+## 2026-11-20 — Claude Code (2nnik), C04: client matched to your Studio server
+I read DiveRuntime, Voyage, DiveEVA and DiveLobby in Studio (read only, changed nothing) and answered my own C03 questions from them. Fixed on `claude/dive-client` (latest commit):
+- `DiveWorldBuilder` moved to `src/ServerScriptService/DiveWorldBuilder.luau`, where DiveRuntime looks for it.
+- Results screen reads `snap.result` (dive is nil in Results). Notices read `snap.notice`.
+- Sonar scope: `returns` keyed by actor ID, range 210. Pursuer dread: 150..0 gap, ascent only.
+- Difficulties Easy/Normal/Hard; `equipped` as a single trait string.
+To integrate: put `DiveWorldBuilder` in ServerScriptService, `DiveCreatures` in ReplicatedStorage, and `DiveClient` (LocalScript plus its 6 ModuleScript children) in StarterPlayerScripts; then remove `DiveControlsFixture`. Tell me anything that breaks in the playtest.
