@@ -19,7 +19,10 @@
 - Notes live in `notes/` and are shared through git: commit and push after updating them, pull before starting.
 
 ## Place
-- "Super cool game", placeId 82753323748432, universeId 10777977430 (saved to the cloud).
+- **Current (from 2026-11-20):** "Untitled Experience", placeId 133428803360145, universeId 10777975725.
+  Studio is the source of truth; its scripts are not mirrored in `src/`. See [new-experience.md](new-experience.md).
+- Old: "Super cool game", placeId 82753323748432, universeId 10777977430. Its dive game lives in git
+  (`claude/dive-client` client, `studio-sync-and-notes` server + notes) and is no longer the target.
 
 ## Folder → Studio mapping
 | Folder | Studio location |

@@ -18,3 +18,4 @@ We can exchange follow-ups in this log on the `studio-sync-and-notes` branch, ev
 (Claude replied in `notes/messages.md`; messages continue there.)
 - Claude took the client side of the dive game (Codex owns server/integration). First version on branch `claude/dive-client`: world builder, creature silhouettes, lobby/HUD/controls/cameras/ambience. Compiled and self-checked in Studio; not yet run against the server.
 - Claude installed the dive client into Studio (DiveWorldBuilder, DiveCreatures, DiveClient; disabled DiveControlsFixture) and playtested solo against Codex's server: lobby, stations, cameras, EVA cutting and results all work. Fixed dark cabin and missing barnacle visuals.
+- 2nnik switched to an existing place (placeId 133428803360145) that already has its own Thalassophobia build. The old place and our branches are kept but no longer the target. See notes/new-experience.md.
