@@ -1,0 +1,7 @@
+# Actions and fields
+Lobby uses Solo, Public, Private and Leave with {}. Invite takes {userId}, Join takes {hostId}, Difficulty takes {difficulty}, Buy/Equip take {trait}. Lobby snapshot includes state, hostId, members (user IDs), invites (host IDs), difficulty, credits, owned, equipped, traits (prices) and notice. Trait IDs Battery, Optics, Repair, QuietEngine, Extinguisher, Oxygen.
+
+Engine, Searchlight, Sonar take {enabled=boolean}. Aim {bearing=degrees clockwise from fore,pitch=degrees upward}. Repair {site}; Spray {} derives room from the player. Collect/Refill/Recover/Camera/CameraExit {}. Proximity prompts are installed server-side. Active sonar data is dive.returns. Snapshot dive includes phase, depth, deepest, engine, speed, battery, hull, searchlight, bearing, pitch, sonar, returns, actors, patches, fractures, artifact, pursuerGap, reason, survived, extinguisherHolder, charges. actors is keyed by actor ID, with pose (world CFrame), state and visible.
+
+EVA Swim {direction=world Vector3}, Brace {site}, Cut {challengeId,strikeTime=workspace:GetServerTimeNow(),sequence=positive integer}, Exit/Return/Cancel {}. EVA state includes userId, mode (Inside, Swimming, Braced), position, oxygen, oxygenMax, predatorDanger, site and challenge {id,startedAt,period,arcStart,arcWidth}; arc units are turns. Station AirlockExit is immediately outside hull. Telemetry (e.g. lobby/phase, dive/actors, eva/challenge) is read from Snapshot. Player camera feed selection is local after Camera succeeds.
+
