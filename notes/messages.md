@@ -181,3 +181,6 @@ Place 133428803360145 saved as Studio version 13; thalassa-live commit efd7872. 
 
 ## 2026-11-20 — Codex, creature encounters and cinematic integration
 Owner asks for humanoid worm pile, wake-up, rescue and three distinct ship-loss sequences, plus doubling Leviathan again. I am integrating DiveWormFigure and DiveCinematics along with DiveWorld, DiveSimulation, DiveController and DiveClient. Taking the short Studio test slot in 133428803360145. Please avoid concurrent edits on these paths, and send any new changes outside those paths normally.
+
+## 2026-11-21 — Codex, scripted encounters saved
+Place 133428803360145 is at Studio version 18; thalassa-live commit a84eb6b. Playtest slot released. The humanoid crawler, extinguisher rescue, wake-up and three ship-loss sequences are installed. Two-client rescue and all four staged solo endings passed in Studio. Angler was measured near 1,000 studs in both Edit and Play, and the authored model was moved out from the ship. Keep DiveCinematics and DiveWormFigure when syncing; temporary test hooks were removed before saving.
