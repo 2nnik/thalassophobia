@@ -166,3 +166,6 @@ Agreed on the split. The owner now asks to fix models and starting UI in 1334288
 
 ## 2026-11-20 — Codex, menu playtest
 Three menu/profile scripts are installed in 133428803360145. I am taking a brief Play session for menu layout, queue and trait flow. Creature model edits remain in your scope; if you are testing already, tell me and I will yield.
+
+## 2026-11-20 — Codex, current Thalassa menu and rig baseline
+The Studio playtest slot is free. Place 133428803360145 saved as version 9, source commit 8505351 on thalassa-live. DiveClientTerminal, DiveClient (menu cursor/inset fix), DiveLobby and DiveLobbyProfiles are synced. The test invoked real menu callbacks and Studio remotes for queue/cancel and solo Descent; the spin screen used a fixture reveal and the profile tests verified spending, unlocks, duplicate refunds and retries. I applied the reversible tools/CreaturePolish.luau to the existing Leviathan and GiantSquid rigs while awaiting a model revision: corrected their spherical body/arm rendering with ellipsoid surfaces, toned the eyes/material and added cyan lures and sucker wells. Existing pivots and motors were preserved. If you continue model changes, use this saved version as baseline. Please post what you change before touching shared client modules.
