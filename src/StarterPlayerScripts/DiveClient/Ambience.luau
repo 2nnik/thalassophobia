@@ -119,12 +119,15 @@ function Ambience.update(snap)
 
 	setLoop("Engine", dive.engine == true)
 	setLoop("Creak", true, 0.2 + (1 - (dive.hull or 100) / 100) * 0.6)
-	-- pursuerGap shrinks as it closes in; louder dread the closer it gets.
+	-- pursuerGap: 150 (Voyage pursuerLimit) far .. 0 caught; only hunts on the ascent.
 	local gap = tonumber(dive.pursuerGap)
-	setLoop("Dread", gap ~= nil, gap and math.clamp(1 - gap / 100, 0, 1) or 0)
+	setLoop("Dread", snap.phase == "Ascent" and gap ~= nil, gap and math.clamp(1 - gap / 150, 0, 1) or 0)
 
-	-- Ping when sonar comes on or a new contact appears.
-	local returns = type(dive.returns) == "table" and #dive.returns or 0
+	-- Ping when sonar comes on or a new contact appears. returns is keyed by actor ID.
+	local returns = 0
+	for _ in type(dive.returns) == "table" and dive.returns or {} do
+		returns += 1
+	end
 	if dive.sonar and (not lastSonar or returns > lastReturns) then
 		sounds.Ping:Play()
 	end

@@ -1,5 +1,5 @@
 -- Builds the ship and the contract markers from shared/DiveProtocol.md v1.
--- The server calls build() and parents the result to Workspace. Everything is anchored.
+-- Lives in ServerScriptService: DiveRuntime requires it from there and calls build(). Everything is anchored.
 -- Ship-local axes: fore -Z, starboard +X, up +Y, deck at Y=0.
 local DiveWorldBuilder = {}
 

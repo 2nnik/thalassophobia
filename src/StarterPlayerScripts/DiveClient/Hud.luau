@@ -6,7 +6,7 @@ local Hud = {}
 local TEXT = Color3.fromRGB(190, 210, 200)
 local WARN = Color3.fromRGB(230, 90, 70)
 local DIVE_PHASES = { Descent = true, Seabed = true, Ascent = true }
-local SCOPE_RANGE = 150 -- shortcut: guessed sonar range in studs; read it from returns once the server sends one
+local SCOPE_RANGE = 210 -- Voyage sonarRange
 
 local ctx
 local gui: ScreenGui
@@ -139,7 +139,10 @@ function Hud.update(snap)
 	local eva = ctx.myEva(snap)
 	local outside = eva ~= nil and eva.mode ~= "Inside"
 	evaPanel.Visible = outside
-	warning.Text = if outside and eva.predatorDanger then "SOMETHING IS CLOSE" elseif (dive.battery or 100) <= 15 then "BATTERY LOW" else ""
+	warning.Text = if outside and eva.predatorDanger then "SOMETHING IS CLOSE"
+		elseif snap.notice then tostring(snap.notice)
+		elseif (dive.battery or 100) <= 15 then "BATTERY LOW"
+		else ""
 	if outside then
 		oxygenFill.Size = UDim2.fromScale(math.clamp((eva.oxygen or 0) / math.max(eva.oxygenMax or 1, 1e-6), 0, 1), 1)
 		challenge = type(eva.challenge) == "table" and eva.challenge or nil
@@ -159,9 +162,11 @@ function Hud.update(snap)
 		challenge = nil
 	end
 
+	-- The server sends Results with dive=nil and the summary in snap.result.
+	local result = snap.result or dive
 	results.Visible = snap.phase == "Results"
 	if results.Visible then
-		results.Text = string.format("%s\n%s\ndeepest %dm", if dive.survived then "YOU SURFACED" else "LOST AT DEPTH", tostring(dive.reason or ""), math.floor(dive.deepest or 0))
+		results.Text = string.format("%s\n%s\ndeepest %dm", if result.survived then "YOU SURFACED" else "LOST AT DEPTH", tostring(result.reason or ""), math.floor(result.deepest or 0))
 	end
 end
 

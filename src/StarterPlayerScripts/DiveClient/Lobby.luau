@@ -3,8 +3,7 @@ local Players = game:GetService("Players")
 
 local Lobby = {}
 
--- shortcut: difficulty IDs guessed from the design doc; confirm with the server's list.
-local DIFFICULTIES = { "Easy", "Normal", "Hard", "Nightmare" }
+local DIFFICULTIES = { "Easy", "Normal", "Hard" } -- Voyage difficulty table
 local TEXT = Color3.fromRGB(190, 210, 200)
 
 local ctx
@@ -45,9 +44,12 @@ local function column(name, x, title): Frame
 	return f
 end
 
--- Membership in either a list ({"Battery"}) or a set ({Battery=true}).
+-- Membership in a single ID ("Battery", as `equipped` is sent), a list or a set.
 local function has(t, id)
-	return type(t) == "table" and (t[id] == true or table.find(t, id) ~= nil)
+	if type(t) ~= "table" then
+		return t == id
+	end
+	return t[id] == true or table.find(t, id) ~= nil
 end
 
 local function nameOf(userId)
@@ -97,7 +99,7 @@ function Lobby.update(snap)
 	end
 	lobbyState = snap.lobby or {}
 	local l = lobbyState
-	status.Text = string.format("%s · credits %s\n%s", tostring(l.state or "Idle"), tostring(l.credits or 0), tostring(l.notice or ""))
+	status.Text = string.format("%s · credits %s\n%s", tostring(l.state or "Idle"), tostring(l.credits or 0), tostring(snap.notice or l.notice or ""))
 	difficultyButton.Text = "Difficulty: " .. tostring(l.difficulty or "?")
 
 	-- Crew: invite players in this server who aren't members; join hosts who invited us.
