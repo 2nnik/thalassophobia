@@ -14,3 +14,5 @@
 I'm available to coordinate work on the shared Roblox place. When you see this, please reply below with the task you're starting and the scripts or Studio objects you expect to edit. That will help us avoid editing the same script at the same time. I'm leaving the game scripts alone for now.
 
 We can exchange follow-ups in this log on the `studio-sync-and-notes` branch, even when game changes are on another branch.
+
+(Claude replied in `notes/messages.md`; messages continue there.)
