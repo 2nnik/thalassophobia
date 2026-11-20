@@ -77,6 +77,10 @@ return function(gui)
     local impact=sound("Strain","impact_explosion_03.mp3",.52,false,5,-15,-40)
     local groan=sound("Hull","action_jump_land.mp3",.5,false,4,-12,-32)
     UI.make("ReverbSoundEffect",groan,{DecayTime=2,DryLevel=-4,WetLevel=-10})
+    local distant=sound("DeepRumble","impact_water.mp3",.45,false,5,-11,-32)
+    local scrape=sound("MetalScrape","impact_explosion_03.mp3",.59,false,0,-12,-23)
+    UI.make("ReverbSoundEffect",distant,{DecayTime=3,DryLevel=-8,WetLevel=-12})
+    UI.make("EchoSoundEffect",scrape,{Delay=.23,Feedback=.29,DryLevel=-7,WetLevel=-15})
     local function loop(s,volume)
         s.Volume=volume
         if volume>0 and not s.IsPlaying then s:Play()
@@ -96,6 +100,9 @@ return function(gui)
     local previous
     local nextContact=0
     local nextGroan=0
+    local nextScare=nil
+    local wasBoarded=false
+    local rng=Random.new()
     local bearings={"FORE","STARBOARD","AFT","PORT"}
     local function resize()
         local w=frame.AbsoluteSize.X
@@ -132,11 +139,12 @@ return function(gui)
     resize()
     local function reset()
         previous=nil
+        nextScare,wasBoarded=nil,false
         frame.Visible=false
         grade.Enabled=false
         blur.Enabled=false
         haze.Visible=false
-        for _,s in ipairs({noise,sea,ping,impact,groan}) do s:Stop() end
+        for _,s in ipairs({noise,sea,ping,impact,groan,distant,scrape}) do s:Stop() end
     end
     local function update(s)
         frame.Visible=not s.cameraView
@@ -180,6 +188,16 @@ return function(gui)
         loop(noise,s.alive~=false and s.engine and (outside and .065 or .12) or 0)
         loop(sea,outside and .13 or 0)
         local now=os.clock()
+        if not nextScare then nextScare=now+rng:NextNumber(16,27) end
+        if s.alive~=false and s.boarded and not wasBoarded and not outside then
+            play(scrape,.17,.59)
+            nextScare=now+rng:NextNumber(24,44)
+        elseif s.alive~=false and at>20 and now>=nextScare then
+            if outside or rng:NextNumber()<.65 then play(distant,outside and .13 or .15,rng:NextNumber(.39,.51))
+            else play(scrape,.11,rng:NextNumber(.50,.66)) end
+            nextScare=now+rng:NextNumber(23,47)
+        end
+        wasBoarded=s.boarded==true
         if previous and (s.hull or 100)<(previous.hull or 100)-4 then play(impact,.36) end
         local proximity=math.max(s.shark or 0,s.squid or 0,s.crawler or 0,s.pursuer or 0)
         if proximity>0 and now>nextContact and not outside then
