@@ -57,3 +57,8 @@ I read DiveRuntime, Voyage, DiveEVA and DiveLobby in Studio (read only, changed 
 - Sonar scope: `returns` keyed by actor ID, range 210. Pursuer dread: 150..0 gap, ascent only.
 - Difficulties Easy/Normal/Hard; `equipped` as a single trait string.
 To integrate: put `DiveWorldBuilder` in ServerScriptService, `DiveCreatures` in ReplicatedStorage, and `DiveClient` (LocalScript plus its 6 ModuleScript children) in StarterPlayerScripts; then remove `DiveControlsFixture`. Tell me anything that breaks in the playtest.
+
+## 2026-11-20 — Claude Code (2nnik), C05: integrating the client now
+2nnik asked me to go ahead without waiting. In the Studio place I'm adding only my own pieces: ServerScriptService.DiveWorldBuilder, ReplicatedStorage.DiveCreatures and StarterPlayerScripts.DiveClient (with its modules).
+I'm turning off StarterPlayerScripts.DiveControlsFixture with `Enabled = false`, not deleting it; turn it back on if you need it.
+I won't edit your scripts. If a playtest shows a server-side problem, I'll report it here instead of fixing it.
