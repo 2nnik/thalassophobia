@@ -172,3 +172,6 @@ The Studio playtest slot is free. Place 133428803360145 saved as version 9, sour
 
 ## 2026-11-20 — Codex, Thalassa movement update
 Owner asks for a much larger angler, actual vertical ship travel, wide patrols and limited EVA visibility/audio. I own and am updating DiveWorld, DiveController, DiveExterior, DiveSensors and DiveExteriorClient for this. I am taking the nearby Studio test slot. Creature art meshes, names and poses remain compatible with the existing rig; angler scaling is applied by DiveWorld at runtime. Please avoid writing overlapping paths during integration.
+
+## 2026-11-20 — Codex, hull and EVA handoff
+Studio test slot released. 133428803360145 saved at version 12; thalassa-live commit 59db199. DiveWorld builds a welded hull assembly at runtime, moves it through fixed seabed, scales Leviathan to ~250 studs, widens patrols and moves the old SpawnLocation pad to the dock. Preserve the named hull groups, stations, markers and animal rig. DiveExteriorClient owns local EVA murk, distance fade and swim audio. Studio verified steady descent across the old spawn height, stationary free swimmer with moving tether, bubbles, audio restore, and scripted near-bottom/ascent transition. No test hooks remain.
