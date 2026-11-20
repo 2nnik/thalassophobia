@@ -25,11 +25,13 @@ local controls=nil
 local received=false
 local terminal
 local function dockControls()
-    player.CameraMode=Enum.CameraMode.LockFirstPerson
+    player.CameraMode=if mode=="Dive" then Enum.CameraMode.LockFirstPerson else Enum.CameraMode.Classic
+    screen.IgnoreGuiInset=mode~="Dive"
     if controls then
         if mode=="Dive" and not viewing then controls:Enable() else controls:Disable() end
     end
     InputService.MouseIconEnabled=mode~="Dive" or viewing
+    if mode~="Dive" then InputService.MouseBehavior=Enum.MouseBehavior.Default end
 end
 local function send(action,arg)
     if action=="InviteFriends" then

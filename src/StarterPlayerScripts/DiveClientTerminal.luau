@@ -1,9 +1,113 @@
 local Players=game:GetService("Players")
 local GuiService=game:GetService("GuiService")
 local UIS=game:GetService("UserInputService")
+local RunService=game:GetService("RunService")
 local UI=require(script.Parent.DiveClientStyle)
 local c=UI.c
 local off=UDim2.fromOffset
+local scale=UDim2.fromScale
+local color=Color3.fromRGB
+local function gradient(parent,colors,rotation,alpha)
+    return UI.make("UIGradient",parent,{Color=ColorSequence.new(colors),Rotation=rotation or 0,
+        Transparency=alpha or NumberSequence.new(0)})
+end
+
+-- A separate, client-only title scene keeps the lobby independent of the dive camera and lighting.
+local function titleScene(parent)
+    gradient(parent,{
+        ColorSequenceKeypoint.new(0,color(17,74,83)),
+        ColorSequenceKeypoint.new(.42,color(6,35,44)),
+        ColorSequenceKeypoint.new(1,color(2,11,21)),
+    },110)
+    local viewport=UI.make("ViewportFrame",parent,{
+        Name="UnderwaterScene",BackgroundTransparency=1,Size=scale(1,1),
+        Ambient=color(39,81,92),LightColor=color(144,229,222),LightDirection=Vector3.new(-.6,-1,-.4),
+        ImageColor3=color(163,212,213),
+    })
+    local world=UI.make("WorldModel",viewport)
+    local camera=UI.make("Camera",viewport,{FieldOfView=43})
+    viewport.CurrentCamera=camera
+    local function solid(where,class,name,size,pose,shade,shape)
+        local p=UI.make(class,where,{Name=name,Anchored=true,CanCollide=false,
+            Size=size,CFrame=pose,Color=shade,CastShadow=false})
+        if shape then p.Shape=shape end
+        return p
+    end
+    local function oval(where,name,size,pose,shade)
+        return solid(where,"Part",name,size,pose,shade,Enum.PartType.Ball)
+    end
+    local function bar(where,name,a,b,width,shade)
+        return solid(where,"Part",name,Vector3.new(width,width,(a-b).Magnitude),
+            CFrame.lookAt((a+b)*.5,b),shade)
+    end
+    local function v(x,y,z) return Vector3.new(x,y,z) end
+    local rng=Random.new(180)
+    for i=1,32 do
+        local x=rng:NextNumber(-59,55)
+        local z=rng:NextNumber(-55,40)
+        local h=rng:NextNumber(1,4)+(math.abs(x)>28 and rng:NextNumber(2,11) or 0)
+        local rock=solid(world,"WedgePart","Basalt",v(rng:NextNumber(5,18),h,rng:NextNumber(6,21)),
+            CFrame.new(x,-8+h/3,z)*CFrame.Angles(rng:NextNumber(-.3,.3),rng:NextNumber(0,6),0),
+            color(12+i%4*6,25+i%5*5,35+i%6*4))
+        rock.Transparency=math.clamp((-z-8)/62,.06,.65)
+    end
+    local vessel=UI.make("Model",world,{Name="Kestrel survey bell"})
+    local steel,rim,light=color(77,113,110),color(20,46,51),color(128,247,212)
+    oval(vessel,"Pressure hull",v(7.4,6.4,18),CFrame.new(),steel)
+    oval(vessel,"Forward window",v(6.25,5.2,4.5),CFrame.new(0,.18,-7.25),color(16,44,58))
+    oval(vessel,"Window reflection",v(4.3,.28,2),CFrame.new(-.15,1.58,-8.5)*CFrame.Angles(.3,0,.14),color(117,204,201))
+    for i=-2,2 do
+        local z=i*2.45
+        local radius=math.sqrt(1-(z/9)^2)
+        for j=0,15 do
+            local a,b=j*math.pi/8,(j+1)*math.pi/8
+            bar(vessel,"Hull hoop",v(3.82*radius*math.cos(a),3.27*radius*math.sin(a),z),
+                v(3.82*radius*math.cos(b),3.27*radius*math.sin(b),z),.23,rim)
+        end
+    end
+    for _,s in ipairs({-1,1}) do
+        oval(vessel,"Ballast tank",v(2.1,1.9,13),CFrame.new(3.8*s,-1.65,1),color(43,75,76))
+        solid(vessel,"Part","Landing skid",v(.92,.43,12),CFrame.new(3.4*s,-3.85,0),rim)
+        for _,z in ipairs({-3.65,3.65}) do
+            bar(vessel,"Skid truss",v(2.4*s,-2.2,z),v(3.4*s,-3.85,z+.65),.31,rim)
+        end
+        oval(vessel,"Floodlight shroud",v(1.35,1.35,2.1),CFrame.new(2.7*s,-.78,-6.2),rim)
+        oval(vessel,"Floodlight",v(.96,.96,.37),CFrame.new(2.7*s,-.78,-7.23),light)
+        for i=-1,1 do
+            oval(vessel,"Navigation lamp",v(.18,.18,.71),CFrame.new(3.66*s,.55,i*.85+1.25),light)
+        end
+    end
+    local origin=CFrame.new(0,.7,-4)*CFrame.Angles(0,-1.25,-.10)
+    vessel:PivotTo(origin)
+    local dust=UI.frame(parent,Color3.new(),nil,nil,1)
+    local particles={}
+    for _=1,39 do
+        local x,y=rng:NextNumber(),rng:NextNumber()
+        local d=UI.frame(dust,color(156,213,206),scale(x,y),off(rng:NextInteger(1,3),rng:NextInteger(1,3)),rng:NextNumber(.38,.84))
+        table.insert(particles,{d,x,y,rng:NextNumber(.007,.025)})
+    end
+    local shade=UI.frame(parent,Color3.new(1,1,1))
+    gradient(shade,{ColorSequenceKeypoint.new(0,c.black),ColorSequenceKeypoint.new(1,color(3,19,25))},0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.37,.13),
+            NumberSequenceKeypoint.new(.70,.73),NumberSequenceKeypoint.new(1,.27),
+        }))
+    local t=0
+    local step
+    step=RunService.RenderStepped:Connect(function(dt)
+        if not parent.Parent then step:Disconnect() return end
+        if not parent.Visible then return end
+        t+=dt
+        local ratio=parent.AbsoluteSize.X/math.max(1,parent.AbsoluteSize.Y)
+        local wide=ratio>1.28
+        camera.CFrame=CFrame.lookAt(v(19+math.sin(t*.18)*.65,5,wide and 26 or 34),
+            v(wide and -6.4 or -.2,wide and -.8 or 1.4,-4))
+        vessel:PivotTo(origin*CFrame.new(0,math.sin(t*.62)*.38,0)*CFrame.Angles(0,math.sin(t*.23)*.09,math.sin(t*.36)*.025))
+        for _,p in ipairs(particles) do
+            p[1].Position=scale((p[2]+t*p[4]*.7)%1,(p[3]-t*p[4])%1)
+        end
+    end)
+end
 local function chart(parent)
     local f=UI.frame(parent,c.sea,off(22,99),off(352,369))
     f.ClipsDescendants=true
@@ -42,16 +146,41 @@ local function chart(parent)
     return f
 end
 return function(gui,send)
-    local backdrop=UI.frame(gui,c.black,nil,nil,.10)
+    local backdrop=UI.frame(gui,c.black)
     backdrop.Name="CrewTerminal"
+    titleScene(backdrop)
+    local home=UI.frame(backdrop,c.black,nil,nil,1)
+    local hero=UI.frame(home,c.black,nil,off(520,495),1)
+    local heroZoom=UI.make("UIScale",hero,{Scale=1})
+    UI.frame(hero,c.green,off(0,8),off(26,2))
+    UI.label(hero,"KESTREL 04  /  SURVEY BELL",14,c.green,UI.mono,off(39,-3),off(370,26))
+    local heroTitle=UI.label(hero,"THALASSO\nPHOBIA",81,c.white,Enum.Font.GothamBlack,off(-3,22),off(520,180))
+    heroTitle.LineHeight=.77
+    local heroBrief=UI.label(hero,"Artifact recovery  •  600 m",17,c.soft,UI.body,off(0,192),off(390,28))
+    local heroStatus=UI.label(hero,"",14,c.orange,UI.mono,off(0,462),off(510,30))
+    local heroButtons={}
+    local function heroButton(value,detail,id,top,callback,primary)
+        local b=UI.button(hero,"",id,primary and c.green or c.black,c.white,callback)
+        b.Position,b.Size=off(0,top),off(340,49)
+        b.BackgroundTransparency=primary and .03 or .30
+        local foreground=primary and c.black or c.white
+        if not primary then UI.edge(b,c.grid) end
+        UI.frame(b,primary and c.black or c.green,off(0,0),off(2,49),primary and .7 or .1)
+        local caption=UI.label(b,value,18,foreground,UI.bold,off(14,3),off(280,26))
+        local sub=UI.label(b,detail,12,primary and c.surface or c.soft,UI.mono,off(14,25),off(286,20))
+        UI.label(b,"›",24,foreground,UI.body,off(302,5),off(26,36),Enum.TextXAlignment.Right)
+        table.insert(heroButtons,b)
+        return b,caption,sub
+    end
+    local homeWallet=UI.label(home,"",14,c.soft,UI.mono,nil,nil,Enum.TextXAlignment.Right)
     local shell=UI.frame(backdrop,c.surface)
     shell.AnchorPoint=Vector2.new(.5,.5)
     shell.Position=UDim2.fromScale(.5,.5)
     UI.edge(shell,c.line)
     local zoom=UI.make("UIScale",shell,{Scale=1})
     UI.frame(shell,c.green,off(0,0),off(50,4))
-    local name=UI.label(shell,"THALASSOPHOBIA",36,c.white,UI.bold,off(21,15),off(488,47))
-    local subtitle=UI.label(shell,"SUBMERSIBLE OPERATIONS",13,c.green,UI.mono,off(23,61),off(345,21))
+    local name=UI.label(shell,"DIVE TERMINAL",35,c.white,Enum.Font.GothamBlack,off(21,15),off(488,47))
+    local subtitle=UI.label(shell,"KESTREL 04",13,c.green,UI.mono,off(23,61),off(345,21))
     local wallet=UI.label(shell,"",13,c.soft,UI.mono,nil,nil,Enum.TextXAlignment.Right)
     local divider=UI.frame(shell,c.line,off(0,88),UDim2.new(1,0,0,1))
     local left=chart(shell)
@@ -64,9 +193,15 @@ return function(gui,send)
     local footer=UI.label(shell,"",12,c.soft,UI.mono,off(23,477),off(852,26))
     local modal=UI.make("TextButton",backdrop,{Text="",BackgroundTransparency=1,Size=off(1,1),Modal=true,Selectable=false,
         AutoButtonColor=false,Active=true})
-    local tab="DIVE"
+    local tab="HOME"
     local state={}
     local report=nil
+    local spinUntil=0
+    local spinStarted=0
+    local spinResultId
+    local spinPreview
+    local selectedResult
+    local render
     local navItems={}
     local order=0
     local function row(height)
@@ -147,11 +282,52 @@ return function(gui,send)
         end
     end
     local function gear()
-        title("Crew outfitter")
-        para("Equip one trait for the next dive. Purchases last between runs.",37)
+        title("Trait station")
+        local cost=state.spinCost
+        local busy=os.clock()<spinUntil
+        local display=row(84)
+        display.BackgroundTransparency=0
+        display.BackgroundColor3=c.panel
+        UI.edge(display,c.line)
+        UI.frame(display,c.green,off(0,0),off(4,84))
+        local result
+        for _,trait in ipairs(state.traits or {}) do
+            if selectedResult and trait.id==selectedResult.trait then result=trait break end
+        end
+        local status=if busy then "SCANNING LOADOUT…" elseif result then "LAST SPIN" else "TRAIT DRAW"
+        UI.label(display,status,11,c.green,UI.mono,off(13,5),UDim2.new(1,-26,0,20))
+        spinPreview=UI.label(display,if result then result.name else "Awaiting spin",25,c.white,UI.bold,
+            off(13,24),UDim2.new(1,-26,0,34))
+        local caption=if result and selectedResult.duplicate then "Already owned  •  +"..selectedResult.refund.." CR returned"
+            elseif result then "Unlocked in your loadout" else "Equip one unlocked trait per dive"
+        UI.label(display,caption,12,c.soft,UI.mono,off(13,58),UDim2.new(1,-26,0,18))
+        if type(cost)=="number" then
+            local ready=not busy and not state.loading and not state.deploying and not state.queued and not state.busy
+            if ready and (state.money or 0)>=cost then
+                buttonRow({{"Spin  ·  "..cost.." CR","SpinTrait",function()
+                    if os.clock()<spinUntil then return end
+                    spinStarted=os.clock()
+                    spinUntil=spinStarted+6
+                    send("SpinTrait")
+                    render()
+                    task.delay(6,function()
+                        if spinUntil>0 and os.clock()>=spinUntil then spinUntil=0 render() end
+                    end)
+                end,c.green,c.black}})
+            else
+                para(if busy then "Selecting a trait…" elseif (state.money or 0)<cost
+                    then "Earn credits on dives. A spin costs "..cost.." CR."
+                    else "Spins are available at the dock when the crew is idle.",42)
+            end
+        elseif state.loading then
+            para("Loading your credit ledger…")
+        end
+        label("TRAITS & ODDS")
         for _,t in ipairs(state.traits or {}) do
-            local caption=t.equipped and "Unequip" or t.owned and "Equip" or tostring(t.price).." CR"
-            entry(t.name,t.description,caption,"Trait"..t.id,function() send("Trait",t.id) end)
+            local caption=t.owned and (t.equipped and "Unequip" or "Equip") or nil
+            local odds=type(t.weight)=="number" and string.format("  ·  %d%%",t.weight) or ""
+            local suffix=if t.equipped then "  ·  EQUIPPED" elseif not t.owned then "  ·  LOCKED" else ""
+            entry(t.name..odds..suffix,t.description,caption,"Trait"..t.id,function() send("Trait",t.id) end)
         end
     end
     local function dive()
@@ -212,25 +388,66 @@ return function(gui,send)
         buttonRow({{"Return to dock","DismissResults",function() send("DismissResults") end,c.green,c.black}})
     end
     local pages={DIVE=dive,CREW=crew,TRAITS=gear,GUIDE=guide}
-    local render
-    for idx,key in ipairs({"DIVE","CREW","TRAITS","GUIDE"}) do
-        local b=UI.button(nav,key,"Tab"..key,c.panel,c.soft,function()
-            tab=key
-            content.CanvasPosition=Vector2.zero
-            render()
-        end)
-        b.Size=UDim2.new(.25,-4,1,0)
-        b.Position=UDim2.new((idx-1)*.25,0,0,0)
+    local function open(key)
+        if tab==key then return end
+        tab=key
+        content.CanvasPosition=Vector2.zero
+        render()
+        if UIS.PreferredInput==Enum.PreferredInput.Gamepad then
+            GuiService.SelectedObject=if key=="HOME" then heroButtons[1] else navItems[key]
+        end
+    end
+    local _,launchCaption,launchSub=heroButton("Launch solo","Private dive","HomeLaunch",231,function()
+        if isHost() and not state.loading and not state.deploying and not state.queued and not state.busy then
+            send("Launch")
+        else
+            open("DIVE")
+        end
+    end,true)
+    local _,queueCaption,queueSub=heroButton("Public queue","Find a crew","HomeQueue",288,function()
+        if isHost() and not state.loading and not state.deploying and not state.queued and not state.busy then
+            send("Queue")
+        end
+        open("DIVE")
+    end)
+    heroButton("Trait station","Spin for a loadout upgrade","HomeTraits",345,function() open("TRAITS") end)
+    heroButton("Dive setup","Difficulty, crew and procedures","HomeSetup",402,function() open("DIVE") end)
+    for i,b in ipairs(heroButtons) do
+        b.NextSelectionUp=heroButtons[i-1]
+        b.NextSelectionDown=heroButtons[i+1]
+    end
+    local keys={"HOME","DIVE","CREW","TRAITS","GUIDE"}
+    for idx,key in ipairs(keys) do
+        local b=UI.button(nav,key,"Tab"..key,c.panel,c.soft,function() open(key) end)
+        b.Size=UDim2.new(1/#keys,-4,1,0)
+        b.Position=UDim2.new((idx-1)/#keys,0,0,0)
         b.Font=UI.mono
         b.TextSize=15
         navItems[key]=b
     end
-    local keys={"DIVE","CREW","TRAITS","GUIDE"}
     for i,key in ipairs(keys) do
         navItems[key].NextSelectionLeft=navItems[keys[(i-2)%#keys+1]]
         navItems[key].NextSelectionRight=navItems[keys[i%#keys+1]]
     end
     render=function()
+        local onHome=tab=="HOME" and not report
+        home.Visible,shell.Visible=onHome,not onHome
+        homeWallet.Text=state.money and string.format("%d  CR",state.money) or ""
+        local party=state.party or {}
+        launchCaption.Text=#party>1 and "Launch crew" or "Launch solo"
+        launchSub.Text=if state.hostId and not isHost() then "Your dive leader launches the crew" else "Private dive  /  "..(state.difficulty or "Normal")
+        queueCaption.Text=state.queued and "View queue" or "Public queue"
+        queueSub.Text=state.queued and "Searching for crew…" or "Find a crew"
+        heroStatus.Text=if state.loading or not state.hostId then "CONNECTING TO DOCK"
+            elseif state.deploying then "PREPARING DEPARTURE"
+            elseif state.busy then "CAGE IN USE" else ""
+        if onHome then
+            if backdrop.Visible and UIS.PreferredInput==Enum.PreferredInput.Gamepad then
+                local selected=GuiService.SelectedObject
+                if not selected or not selected:IsDescendantOf(home) then GuiService.SelectedObject=heroButtons[1] end
+            end
+            return
+        end
         local focused=GuiService.SelectedObject
         local selected=focused and focused:IsDescendantOf(content) and focused.Name or nil
         local scroll=content.CanvasPosition
@@ -238,6 +455,7 @@ return function(gui,send)
             if child:IsA("GuiObject") then child:Destroy() end
         end
         order=0
+        spinPreview=nil
         wallet.Text=state.money and string.format("%d  CR",state.money) or ""
         for key,btn in pairs(navItems) do
             btn.BackgroundColor3=(key==tab and not report) and c.soft or c.panel
@@ -279,6 +497,15 @@ return function(gui,send)
         local v=backdrop.AbsoluteSize
         if v.X<1 or v.Y<1 then return end
         local narrow=v.X/v.Y<1.36
+        heroZoom.Scale=if narrow then math.min(1,(v.X-36)/360,(v.Y-42)/515)
+            else math.min(1.28,v.X/1240,v.Y/625)
+        hero.Position=if narrow then off(18,math.max(25,(v.Y-495*heroZoom.Scale)*.65))
+            else off(v.X*.078,math.max(24,(v.Y-495*heroZoom.Scale)*.5))
+        homeWallet.Position=UDim2.new(1,-140,0,12)
+        homeWallet.Size=off(118,24)
+        heroTitle.Size=off(narrow and 380 or 520,180)
+        heroTitle.TextSize=narrow and 74 or 81
+        heroBrief.Size=off(narrow and 350 or 390,28)
         local w,h=narrow and 424 or 900,narrow and 582 or 508
         shell.Size=off(w,h)
         zoom.Scale=math.min(1.23,(v.X-12)/w,(v.Y-12)/h)
@@ -298,7 +525,18 @@ return function(gui,send)
     backdrop:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize)
     UIS.LastInputTypeChanged:Connect(function()
         if backdrop.Visible and UIS.PreferredInput==Enum.PreferredInput.Gamepad and not GuiService.SelectedObject then
-            GuiService.SelectedObject=report and content:FindFirstChild("DismissResults",true) or navItems[tab]
+            GuiService.SelectedObject=if report then content:FindFirstChild("DismissResults",true)
+                elseif tab=="HOME" then heroButtons[1] else navItems[tab]
+        end
+    end)
+    local spinStep
+    spinStep=RunService.RenderStepped:Connect(function()
+        if not backdrop.Parent then spinStep:Disconnect() return end
+        local choices=state.traits
+        if backdrop.Visible and tab=="TRAITS" and not report and spinPreview and spinPreview.Parent
+            and os.clock()<spinUntil and choices and #choices>0 then
+            local index=math.floor((os.clock()-spinStarted)*10)%#choices+1
+            spinPreview.Text=choices[index].name
         end
     end)
     resize()
@@ -312,6 +550,17 @@ return function(gui,send)
             state=s
             report=nil
             backdrop.Visible=true
+            local result=s.spinResult
+            if type(result)=="table" and result.id~=spinResultId then
+                spinResultId=result.id
+                selectedResult=result
+                if os.clock()<spinUntil then
+                    spinUntil=math.max(spinStarted+1.2,os.clock()+.18)
+                    task.delay(spinUntil-os.clock(),function()
+                        if spinUntil>0 and os.clock()>=spinUntil then spinUntil=0 render() end
+                    end)
+                end
+            end
             render()
         end,
         results=function(s)

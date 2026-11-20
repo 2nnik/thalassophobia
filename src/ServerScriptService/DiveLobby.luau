@@ -47,10 +47,11 @@ local function view(plr)
 			table.insert(invites,info(host))
 		end
 	end
-	local money,equipped,traits=Profiles.view(plr)
+	local money,equipped,traits,spinResult=Profiles.view(plr)
 	feed:FireClient(plr,"Lobby",{
 		difficulty=group.difficulty,party=roster,hostId=group.members[1].UserId,available=available,invites=invites,
-		money=money,equipped=equipped,traits=traits,queued=group.ticket~=nil,deploying=group.deploying==true,
+		money=money,equipped=equipped,traits=traits,spinCost=Profiles.spinCost,spinResult=spinResult,
+		queued=group.ticket~=nil,deploying=group.deploying==true,
 		queueSeconds=if group.joined then math.max(0,os.time()-group.joined) else 0,
 		studio=studio,reserved=game.PrivateServerId~="",busy=busy(plr),loading=not Profiles.ready(plr),
 	})
@@ -266,6 +267,8 @@ function L.input(plr,action,arg)
 	if action=="CancelQueue" and host then
 		cancel(group)
 	elseif group.ticket then return
+	elseif action=="SpinTrait" then
+		notice(plr,Profiles.spin(plr))
 	elseif action=="Trait" and typeof(arg)=="string" then
 		notice(plr,Profiles.choose(plr,arg))
 	elseif action=="Difficulty" and host and typeof(arg)=="string" and difficulties[arg] then

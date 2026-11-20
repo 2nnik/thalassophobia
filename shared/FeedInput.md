@@ -11,6 +11,8 @@ Both remotes are under `ReplicatedStorage.DiveNet`. The client calls `Input:Fire
 | Results | `DiveController` sends the run receipt. `DismissResults` clears the receipt and asks the lobby for fresh state. |
 | Notice | A string for player-facing feedback. |
 
-The server sends Dive updates about four times per second during a run, with additional updates for interactions. The `Sync` action requests the current view. Lobby actions include `Launch`, `Queue`, `CancelQueue`, `PublicLobby`, `LeaveParty`, `Invite` and `Accept` with a numeric user ID, and `Difficulty` and `Trait` with string arguments.
+The server sends Dive updates about four times per second during a run, with additional updates for interactions. The `Sync` action requests the current view. Lobby actions include `Launch`, `Queue`, `CancelQueue`, `PublicLobby`, `LeaveParty`, `Invite` and `Accept` with a numeric user ID, and `Difficulty` with a string argument.
+
+`SpinTrait` spends `Lobby.spinCost` earned credits. The server samples using the catalog weights, then persists the balance and unlock together. `Lobby.spinResult` carries a unique `id`, `trait`, `duplicate` and `refund` for the reveal. `Trait` with an owned trait ID toggles equip.
 
 Dive actions include `CloseCamera`, `SwimMove` with direction and look vectors, `CleanStrike` with challenge id and strike time, and `CleanCancel`. Many station interactions originate from server-side ProximityPrompts. Review `DiveController`, `DiveExterior`, and `DiveLobby` for validation and exact fields before changing the interface.

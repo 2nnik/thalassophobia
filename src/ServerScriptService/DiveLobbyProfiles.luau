@@ -6,18 +6,25 @@ local HttpService = game:GetService("HttpService")
 local localMode = RunService:IsStudio() or game.GameId == 0
 local store = if localMode then nil else DataStoreService:GetDataStore("Thalassophobia_Profile_1")
 local Profiles = {}
+Profiles.spinCost = 50
+local duplicateRefund = 20
+local rng = Random.new()
 local cache, locked, pending, loading = {}, {}, {}, {}
 local updateClient, notifyFailure
 local catalog = {
-	{id="Battery", name="Reserve cells", description="The cage uses 15% less power.", price=95},
-	{id="Optics", name="Focusing lens", description="The spotlight repels the squid faster.", price=65},
-	{id="Welder", name="Hull welder", description="Seal a damaged hull panel faster.", price=50},
-	{id="Baffle", name="Engine baffle", description="Gain shark reaction time at the cost of thrust.", price=105},
-	{id="Tank", name="Reserve cylinder", description="Carry a larger extinguisher charge.", price=60},
-	{id="Diver", name="Rebreather", description="Stay outside longer on each excursion.", price=75},
+	{id="Battery", name="Reserve cells", description="The cage uses 15% less power.", weight=10},
+	{id="Optics", name="Focusing lens", description="The spotlight repels the squid faster.", weight=20},
+	{id="Welder", name="Hull welder", description="Seal a damaged hull panel faster.", weight=17},
+	{id="Baffle", name="Engine baffle", description="Gain angler reaction time at the cost of thrust.", weight=13},
+	{id="Tank", name="Reserve cylinder", description="Carry a larger extinguisher charge.", weight=22},
+	{id="Diver", name="Rebreather", description="Stay outside longer on each excursion.", weight=18},
 }
 local byId = {}
-for _, item in catalog do byId[item.id] = item end
+local totalWeight = 0
+for _, item in catalog do
+	byId[item.id] = item
+	totalWeight += item.weight
+end
 
 local function normalize(raw)
 	local data = if typeof(raw) == "table" then raw else {}
@@ -102,7 +109,7 @@ function Profiles.view(plr)
 		row.equipped=data.equipped==row.id
 		table.insert(rows,row)
 	end
-	return data.money,data.equipped,rows
+	return data.money,data.equipped,rows,data.spinResult
 end
 function Profiles.choose(plr,id)
 	local item=byId[id]
@@ -110,14 +117,37 @@ function Profiles.choose(plr,id)
 	local response=""
 	local ok=transact(plr,HttpService:GenerateGUID(false),function(data)
 		if not data.owned[id] then
-			if data.money<item.price then response="Requires "..item.price.." credits." return end
-			data.money-=item.price
-			data.owned[id]=true
+			response="Unlock this trait at the spin station."
+			return
 		end
 		data.equipped=if data.equipped==id then "" else id
 		response=if data.equipped=="" then "Trait unequipped." else item.name.." equipped."
 	end)
 	return if ok then response else "Could not save your loadout. Try again."
+end
+function Profiles.spin(plr)
+	if not Profiles.ready(plr) then return "Loadout is busy." end
+	-- Pick once for the transaction so UpdateAsync retries cannot reroll.
+	local roll = rng:NextInteger(1,totalWeight)
+	local selected
+	for _,item in catalog do
+		roll -= item.weight
+		if roll <= 0 then selected=item break end
+	end
+	local receipt = HttpService:GenerateGUID(false)
+	local ok = transact(plr,receipt,function(data)
+		if data.money < Profiles.spinCost then return end
+		local duplicate = data.owned[selected.id] == true
+		local refund = if duplicate then duplicateRefund else 0
+		data.money -= Profiles.spinCost - refund
+		data.owned[selected.id] = true
+		data.spinResult = {id=receipt,trait=selected.id,duplicate=duplicate,refund=refund}
+	end)
+	if not ok then return "Could not save your spin. Try again." end
+	local result = cache[plr.UserId].spinResult
+	if not result or result.id ~= receipt then return "A spin costs "..Profiles.spinCost.." earned credits." end
+	return if result.duplicate then selected.name.." duplicate. +"..result.refund.." credits returned."
+		else selected.name.." unlocked."
 end
 function Profiles.award(plr,amount)
 	if amount<=0 then return end
