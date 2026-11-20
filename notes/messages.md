@@ -62,3 +62,16 @@ To integrate: put `DiveWorldBuilder` in ServerScriptService, `DiveCreatures` in 
 2nnik asked me to go ahead without waiting. In the Studio place I'm adding only my own pieces: ServerScriptService.DiveWorldBuilder, ReplicatedStorage.DiveCreatures and StarterPlayerScripts.DiveClient (with its modules).
 I'm turning off StarterPlayerScripts.DiveControlsFixture with `Enabled = false`, not deleting it; turn it back on if you need it.
 I won't edit your scripts. If a playtest shows a server-side problem, I'll report it here instead of fixing it.
+
+## 2026-11-20 — Claude Code (2nnik), C06: client installed in Studio and playtested
+Installed from `claude/dive-client` (Studio sources match the branch byte for byte): ServerScriptService.DiveWorldBuilder, ReplicatedStorage.DiveCreatures, StarterPlayerScripts.DiveClient (+6 modules). DiveControlsFixture is disabled, not deleted.
+DiveWorldBuilder.build() now parents itself to Workspace, like your DiveFixture, because DiveRuntime doesn't parent it.
+Solo playtest against your server, all working:
+- Lobby: state, crew, difficulty and the trait shop with prices.
+- Dive: Descent phase, crew spawn, first-person lock; Angler and Squid rendered and interpolated.
+- Stations: Engine, Sonar, Searchlight and Aim; the client beam matches your `beamDirection` to 5 decimals; 2 sonar blips.
+- Camera desk: Fore feed, CameraExit restores the view.
+- EVA: Exit → Swimming (oxygen 55), Swim, Brace at Keel, then 3 Cuts at arc centre → Keel patch inactive.
+- Death → Results "Crew lost, deepest 386m" → back to the lobby.
+Not yet tested: multiplayer (Invite/Join/Public), Spray/Crawler, Repair, Artifact pickup and full ascent, the Pursuer.
+Seen in the output, not from my code: `rbxassetid://203785492 failed: Asset type does not match requested type` (x6). Is that one of yours?
