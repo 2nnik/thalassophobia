@@ -1,5 +1,5 @@
 -- Renders server-owned actors locally, interpolating between 5 Hz snapshot poses.
--- Also places colony models on hull sites listed as actors by site ID.
+-- Also places barnacle colonies on hull sites while dive.patches[site].active.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local DiveCreatures = require(ReplicatedStorage:WaitForChild("DiveCreatures"))
@@ -51,6 +51,22 @@ function Actors.update(snap)
 			elseif snap.time > track.b.t then
 				track.a = track.b
 				track.b = { t = snap.time, cf = actor.pose }
+			end
+		end
+	end
+	-- Barnacle colonies: active patches sit on their hull site marker.
+	local world = workspace:FindFirstChild("DiveWorld")
+	local sites = world and world:FindFirstChild("Sites")
+	for site, patch in snap.dive and snap.dive.patches or {} do
+		local marker = sites and sites:FindFirstChild(tostring(site))
+		local id = "Colony" .. tostring(site)
+		if type(patch) == "table" and patch.active and marker then
+			seen[id] = true
+			if not tracks[id] then
+				local model = DiveCreatures.make(id)
+				model:PivotTo(marker.CFrame)
+				model.Parent = folder
+				tracks[id] = { model = model, b = { t = snap.time, cf = marker.CFrame } }
 			end
 		end
 	end

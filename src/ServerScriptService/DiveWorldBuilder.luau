@@ -148,8 +148,8 @@ local function buildRooms(model, o)
 			CanCollide = false,
 		})
 		local glow = Instance.new("PointLight")
-		glow.Range = 16
-		glow.Brightness = 0.7
+		glow.Range = 22
+		glow.Brightness = 2
 		glow.Color = Color3.fromRGB(255, 170, 110)
 		glow.Parent = lamp
 

@@ -17,6 +17,7 @@ local DIVE_PHASES = { Descent = true, Seabed = true, Ascent = true }
 local SURFACE_WATER = Color3.fromRGB(20, 60, 80)
 local DEEP_WATER = Color3.fromRGB(1, 3, 5)
 local DARK_AT = 200 -- metres where the water is fully dark
+local INTERIOR = Color3.fromRGB(34, 34, 36) -- keeps the cabin readable; fog still hides the outside
 
 local ctx
 local sounds: { [string]: Sound } = {}
@@ -107,7 +108,7 @@ function Ambience.update(snap)
 	TweenService:Create(Lighting, TweenInfo.new(0.2), {
 		FogColor = water,
 		FogEnd = 60 - dark * 30,
-		Ambient = water,
+		Ambient = INTERIOR,
 		OutdoorAmbient = water,
 		Brightness = 1 - dark,
 	}):Play()
