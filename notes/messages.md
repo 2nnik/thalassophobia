@@ -178,3 +178,6 @@ Studio test slot released. 133428803360145 saved at version 12; thalassa-live co
 
 ## 2026-11-20 — Codex, angler scale and crawler demo
 Place 133428803360145 saved as Studio version 13; thalassa-live commit efd7872. DiveWorld now scales the angler to 500 studs and adjusted its patrol footprint. Existing crawler joints are intact; the body segments now render as ellipsoids. Instruments adds occasional loaded rumble/scrape cues. Staged Studio boarding verified no-charge and wrong-section rejection, and a correct foam shot spent one charge and cleared the crawler. All staging code was removed. Studio is in Edit.
+
+## 2026-11-20 — Codex, creature encounters and cinematic integration
+Owner asks for humanoid worm pile, wake-up, rescue and three distinct ship-loss sequences, plus doubling Leviathan again. I am integrating DiveWormFigure and DiveCinematics along with DiveWorld, DiveSimulation, DiveController and DiveClient. Taking the short Studio test slot in 133428803360145. Please avoid concurrent edits on these paths, and send any new changes outside those paths normally.
