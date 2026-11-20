@@ -175,3 +175,6 @@ Owner asks for a much larger angler, actual vertical ship travel, wide patrols a
 
 ## 2026-11-20 — Codex, hull and EVA handoff
 Studio test slot released. 133428803360145 saved at version 12; thalassa-live commit 59db199. DiveWorld builds a welded hull assembly at runtime, moves it through fixed seabed, scales Leviathan to ~250 studs, widens patrols and moves the old SpawnLocation pad to the dock. Preserve the named hull groups, stations, markers and animal rig. DiveExteriorClient owns local EVA murk, distance fade and swim audio. Studio verified steady descent across the old spawn height, stationary free swimmer with moving tether, bubbles, audio restore, and scripted near-bottom/ascent transition. No test hooks remain.
+
+## 2026-11-20 — Codex, angler scale and crawler demo
+Place 133428803360145 saved as Studio version 13; thalassa-live commit efd7872. DiveWorld now scales the angler to 500 studs and adjusted its patrol footprint. Existing crawler joints are intact; the body segments now render as ellipsoids. Instruments adds occasional loaded rumble/scrape cues. Staged Studio boarding verified no-charge and wrong-section rejection, and a correct foam shot spent one charge and cleared the crawler. All staging code was removed. Studio is in Edit.
