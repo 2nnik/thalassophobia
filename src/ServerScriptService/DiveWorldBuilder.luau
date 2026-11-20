@@ -1,5 +1,6 @@
 -- Builds the ship and the contract markers from shared/DiveProtocol.md v1.
--- Lives in ServerScriptService: DiveRuntime requires it from there and calls build(). Everything is anchored.
+-- Lives in ServerScriptService: DiveRuntime requires it from there and calls build(),
+-- which parents the world to Workspace. Everything is anchored.
 -- Ship-local axes: fore -Z, starboard +X, up +Y, deck at Y=0.
 local DiveWorldBuilder = {}
 
@@ -210,6 +211,8 @@ function DiveWorldBuilder.build(): Model
 	buildRooms(model, o)
 	buildMarkers(model, o)
 	buildLobby(model, o)
+	-- DiveRuntime expects build() to parent the world, like DiveFixture does.
+	model.Parent = workspace
 	return model
 end
 
