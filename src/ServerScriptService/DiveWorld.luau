@@ -3,6 +3,7 @@ local World = {}
 local world = workspace:WaitForChild("Thalassa")
 local stations = world.Stations
 local actors = world.Contacts
+local Dive = require(script.Parent:WaitForChild("DiveSimulation"))
 local Breach = require(script.Parent:WaitForChild("DiveBreach"))
 local breachEffects = Breach.install(stations)
 require(script.Parent:WaitForChild("DiveExtinguisher")).install(stations)
@@ -27,6 +28,12 @@ local offColor = Color3.fromHex("445556")
 local amber = Color3.fromHex("F2B650")
 local lastDirection, lastRender = nil, -math.huge
 local activePhase = {Descent=true, Bottom=true, Ascent=true}
+local dockCRT = world["Launch dock"]:FindFirstChild("Mission CRT")
+local missionFace = dockCRT and dockCRT:FindFirstChild("Face")
+local missionText = missionFace and missionFace:FindFirstChild("Legend")
+if missionText and missionText:IsA("TextLabel") and missionText.Text:find("600 M",1,true) then
+ missionText.Text = missionText.Text:gsub("%f[%d]600 M%f[%W]","10,000 M")
+end
 for _,item in world:GetDescendants() do
  if item:IsA("ProximityPrompt") and item:GetAttribute("Action") then
   prompts[item:GetAttribute("Action")] = item
@@ -52,7 +59,8 @@ end
 local envelope=world:WaitForChild("ShipEnvelope")
 local barnacles=world:WaitForChild("BarnacleSites")
 local center=envelope.Position
-local depthScale = .72
+-- The seabed and dock are 432 studs of ship travel apart. Instruments report survey depth.
+local hullTravel = 432
 local shipY = 0
 local targetY = 0
 local travelTime = 0
@@ -141,7 +149,7 @@ function World.travel(dt)
 end
 
 function World.setDepth(depth)
-	local goal = -math.clamp(depth,0,600)*depthScale
+	local goal = -hullTravel * math.clamp(depth / Dive.targetDepth, 0, 1)
 	if goal ~= targetY then targetY,travelTime = goal,travelStep end
 end
 
@@ -198,6 +206,9 @@ local function bearing(pos)
  return delta.Z<0 and 1 or 3
 end
 function World.squidBearing()
+ if not actors.GiantSquid:GetAttribute("Detectable") then
+  return bearing(center+Vector3.new(math.sin(phaseAngle.squid),0,-math.cos(phaseAngle.squid)))
+ end
  return bearing(actors.GiantSquid:GetPivot().Position)
 end
 
@@ -227,7 +238,20 @@ local function face(model,cf)
  -- The welded body follows one root. The tentacles, tail and fins have separate joints.
  if model.PrimaryPart and runService:IsRunning() then model.PrimaryPart.CFrame=cf else model:PivotTo(cf) end
 end
-local function megafauna(model,angle,radius,height,clock,heading,aim,lit)
+local dormant={}
+local function megafauna(model,unlocked,angle,radius,height,clock,heading,aim,lit)
+ local fill=lighting[model]
+ if not unlocked then
+  if not dormant[model] then
+   model:SetAttribute("Detectable",false)
+   fill.light.Enabled=false
+   if fill.reveal then fill.reveal.Enabled=false end
+   face(model,CFrame.new(0,0,-5000))
+   dormant[model]=true
+  end
+  return
+ end
+ dormant[model]=false
  local radial=Vector3.new(math.sin(angle),0,-math.cos(angle))
  local tangent=Vector3.new(math.cos(angle),0,math.sin(angle))
  local pos=center+radial*radius+Vector3.new(0,height,0)
@@ -235,7 +259,6 @@ local function megafauna(model,angle,radius,height,clock,heading,aim,lit)
  local cf=CFrame.lookAt(pos,pos+forward)*CFrame.Angles(0,0,.042*math.sin(clock*.21))
  face(model,cf)
  model:SetAttribute("Detectable",true)
- local fill=lighting[model]
  local illuminated=lit and (bearing(pos)==aim or dirs[aim]:Dot(radial)>.68)
  local lightOffset=(-radial*24+Vector3.new(0,19,0))
  fill.attachment.Position=cf:VectorToObjectSpace(lightOffset)
@@ -283,7 +306,7 @@ function World.update(state)
   local charge=state.battery or 100
   cell.Color=charge>((i-1)*100/3) and (charge<27 and amber or meterColor) or offColor
  end
- local depth=math.clamp(state.depth or 0,0,600)
+ local depth=math.clamp(state.depth or 0,0,Dive.targetDepth)
  local message="CLEAR"
  if shark>0 then message="LARGE WAKE" elseif squid>0 then message="MASS / "..bearings[sqSide] elseif crawler>0 then message="HULL BREACH" elseif swarm>0 then message="HULL FOULING" elseif pursuer>.12 then message="WAKE BELOW" end
  if state.systemsOffline then message="OFFLINE / HULL BREACHED"
@@ -298,13 +321,16 @@ function World.update(state)
  local pos=cameraHeads[aim].Position+d*1.7+Vector3.yAxis*.8
  head.CFrame=CFrame.lookAt(pos,pos+d)
  spot.Enabled=lit scatter.Enabled=lit
- if lastDirection~=phase..tostring(state.engine) then
-  lastDirection=phase..tostring(state.engine)
+ local moving=active and phase~="Bottom" and (state.engine or (phase=="Ascent" and (state.coast or 0)>.2))
+ if lastDirection~=phase..tostring(moving) then
+  lastDirection=phase..tostring(moving)
   local vertical=phase=="Ascent" and -1 or 1
   for _,em in snow do
-   em.Acceleration=Vector3.new(.08,state.engine and vertical*1.1 or .04,.03)
+   local slip=if not moving then .15 elseif phase=="Ascent" then 5 else 2.4
+   em.Acceleration=Vector3.new(.08,vertical*slip,.03)
+   em.Speed=if not moving then NumberRange.new(.12,.4) elseif phase=="Ascent" then NumberRange.new(3.5,6) else NumberRange.new(1.6,2.8)
    em.EmissionDirection=vertical==1 and Enum.NormalId.Top or Enum.NormalId.Bottom
-   em.Rate=active and 3.3 or .35
+   em.Rate=if not active then .35 elseif not moving then 1.2 elseif phase=="Ascent" then 6 else 4
   end
  end
  local now=os.clock()
@@ -329,8 +355,8 @@ function World.update(state)
  end
  squidRange=approach(squidRange,squidCruise-(squidCruise-88)*math.clamp(squid*1.55,0,1),23,dt)
  -- Megafauna stay beyond the pressure hull even when the feeding tentacles pass broadside.
- megafauna(leviathan,phaseAngle.angler,anglerRange,7.5+18*math.sin(elapsed*.035),elapsed,Vector3.new(1,0,-.08*shark),aim,lit)
- megafauna(actors.GiantSquid,phaseAngle.squid,squidRange,12+14*math.sin(elapsed*.028+1.4),elapsed,Vector3.new(-1,0,-.26*squid),aim,lit)
+ megafauna(leviathan,active and Dive.isUnlocked(state,"shark"),phaseAngle.angler,anglerRange,7.5+18*math.sin(elapsed*.035),elapsed,Vector3.new(1,0,-.08*shark),aim,lit)
+ megafauna(actors.GiantSquid,active and Dive.isUnlocked(state,"squid"),phaseAngle.squid,squidRange,12+14*math.sin(elapsed*.028+1.4),elapsed,Vector3.new(-1,0,-.26*squid),aim,lit)
  local crawlerPresent=active and crawler>0
  actors.CrackCrawler:SetAttribute("Detectable",crawlerPresent)
  if crawlerPresent then

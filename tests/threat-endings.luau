@@ -69,6 +69,7 @@ for _ = 1,12 do Dive.step(s,.25) end
 assert(s.squid==0 and not s.squidLatched and s.systemsOffline,"The searchlight should dislodge, not repair")
 
 s = Dive.new("Nightmare",1,{},rng)
+s.depth,s.deepest=3000,3000
 s.nextThreat,s.nextCrack,s.nextInfestation = math.huge,math.huge,0
 Dive.step(s,.25)
 assert(s.crawler>0 and s.nextInfestation>=s.elapsed)
@@ -77,6 +78,7 @@ Dive.step(s,.25)
 assert(s.swarm>0,"Nightmare's second ambient roll should allow overlapping infestations")
 
 s = fresh()
+s.depth,s.deepest=3000,3000
 Dive.spawn(s,"swarm")
 s.swarm, s.foulingExposure, s.cleanSites = 1,35.98,{0,0,0,0}
 Dive.step(s,.25)

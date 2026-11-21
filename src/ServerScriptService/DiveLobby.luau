@@ -4,6 +4,7 @@ local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local Profiles = require(script.Parent.DiveLobbyProfiles)
+local Dive = require(script.Parent.DiveSimulation)
 local studio = RunService:IsStudio() or game.GameId==0
 local NetworkQueue = if studio then nil else require(script.Parent.DiveLobbyQueue)
 local L = {}
@@ -323,8 +324,8 @@ function L.input(plr,action,arg)
 end
 function L.finish(members,depth,artifact,survived,difficulty)
 	local payouts={}
-	local meters=math.clamp(tonumber(depth) or 0,0,600)
-	local base=meters/6+(if artifact then 35 else 0)+(if survived then 80 else 0)
+	local progress=math.clamp((tonumber(depth) or 0)/Dive.targetDepth,0,1)
+	local base=progress*100+(if artifact then 35 else 0)+(if survived then 80 else 0)
 	local amount=math.floor(base*(if survived then 1 else .75)*(difficulties[difficulty] or 1))
 	for _,p in members do
 		payouts[p.UserId]=amount

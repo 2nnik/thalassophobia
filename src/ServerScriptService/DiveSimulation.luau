@@ -1,6 +1,9 @@
 -- All state transitions and resource costs are evaluated by the server.
 local Dive = {}
-local TARGET_DEPTH = 600
+local TARGET_DEPTH = 10000
+local DESCENT_RATE = TARGET_DEPTH / (15 * 60)
+local ASCENT_RATE = TARGET_DEPTH / (7 * 60)
+Dive.targetDepth = TARGET_DEPTH
 local MAX_BREACH = 3
 local rules = {
 	Easy = {pace = 0.80, damage = 0.78, power = 0.85, anglerStrikes = 3, squidSqueezes = 4, squeezeInterval = 7},
@@ -9,6 +12,7 @@ local rules = {
 	Nightmare = {pace = 1.48, damage = 1.38, power = 1.26, anglerStrikes = 1, squidSqueezes = 1, squeezeInterval = 4},
 }
 local names = {"shark", "squid", "crawler", "swarm"}
+local firstDepth = {shark = 500, squid = 1250, crawler = 2000, swarm = 3000}
 local bearings = {"FORE", "STARBOARD", "AFT", "PORT"}
 local squidSections = {1, 3, 3, 2}
 
@@ -23,8 +27,8 @@ function Dive.new(difficulty, crewCount, traits, rng)
 		anglerStrikes = 0, squidSqueezes = 0, squidLatched = false, squeezeRemaining = 0,
 		squidSide = 1, crawlerSection = 1, boarded = false, artifact = false,
 		coast = 0, sharkPass = 0, repelled = 0, catchup = 0, elapsed = 0,
-		nextInfestation = if difficulty == "Nightmare" then 8 else math.huge,
-		nextThreat = 13, nextCrack = 23, warning = "Descent underway. Listen for contacts.",
+		nextInfestation = math.huge,
+		nextThreat = math.huge, nextCrack = 23, warning = "Descent underway. Listen for contacts.",
 		warningUntil = 7, 
 	}
 end
@@ -73,8 +77,14 @@ function Dive.patchBreach(s, section)
 	return true
 end
 
+function Dive.isUnlocked(s, name)
+	if name == "pursuer" then return s.artifact end
+	local threshold = firstDepth[name]
+	return threshold ~= nil and s.deepest >= threshold
+end
+
 function Dive.spawn(s, name)
-	if s[name] > 0 then return false end
+	if not firstDepth[name] or not Dive.isUnlocked(s, name) or s[name] > 0 then return false end
 	s[name] = 0.015
 	if name == "shark" then
 		s.sharkPass = 0
@@ -98,7 +108,9 @@ end
 
 local function drawContact(s)
 	if #s.bag == 0 then
-		s.bag = table.clone(names)
+		for _, name in names do
+			if Dive.isUnlocked(s, name) then table.insert(s.bag, name) end
+		end
 		for i = #s.bag, 2, -1 do
 			local j = s.rng:NextInteger(1, i)
 			s.bag[i], s.bag[j] = s.bag[j], s.bag[i]
@@ -108,6 +120,23 @@ local function drawContact(s)
 		if s[s.bag[i]] == 0 then
 			Dive.spawn(s, table.remove(s.bag, i))
 			return
+		end
+	end
+end
+
+local function nextContact(s, pace)
+	return s.elapsed + s.rng:NextNumber(36, 52) / (pace * (1 + s.depth / TARGET_DEPTH * 0.25))
+end
+
+local function introduceContacts(s, previousDepth, pace)
+	for _, name in names do
+		if previousDepth < firstDepth[name] and Dive.isUnlocked(s, name) then
+			Dive.spawn(s, name)
+			table.clear(s.bag)
+			s.nextThreat = nextContact(s, pace)
+			if name == "crawler" and s.difficulty == "Nightmare" then
+				s.nextInfestation = s.elapsed + 8
+			end
 		end
 	end
 end
@@ -190,7 +219,7 @@ local function contacts(s, dt, pace)
 		s.swarm = math.min(1, s.swarm + dt * pace / 18)
 		local remaining = 1
 		for _,cuts in s.cleanSites or {} do remaining -= cuts/12 end
-		s.battery -= dt * remaining * s.swarm * 0.22 * s.rules.power
+		s.battery -= dt * remaining * s.swarm * 0.09 * s.rules.power
 		s.hull -= dt * remaining * s.swarm * 0.17 * s.rules.damage
 		s.foulingExposure = (s.foulingExposure or 0) + dt * remaining * s.swarm * pace
 		if s.foulingExposure >= 36 then
@@ -237,7 +266,7 @@ function Dive.step(s, dt)
 	end
 	if s.elapsed >= s.nextThreat then
 		drawContact(s)
-		s.nextThreat = s.elapsed + s.rng:NextNumber(17, 24) / (pace * (1 + depthRatio * 0.25))
+		s.nextThreat = nextContact(s, pace)
 	end
 	if s.elapsed >= s.nextInfestation then
 		local first = if s.rng:NextInteger(1, 2) == 1 then "crawler" else "swarm"
@@ -255,13 +284,14 @@ function Dive.step(s, dt)
 		Dive.endRun(s,false,"The pressure hull collapsed.",breachCause)
 		return
 	end
-	s.battery -= dt * (0.077 + (s.engine and 0.196 or 0) + (s.light and 0.46 or 0) + (s.sonarOn and 0.046 or 0)) * s.rules.power / (s.traits.Battery and 1.15 or 1)
+	-- A continuous round trip uses 52.8% at Normal before lighting, sonar and contacts.
+	s.battery -= dt * (0.012 + (s.engine and 0.028 or 0) + (s.light and 0.09 or 0) + (s.sonarOn and 0.008 or 0)) * s.rules.power / (s.traits.Battery and 1.15 or 1)
 	contacts(s, dt, pace)
 	if s.phase == "Results" then return end
 	if s.battery <= 0 then Dive.endRun(s, false, "The cage lost its last reserve of power.") return end
 	if s.hull <= 0 then Dive.endRun(s, false, "The pressure hull collapsed.") return end
 	local efficiency = math.min(1, 0.62 + s.hull * 0.006) * math.min(1, 0.65 + s.battery * 0.02)
-	local speed = (ascent and 4.9 or 6) * efficiency * (s.traits.Baffle and 0.95 or 1)
+	local speed = (ascent and ASCENT_RATE or DESCENT_RATE) * efficiency * (s.traits.Baffle and 0.95 or 1)
 	if ascent then
 		if s.engine then s.coast = 2.7 else s.coast = math.max(0, s.coast - dt) end
 		local thrust = s.engine and 1 or 0.62 * s.coast / 2.7
@@ -275,8 +305,10 @@ function Dive.step(s, dt)
 		if s.catchup >= 1 then Dive.endRun(s, false, "The Pursuer caught the stalled cage.") 
 		elseif s.depth <= 0 then Dive.endRun(s, true, "The cage surfaced with the artifact.") end
 	elseif s.phase == "Descent" and s.engine then
+		local previousDepth = s.deepest
 		s.depth = math.min(TARGET_DEPTH, s.depth + speed * dt)
 		s.deepest = math.max(s.deepest, s.depth)
+		if s.deepest > previousDepth then introduceContacts(s, previousDepth, pace) end
 		if s.depth >= TARGET_DEPTH then
 			s.phase = "Bottom"
 			Dive.warn(s, "Seabed reached. Recover the artifact at the salvage hatch.", 12)

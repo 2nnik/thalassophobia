@@ -107,82 +107,100 @@ local function cloneHull(scene, world)
 end
 
 local function constructMouth(scene)
-	-- This chamber sits below the scenery and is seen only after the engulfing cut.
-	local stage=CFrame.new(3500,-3000,3500)
+	-- The entry axis matches the closing lips. Palate folds then bend away from the light.
+	local stage=CFrame.new(3500,scene.cameraFrame.Y,3500)
 	scene.mouth=stage
-	local shell=ellipse(part(scene.folder,"Throat",rgb(29,19,29),Enum.Material.Slate))
-	shell.Size=Vector3.new(74,62,95)
-	shell.CFrame=stage*CFrame.new(0,0,-18)
-	shell.Transparency=.55
-	for ring=0,7 do
-		local radial=11-ring*.57
-		for i=0,15 do
-			local a, b=i/16*TAU,(i+1)/16*TAU
-			local z=-ring*5
-			local rib=ellipse(part(scene.folder,"Inner cartilage",if ring%2==0 then rgb(66,48,61) else rgb(45,39,54)))
-			link(rib,stage:PointToWorldSpace(Vector3.new(math.cos(a)*radial,math.sin(a)*radial*.78,z)),
-				stage:PointToWorldSpace(Vector3.new(math.cos(b)*radial,math.sin(b)*radial*.78,z)),2.3,1.3)
+	local function contour(ring,i)
+		local a=i/12*TAU+.06*math.sin(ring*.8)
+		local radius=(10.6-ring*.65)*(1+.07*math.sin(3*a+ring*.48))
+		return stage:PointToWorldSpace(Vector3.new(math.cos(a)*radius+1.6*math.sin(ring*.55),
+			math.sin(a)*radius*.76-ring*.19,-ring*4.4))
+	end
+	for ring=0,8 do
+		for i=0,11 do
+			local a,b=contour(ring,i),contour(ring,i+1)
+			local rib=ellipse(part(scene.folder,"Palate fold",if ring%2==0 then rgb(87,49,57) else rgb(64,39,53)))
+			link(rib,a,b,1.85+.32*math.cos(i),1.3)
+			if ring<8 then
+				local wall=ellipse(part(scene.folder,"Palate wall",rgb(48+i%3*4,30,42)))
+				link(wall,(a+b)*.5,(contour(ring+1,i)+contour(ring+1,i+1))*.5,5.8-ring*.27,2.4)
+			end
 		end
 	end
-	for i=0,15 do
-		local a=i/16*TAU
-		local at=stage:PointToWorldSpace(Vector3.new(math.cos(a)*9.9,math.sin(a)*7.7,-.7))
-		local inward=stage.Position+stage.LookVector*3.5
-		local fang=make("WedgePart",scene.folder,{Name="Silhouette tooth",Anchored=true,CanCollide=false,CanTouch=false,CanQuery=false,
-			Material=Enum.Material.SmoothPlastic,Color=rgb(173,158,130),Size=Vector3.new(1.7,4.6,2.9),
-			CFrame=CFrame.lookAt(at,inward)*CFrame.Angles(-.95,0,0)})
-		fang.CastShadow=false
-	end
-	local lure=ellipse(part(scene.folder,"Fading lure",rgb(100,210,219),Enum.Material.Neon))
-	lure.Size=Vector3.new(1,1,1)
-	lure.CFrame=stage*CFrame.new(-.4,2.8,-11)
-	make("PointLight",lure,{Range=32,Brightness=1.65,Color=rgb(112,224,233)})
+	local throatEnd=ellipse(part(scene.folder,"Gullet end",rgb(32,16,27)))
+	throatEnd.Size=Vector3.new(14,10,6)
+	throatEnd.CFrame=stage*CFrame.new(-1.4,-1.6,-36)
+	local lamp=part(scene.folder,"Reflected dive light",rgb(175,121,111))
+	lamp.Transparency=1
+	scene.throatLamp=lamp
+	scene.throatLight=make("PointLight",lamp,{Range=28,Brightness=2.4,Color=rgb(242,177,160)})
 end
 
 local function constructJaws(scene)
 	scene.jaws={}
-	for i=0,23 do
-		local angle=i/24*TAU
-		local fang=make("WedgePart",scene.folder,{Name="Closing jaws",Anchored=true,CanCollide=false,CanQuery=false,
-			CanTouch=false,CastShadow=false,Transparency=1,Color=rgb(187,174,147),Material=Enum.Material.SmoothPlastic})
-		scene.jaws[#scene.jaws+1]={part=fang,angle=angle,offset=(i%3)*.8}
+	for i=0,25 do
+		local tooth=make("WedgePart",scene.folder,{Name="Needle tooth",Anchored=true,CanCollide=false,CanQuery=false,
+			CanTouch=false,CastShadow=false,Transparency=1,Color=rgb(193,189,161),Material=Enum.Material.SmoothPlastic})
+		local gum=ellipse(part(scene.folder,"Gum ridge",rgb(57,61,67),Enum.Material.Slate))
+		gum.Transparency=1
+		table.insert(scene.jaws,{part=tooth,gum=gum,angle=i/26*TAU,scale=.8+.27*math.cos(i*2.3)})
 	end
-	local pad=ellipse(part(scene.folder,"Shadow in the jaws",rgb(4,9,15)))
-	pad.Transparency=1
-	scene.jawShade=pad
+	scene.jawShade=ellipse(part(scene.folder,"Gullet shadow",rgb(14,11,22)))
+	scene.jawShade.Transparency=1
+	local fill=part(scene.folder,"Reflected bow light",rgb(170,209,222))
+	fill.Transparency=1
+	scene.jawLamp=make("PointLight",fill,{Range=34,Brightness=0,Color=rgb(169,210,218)})
 end
 
-local function approachJaws(scene,view,distance,opening,alpha)
-	local mouth=view*CFrame.new(0,0,-distance)
-	local shade=scene.jawShade
-	shade.Size=Vector3.new(22,17,5)
-	shade.CFrame=mouth*CFrame.new(0,0,-4.8)
-	shade.Transparency=1-alpha*.91
+local function approachJaws(scene,mouth,aperture,alpha)
+	local function point(a)
+		return mouth:PointToWorldSpace(Vector3.new(math.cos(a)*11,math.sin(a)*8.4*aperture,-math.cos(a*2)*.65))
+	end
+	scene.jawShade.Size=Vector3.new(23,18*aperture,4)
+	scene.jawShade.CFrame=mouth*CFrame.new(0,0,-2)
+	scene.jawShade.Transparency=1-alpha
+	scene.jawLamp.Parent.CFrame=mouth*CFrame.new(-4,4,7)
+	scene.jawLamp.Brightness=2.6*alpha
 	for _,tooth in scene.jaws do
 		local a=tooth.angle
-		local at=mouth:PointToWorldSpace(Vector3.new(math.cos(a)*opening,math.sin(a)*opening*.74,tooth.offset))
-		tooth.part.Size=Vector3.new(1.42,4.1+tooth.offset,2.68)
-		tooth.part.CFrame=CFrame.lookAt(at,mouth.Position)*CFrame.Angles(-1.15,0,0)
+		local root=point(a)
+		local inward=mouth:VectorToWorldSpace(Vector3.new(-math.cos(a)*.75,-math.sin(a),.45)).Unit
+		local length=3.4*tooth.scale
+		local right=inward:Cross(mouth.ZVector).Unit
+		tooth.part.Size=Vector3.new(.53*tooth.scale,length,.83)
+		tooth.part.CFrame=CFrame.fromMatrix(root+inward*length*.5,right,inward)
 		tooth.part.Transparency=1-alpha
+		link(tooth.gum,root,point(a+TAU/26),1.9,1.2)
+		tooth.gum.Transparency=1-alpha
 	end
 end
 
 local function constructBeak(scene)
 	scene.beak={}
+	scene.beakTips={}
 	for i=1,2 do
-		scene.beak[i]=make("WedgePart",scene.folder,{Name="Chitin beak",Anchored=true,CanCollide=false,CanTouch=false,CanQuery=false,
-			Size=Vector3.new(5.2,3.4,5.8),Color=rgb(63,49,42),Transparency=1,CastShadow=false})
+		local half=ellipse(part(scene.folder,"Beak plate",rgb(73,51,46)))
+		half.Size,half.Transparency=Vector3.new(4.3,2.55,3.9),1
+		scene.beak[i]=half
+		scene.beakTips[i]=make("WedgePart",scene.folder,{Name="Hooked cutting edge",Anchored=true,CanCollide=false,CanQuery=false,
+			CanTouch=false,Size=Vector3.new(1.7,1.8,2.9),Color=rgb(104,79,59),Transparency=1,CastShadow=false})
 	end
+	local fill=part(scene.folder,"Reflected helmet light",rgb(174,205,211))
+	fill.Transparency=1
+	scene.beakLamp=make("PointLight",fill,{Range=46,Brightness=0,Color=rgb(191,215,219)})
 end
 
-local function closeBeak(scene,view,seize)
-	local reach=smooth((seize-.57)/.43)
-	local at=view*CFrame.new(0,0,-(15-12*reach))
+local function closeBeak(scene,at,bite,alpha)
 	for i,half in scene.beak do
-		local dir=if i==1 then -1 else 1
-		half.CFrame=at*CFrame.new(0,dir*(3.0-1.85*reach),0)*CFrame.Angles(dir*-.42,0,i==1 and math.pi or 0)
-		half.Transparency=1-reach
+		local dir=if i==1 then 1 else -1
+		half.CFrame=at*CFrame.new(0,dir*(2.8-1.85*bite),0)*CFrame.Angles(dir*(.63-.46*bite),0,if i==1 then math.pi else 0)
+		half.Transparency=1-alpha
+		local tip=scene.beakTips[i]
+		tip.CFrame=half.CFrame*CFrame.new(0,.5,-1.48)*CFrame.Angles(-.52,0,0)
+		tip.Transparency=1-alpha
 	end
+	scene.beakLamp.Parent.CFrame=at*CFrame.new(-3,4,-7)
+	scene.beakLamp.Brightness=alpha*3.5
 end
 
 local function makeArms(scene,count,segments)
@@ -229,7 +247,7 @@ local function armColor()
 	return body and body.RightArmColor3 or rgb(151,123,103)
 end
 
-local function hideWakeAvatar(scene)
+local function hideAvatar(scene)
 	local character=player.Character
 	if not character then return end
 	for _,body in character:GetDescendants() do
@@ -350,7 +368,7 @@ local function revealPursuer(scene,p,seconds,view,squid)
 	return view,actor,reveal,closing
 end
 
-local function spreadApproachArms(scene,actor,seconds,alpha)
+local function spreadApproachArms(scene,actor,view,seconds,alpha,grab)
 	for i,arm in scene.arms do
 		local a=i/#scene.arms*TAU
 		local outward=Vector3.new(math.cos(a),math.sin(a),0)
@@ -358,8 +376,13 @@ local function spreadApproachArms(scene,actor,seconds,alpha)
 		local last=actor:PointToWorldSpace(outward*3.2+Vector3.new(0,0,-8))
 		for j,segment in arm.segments do
 			local u=j/#arm.segments
-			local at=actor:PointToWorldSpace(outward*(3.2+12*u)+right*(5*u*u*math.sin(u*3+seconds*2+i))
+			local extended=actor:PointToWorldSpace(outward*(3.2+12*u)+right*(5*u*u*math.sin(u*3+seconds*2+i))
 				+Vector3.new(0,0,-8-31*u+8*u*u))
+			local angle=a+.95*u
+			local tip=view:PointToWorldSpace(Vector3.new(math.cos(angle)*1.18,math.sin(angle)*.8,-1.55))
+			local base=actor:PointToWorldSpace(outward*3.2+Vector3.new(0,0,-8))
+			local arched=base:Lerp(tip,u)+actor:VectorToWorldSpace(outward)*math.sin(math.pi*u)*4.6
+			local at=extended:Lerp(arched,smooth(grab*1.45-(i%3)*.18))
 			local diameter=2.3*(1-u*.86)
 			link(segment,last,at,diameter,diameter)
 			segment.Transparency=1-alpha
@@ -450,9 +473,10 @@ function Cinematics.new(gui,onOwnershipChanged)
 		grade.Brightness=0
 		grade.Contrast=0
 		grade.Saturation=0
+		if kind=="Angler" or kind=="Squid" or kind=="Flood" then hideAvatar(current) end
 
 		if kind=="Wake" then
-			hideWakeAvatar(current)
+			hideAvatar(current)
 			local rise=smooth((p-.14)/.74)
 			local floorHeight=if root then root.Position.Y-1.95 else start.Position.Y-2.9
 			local eye=Vector3.new(livePosition.X,floorHeight+.45+rise*2.81,livePosition.Z)-heading*(.36*(1-rise))
@@ -509,33 +533,41 @@ function Cinematics.new(gui,onOwnershipChanged)
 				if not current.escape then beginEscape(current) end
 				local swim=swimView(current,dt,current.lookTouch,current.moveTouch,p>.65)
 				current.lookTouch=Vector2.zero
-				local actor,reveal,closing
-				view,actor,reveal,closing=revealPursuer(current,p,seconds,swim,true)
-				view=view*CFrame.new(seize*.9,seize*2.2,-seize*3.5)*CFrame.Angles(.15*seize,0,seize*.45)
-				if p>.76 then
-					bendArms(current,view,seconds,math.max(seize,closing*.8))
-				else
-					spreadApproachArms(current,actor,seconds,reveal)
-				end
-				closeBeak(current,view,seize)
+				local actor,reveal
+				view,actor,reveal=revealPursuer(current,p,seconds,swim,true)
+				local grab=smooth((p-.715)/.14)
+				local pull=smooth((p-.82)/.15)
+				local bite=smooth((p-.905)/.067)
+				local beak=actor*CFrame.new(0,-.9,-12)
+				local eye=view.Position:Lerp(beak:PointToWorldSpace(Vector3.new(.15,.15,-2.5)),pull)
+				local look=CFrame.lookAt(eye,beak.Position)*CFrame.Angles(0,0,grab*.18-pull*.32)
+				view=view:Lerp(look,grab)
+				spreadApproachArms(current,actor,view,seconds,reveal,grab)
+				closeBeak(current,beak,bite,reveal)
 			end
 			grade.TintColor=rgb(180,216,210)
-			grade.Brightness=-.08-.22*seize
-			opacity=math.max(.86*(1-math.clamp(math.abs(p-.20)/.035,0,1)),smooth((p-.89)/.095))
+			grade.Brightness=-.035+.045*seize
+			opacity=math.max(.86*(1-math.clamp(math.abs(p-.20)/.035,0,1)),smooth((p-.94)/.045))
 		elseif kind=="Angler" or kind=="Flood" then
 			local flood=kind=="Flood"
 			local gulp = if flood then .77 else .47
 			if p>=gulp then
 				if current.jaws then
-					for _,tooth in current.jaws do tooth.part.Transparency=1 end
+					for _,tooth in current.jaws do
+						tooth.part.Transparency=1
+						tooth.gum.Transparency=1
+					end
 					current.jawShade.Transparency=1
 				end
 				local q=smooth((p-gulp)/(1-gulp))
-				view=current.mouth*CFrame.new(math.sin(seconds*4)*.48,-q*1.5,4-q*27)
-					*CFrame.Angles(.045*math.sin(seconds*8),0,.035*math.cos(seconds*5))
-				grade.TintColor=rgb(170,201,211)
-				grade.Brightness=-.12
-				opacity=math.max(1-smooth(q*10),smooth((q-.51)/.48))
+				local bend=math.sin(q*3.8)
+				view=current.mouth*CFrame.new(1.5*bend,-q*1.4,4-q*29)
+					*CFrame.Angles(-.035*q,-.06*math.cos(q*3.8),.085*bend)
+				current.throatLamp.CFrame=view*CFrame.new(.65,.45,-1.5)
+				current.throatLight.Brightness=4.2*(1-.58*q)
+				grade.TintColor=rgb(244,221,222)
+				grade.Brightness=.035
+				opacity=math.max(1-smooth((p-gulp)/.026),smooth((q-.76)/.24))
 			elseif flood then
 				local liquid=smooth(p/.28)
 				local at=current.breach.Position
@@ -564,17 +596,33 @@ function Cinematics.new(gui,onOwnershipChanged)
 					current.lookTouch=Vector2.zero
 					local actor,reveal
 					view,actor,reveal=revealPursuer(current,p,seconds,swim,false)
-					approachJaws(current,actor*CFrame.Angles(0,math.pi,0),-12,11,reveal)
+					local bite=smooth((p-.69)/.08)
+					local lips=actor*CFrame.new(0,-1,-17)*CFrame.Angles(0,math.pi,0)
+					approachJaws(current,lips,1-.65*bite,reveal)
 				end
-				opacity=math.max(.86*(1-math.clamp(math.abs(p-.22)/.035,0,1)),smooth((p-(gulp-.075))/.075))
+				opacity=math.max(.86*(1-math.clamp(math.abs(p-.22)/.035,0,1)),smooth((p-(gulp-.032))/.032))
 			else
 				local rush=smooth(p/gulp)
-				view=start*CFrame.new(math.sin(seconds*21)*rush*.16,-.9*rush,-3*rush)
-					*CFrame.Angles(.13*rush,.05*math.sin(seconds*18)*rush,.28*rush)
+				for _,piece in current.fragments or {} do
+					local peel=smooth((rush-piece.stagger*.24)/.48)
+					piece.part.Transparency=piece.transparency+(1-piece.transparency)*peel
+				end
+				local brace=math.sin(rush*math.pi)
+				view=start*CFrame.new(.13*brace,-.32*rush,.65*brace)
+					*CFrame.Angles(.065*brace,-.025*brace,.09*rush)
 				grade.TintColor=rgb(162,201,205)
-				grade.Brightness=-rush*.24
-				approachJaws(current,view,44-rush*38,11-rush*4,smooth(p*7))
-				opacity=smooth((p-(gulp-.16))/.16)
+				grade.Brightness=-rush*.045
+				local bite=smooth((p-gulp*.60)/(gulp*.40))
+				local lips=start*CFrame.new(.7*(1-rush),.35*(1-rush),-36+34*rush)*CFrame.Angles(0,0,.1*(1-rush))
+				local reveal=smooth(p*9)
+				local skull=lips*CFrame.new(0,1,-16)*CFrame.Angles(0,math.pi,0)
+				for _,piece in current.predator do
+					piece.part.CFrame=skull*piece.offset
+					piece.part.Transparency=1-reveal
+				end
+				current.pursuerLight.Brightness=reveal*1.4
+				approachJaws(current,lips,1-.69*bite,reveal)
+				opacity=smooth((p-(gulp-.055))/.055)
 			end
 		end
 		local swimming=(kind=="Flood" and p>=.22 and p<=.64) or (kind=="Squid" and p>=.20 and p<=.65)
@@ -626,7 +674,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 		end
 		scene=current
 		local world=workspace:FindFirstChild("Thalassa")
-		if kind=="Squid" or kind=="Flood" then cloneHull(current,world) end
+		if kind=="Squid" or kind=="Flood" or kind=="Angler" then cloneHull(current,world) end
 		if kind=="Squid" or kind=="Flood" then
 			local envelope=world and world:FindFirstChild("ShipEnvelope")
 			current.shipWidth=envelope and envelope.Size.X or 40
@@ -657,6 +705,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 			}
 		end
 		if kind=="Angler" or kind=="Flood" then
+			if kind=="Angler" then constructPursuer(current) end
 			constructMouth(current)
 			constructJaws(current)
 		end
@@ -683,7 +732,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 			current.water=part(current.folder,"Floodwater",rgb(18,75,84),Enum.Material.Glass)
 			current.water.Transparency=1
 		elseif kind=="Wake" then
-			hideWakeAvatar(current)
+			hideAvatar(current)
 			current.hands={}
 			for i=1,2 do current.hands[i]=ellipse(part(current.folder,"Bracing forearm",armColor())) end
 		end

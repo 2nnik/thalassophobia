@@ -127,10 +127,10 @@ local function chart(parent)
     end
     for y=60,264,10 do UI.frame(f,c.green,off(169,y),off(1,5)) end
     UI.frame(f,c.green,off(31,57),off(285,1),.35)
-    for i,label in ipairs({"000 M","200 M","400 M","600 M"}) do
-        local y=55+(i-1)*73
+    for i,label in ipairs({"0 M","2,500 M","5,000 M","7,500 M","10,000 M"}) do
+        local y=55+(i-1)*55
         UI.frame(f,c.soft,off(4,y+2),off(5,1))
-        UI.label(f,label,10,c.soft,UI.mono,off(11,y-7),off(48,18))
+        UI.label(f,label,10,c.soft,UI.mono,off(11,y-7),off(62,18))
     end
     UI.line(f,159,74,169,64,c.green,2)
     UI.line(f,179,74,169,64,c.green,2)
@@ -142,7 +142,7 @@ local function chart(parent)
     UI.label(f,"ARTIFACT",11,c.orange,UI.mono,off(181,268),off(78,22))
     UI.frame(f,c.line,off(15,333),off(322,1))
     UI.label(f,"TARGET DEPTH",12,c.soft,UI.mono,off(15,341),off(145,20))
-    UI.label(f,"600 M",15,c.white,UI.mono,off(220,340),off(114,23),Enum.TextXAlignment.Right)
+    UI.label(f,"10,000 M",15,c.white,UI.mono,off(220,340),off(114,23),Enum.TextXAlignment.Right)
     return f
 end
 return function(gui,send)
@@ -156,7 +156,7 @@ return function(gui,send)
     UI.label(hero,"KESTREL 04  /  SURVEY BELL",14,c.green,UI.mono,off(39,-3),off(370,26))
     local heroTitle=UI.label(hero,"THALASSO\nPHOBIA",81,c.white,Enum.Font.GothamBlack,off(-3,22),off(520,180))
     heroTitle.LineHeight=.77
-    local heroBrief=UI.label(hero,"Artifact recovery  •  600 m",17,c.soft,UI.body,off(0,192),off(390,28))
+    local heroBrief=UI.label(hero,"Artifact recovery  •  10,000 m",17,c.soft,UI.body,off(0,192),off(390,28))
     local heroStatus=UI.label(hero,"",14,c.orange,UI.mono,off(0,462),off(510,30))
     local heroButtons={}
     local function heroButton(value,detail,id,top,callback,primary)
@@ -336,7 +336,7 @@ return function(gui,send)
             return
         end
         title("Artifact recovery")
-        para("Descend to 600 m, recover the artifact, and bring the cage back to the surface.",42)
+        para("Descend to 10,000 m, recover the artifact, and surface. Allow about 15 minutes down and 7 minutes up under power.",60)
         local level=state.difficulty or "Normal"
         label("DIVE DIFFICULTY")
         if isHost() and not state.queued and not state.deploying then
@@ -375,13 +375,13 @@ return function(gui,send)
         title("Emergency procedures")
         entry("Bridge sonar","Toggle the transducer for a live chart of animal echoes, divers, fouling and nearby seabed. Each pulse uses battery.")
         entry("Exterior video","Use the bridge camera desk to view four hull cameras. Track a contact or switch to a fixed feed.")
-        entry("Leviathan angler","Cut the engine at the heavy-contact warning. Wait for the angler to pass, then restart.")
-        entry("Giant squid","Turn the floodlight toward the squid's bearing. Hold the beam there until it retreats, then switch it off.")
+        entry("Leviathan angler · 500 m","Cut the engine at the heavy-contact warning. Wait for the angler to pass, then restart.")
+        entry("Giant squid · 1,250 m","Turn the floodlight toward the squid's bearing. Hold the beam there until it retreats, then switch it off.")
         entry("Hull breach","Take planks from the amber rack by the bridge. Fit one at a leak and click each circle when its outer ring meets it. The sonar and cameras return after all breaches are sealed. The searchlight stays available.")
-        entry("Crack crawler","Seal the cracked window before the worms get in. Equip the red wall extinguisher between the bridge consoles, then get close and spray the boarder.")
-        entry("Hull swarm","Check sonar for close predators before going outside. Swim to the hull patches, including the keel. Time three cuts per patch. Cancel and resume any time.")
+        entry("Worms · 2,000 m","Seal the cracked window before the worms get in. Equip the red wall extinguisher between the bridge consoles, then get close and spray the boarder.")
+        entry("Barnacles · 3,000 m","Check sonar for close predators before going outside. Swim to the hull patches, including the keel. Time three cuts per patch. Cancel and resume any time.")
         entry("Pursuer · ascent only","The cage coasts briefly after shutdown. Restart once the angler passes. Low power and hull damage reduce thrust.")
-        entry("Seafloor pickup","Use the salvage station at 600 m to bring the artifact aboard and begin the ascent.")
+        entry("Seafloor pickup · 10,000 m","Use the salvage station to bring the artifact aboard and begin the ascent.")
     end
     local function results()
         title(report.survived and "Recovered at surface" or "Contact lost")
