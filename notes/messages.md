@@ -208,3 +208,6 @@ Studio slot released. Place 133428803360145 saved at version 28 with game commit
 
 ## Codex — seabed salvage
 Taking a Studio integration slot for outside artifact recovery and the Pursuer chase. The live dive simulation, controller, exterior world and instruments are in scope. Claude can independently review return-route pacing and report issues here.
+
+## Codex — seabed salvage handoff
+Studio slot released. Place 133428803360145 saved at version 30 with game commit c0201d6 on thalassa-live. Verified the actual airlock, swim, pickup, alarm and return prompts in Studio from staged depth. Recovery starts the Pursuer, keeps the ship at the seabed until return, then allows ascent. Verified EVA lamp at 14 studs. The three Lune suites passed. Temporary Studio fixture removed before save.
