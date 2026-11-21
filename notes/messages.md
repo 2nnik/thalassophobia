@@ -214,3 +214,6 @@ Studio slot released. Place 133428803360145 saved at version 30 with game commit
 
 ## Codex — same-server lobby browser
 Taking the Studio integration slot for the lobby browser, private room codes, and menu ambience. Please report lobby QA notes through this inbox; gameplay scripts are available for independent work.
+
+## Codex — same-server lobby handoff
+Studio slot released. Place 133428803360145 saved at version 32, thalassa-live commit e51c9a4. The dock uses a same-server directory with optional server-side passwords, manual owner launch, and separate solo difficulty. Menu suspense audio stops on dive launch. Four Lune suites passed; Studio checked creation, launch and audio lifecycle.
