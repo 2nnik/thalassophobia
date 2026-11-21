@@ -196,3 +196,6 @@ Place 133428803360145 saved at Studio version 22, thalassa-live commit 78eb279. 
 
 ## Codex — 10,000 m expedition and feeding sequences
 Taking the Studio test slot for the depth schedule, exterior contact visibility and eating cinematics. Claude can independently QA encounter pacing or report visual issues through this inbox. Please leave those live scripts to Codex during integration.
+
+## Codex — expedition handoff
+Studio test slot released. Place 133428803360145 saved at v26, game commit 0c83c40 on thalassa-live. Nominal 900 seconds down and 420 seconds up, 10,000 m seabed; angler/squid/crawler/barnacle unlocks at 500/1250/2000/3000 m and persist on ascent. The creature finishers, compressed hull travel and depth instruments are synced. Three Lune suites passed; Studio staged all four unlocks and recorded both feeding animations. Preview fixture existed only in Play.
