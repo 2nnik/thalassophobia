@@ -189,8 +189,10 @@ return function(gui)
         rail.BackgroundColor3=signal.TextColor3
         if s.alive==false then status.Text="DIVER LOST"
         elseif outside then status.Text="OXYGEN   "..math.max(0,math.ceil(s.oxygen or 0)).." s"
+        elseif s.systemsOffline then status.Text="CAMERAS / SONAR OFFLINE\nPLANKS   "..tostring(s.planks or 0).." / 3"
         elseif s.hasExtinguisher then status.Text=(s.extinguisherEquipped and "FOAM EQUIPPED   " or "FOAM STOWED   ")
             ..tostring(s.charges or 0).." / "..tostring(s.capacity or 3)
+        elseif (s.planks or 0)>0 then status.Text="PLANKS   "..tostring(s.planks).." / 3"
         else status.Text="" end
         status.Visible=status.Text~=""
         grade.Enabled=true

@@ -25,17 +25,19 @@ local controls=nil
 local received=false
 local terminal
 local cinematics
+local breach
 local promptEligible=false
 local function dockControls()
     local sequence=cinematics and cinematics:isPlaying()
+    local patching=breach and breach:isActive()
     player.CameraMode=if mode=="Dive" then Enum.CameraMode.LockFirstPerson else Enum.CameraMode.Classic
     screen.IgnoreGuiInset=mode~="Dive"
     if controls then
-        if mode=="Dive" and not viewing and not sequence then controls:Enable() else controls:Disable() end
+        if mode=="Dive" and not viewing and not sequence and not patching then controls:Enable() else controls:Disable() end
     end
-    InputService.MouseIconEnabled=mode~="Dive" or viewing
-    if mode~="Dive" then InputService.MouseBehavior=Enum.MouseBehavior.Default end
-    PromptService.Enabled=mode=="Dive" and promptEligible and not sequence
+    InputService.MouseIconEnabled=mode~="Dive" or viewing or patching
+    if mode~="Dive" or patching then InputService.MouseBehavior=Enum.MouseBehavior.Default end
+    PromptService.Enabled=mode=="Dive" and promptEligible and not sequence and not patching
 end
 cinematics=require(script.Parent:WaitForChild("DiveCinematics")).new(screen,dockControls)
 local function send(action,arg)
@@ -58,6 +60,7 @@ local function send(action,arg)
     end
     input:FireServer(action,arg)
 end
+breach=require(script.Parent:WaitForChild("DiveBreachClient")).new(screen,send,dockControls)
 terminal=require(script.Parent:WaitForChild("DiveClientTerminal"))(screen,send)
 local world=workspace:WaitForChild("Thalassa",12)
 local distances={}
@@ -93,6 +96,7 @@ feed.OnClientEvent:Connect(function(kind,payload)
         received=true
         pendingLobby=payload
         if mode=="Lobby" then
+            breach:reset()
             cinematics:reset()
             instruments.reset()
             optics.reset()
@@ -109,8 +113,9 @@ feed.OnClientEvent:Connect(function(kind,payload)
             cinematics:play({kind="Wake",duration=2.7})
         end
         applyOutside(payload.outside==true)
-        local camera=payload.cameraView==true and payload.alive~=false and not payload.outside
+        local camera=payload.cameraView==true and payload.alive~=false and not payload.outside and not payload.systemsOffline
         viewing=camera
+        if cinematics:isPlaying() then breach:reset() else breach:update(payload) end
         promptEligible=payload.alive~=false and not camera and not payload.cleaning
         if not cinematics:isPlaying() then optics.update(payload) end
         exterior.update(payload)
@@ -118,6 +123,7 @@ feed.OnClientEvent:Connect(function(kind,payload)
         dockControls()
     elseif kind=="Cinematic" and mode=="Dive" and type(payload)=="table" then
         viewing=false
+        breach:reset()
         optics.reset()
         if payload.kind=="Angler" or payload.kind=="Squid" or payload.kind=="Flood" then
             exterior.reset()
@@ -128,6 +134,7 @@ feed.OnClientEvent:Connect(function(kind,payload)
     elseif kind=="Results" and type(payload)=="table" then
         received=true
         mode="Results"
+        breach:reset()
         cinematics:reset()
         viewing=false
         optics.reset()

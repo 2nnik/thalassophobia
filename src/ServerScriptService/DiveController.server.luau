@@ -10,6 +10,7 @@ local Sensors = require(script.Parent:WaitForChild("DiveSensors"))
 local World = require(script.Parent:WaitForChild("DiveWorld"))
 local Lobby = require(script.Parent:WaitForChild("DiveLobby"))
 local Extinguisher = require(script.Parent:WaitForChild("DiveExtinguisher"))
+local Breach = require(script.Parent:WaitForChild("DiveBreach"))
 local site = workspace:WaitForChild("Thalassa")
 local net = ReplicatedStorage:WaitForChild("DiveNet")
 local feed = net:WaitForChild("Feed")
@@ -56,6 +57,19 @@ local function clearExtinguisher(m)
 	m.extinguisher,m.charges=nil,0
 end
 
+local function stopPatch(s,p,m)
+	local repair=m.breachRepair
+	if not repair then return end
+	if s.repairOwners[repair.section]==p then s.repairOwners[repair.section]=nil end
+	m.breachRepair=nil
+end
+
+local function atBreach(p,section)
+	local root=p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+	local part=site.Stations["Section"..section]["Breach patch point"]
+	return root and (root.Position-part.Position).Magnitude<=8
+end
+
 local function releaseGrab(p,m,s)
 	local grip=m.grab
 	if not grip then return end
@@ -89,7 +103,7 @@ local function tether(p, m)
 	Exterior.startSwim(p,m,active)
 end
 
-local public = {"phase","difficulty","depth","maxDepth","battery","hull","engine","light","aim","cracks","shark","squid","crawler","swarm","pursuer","squidSide","crawlerSection","boarded","warning","coast","artifact"}
+local public = {"phase","difficulty","depth","maxDepth","battery","hull","engine","light","aim","cracks","shark","squid","crawler","swarm","pursuer","squidSide","crawlerSection","boarded","warning","coast","artifact","breaches","systemsOffline","anglerStrikes","squidLatched"}
 local function sendSnapshot(p, m, s)
 	local out = {}
 	for _,key in public do out[key] = s[key] end
@@ -99,6 +113,7 @@ local function sendSnapshot(p, m, s)
 	out.charges, out.capacity = m.charges,m.capacity
 	out.hasExtinguisher = m.extinguisher~=nil and m.extinguisher.Parent~=nil
 	out.extinguisherEquipped = out.hasExtinguisher and m.extinguisher.Parent==p.Character
+	out.planks,out.breachRepair=m.planks,m.breachRepair
 	out.sonarOn, out.sonarRange = s.sonarOn, Sensors.range
 	out.cameraView = m.cameraOrigin ~= nil
 	if s.sonarOn and not m.outside then out.echoes, out.pingAt = s.echoes,s.pingAt end
@@ -119,6 +134,10 @@ local function recalculate(s)
 end
 
 local function sync(s)
+	if s.systemsOffline then
+		s.sonarOn,s.echoes=false,nil
+		for _,m in members do m.cameraOrigin=nil end
+	end
 	World.update(s)
 	Sensors.pulse(s,members)
 	for p,m in members do
@@ -133,13 +152,14 @@ local function start(party, difficulty)
 		if p.Parent == Players and not crew[p] then
 			local trait = Lobby.trait(p) or ""
 			local capacity = trait == "Tank" and 5 or 3
-			crew[p] = {alive=true, outside=false, trait=trait, charges=0, capacity=capacity,
+			crew[p] = {alive=true, outside=false, trait=trait, charges=0, capacity=capacity,planks=0,
 				maxOxygen=trait == "Diver" and 105 or 80, lastAction={}}
 		end
 	end
 	if next(crew) == nil then return false end
 	members = crew
 	active = Dive.new(difficulty, #party, {})
+	active.repairOwners={}
 	recalculate(active)
 	for index,p in party do
 		if members[p] then
@@ -155,6 +175,7 @@ local function finishResults(s)
 	if active ~= s then return end
 	local groups = {{},{}}
 	for p,m in members do
+		stopPatch(s,p,m)
 		releaseGrab(p,m,s)
 		clearExtinguisher(m)
 		releaseTether(p,m)
@@ -188,6 +209,7 @@ settle = function(s)
 	if kind then
 		local model=site.Contacts[if kind=="Squid" then "GiantSquid" else "Leviathan"]
 		for p,m in members do
+			stopPatch(s,p,m)
 			releaseGrab(p,m,s)
 			if m.alive then cue(p,kind,cueDuration[kind],s.crawlerSection,model:GetPivot().Position) end
 		end
@@ -201,6 +223,7 @@ down = function(p, reason)
 	local s,m = active,members[p]
 	if not s or settling or not m or not m.alive then return end
 	m.alive, m.death = false, reason
+	stopPatch(s,p,m)
 	releaseGrab(p,m,s)
 	clearExtinguisher(m)
 	releaseTether(p,m)
@@ -216,7 +239,7 @@ end
 
 local function validPrompt(p, prompt)
 	local m = members[p]
-	if not active or active.elapsed<2.7 or settling or not m or not m.alive or m.grab or not prompt.Enabled or not prompt:IsDescendantOf(site) then return end
+	if not active or active.elapsed<2.7 or settling or not m or not m.alive or m.grab or m.breachRepair or not prompt.Enabled or not prompt:IsDescendantOf(site) then return end
 	local base = prompt:FindFirstAncestorWhichIsA("BasePart")
 	local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
 	if not base or not root then return end
@@ -249,14 +272,25 @@ end
 
 local function interact(p, action)
 	local m,s = members[p],active
-	if not m or not s or settling or not m.alive or m.grab then return end
+	if not m or not s or settling or not m.alive or m.grab or m.breachRepair then return end
 	if m.cleaning or m.cameraOrigin then return end
 	local cleanIndex = tonumber(action:match("^Clean([1-4])$"))
 	local exterior = cleanIndex ~= nil or action == "Return"
 	if exterior ~= m.outside then return end
 	if (m.lastAction[action] or -2) + 0.35 > s.elapsed then return end
 	m.lastAction[action] = s.elapsed
-	if action == "Engine" then
+	local patchSection=tonumber(action:match("^Patch([1-3])$"))
+	if action=="Planks" then
+		if m.planks>=3 then notice(p,"You can carry three planks.") return end
+		m.planks+=1
+		notice(p,("Repair plank collected (%d / 3)."):format(m.planks))
+	elseif patchSection then
+		if s.breaches[patchSection]<=0 or not atBreach(p,patchSection) then return end
+		if m.planks<=0 then notice(p,"Take a plank from the amber rack by the bridge.") return end
+		if s.repairOwners[patchSection] then notice(p,"A crewmate is fitting a plank here.") return end
+		m.breachRepair=Breach.newChallenge(s.difficulty,patchSection)
+		s.repairOwners[patchSection]=p
+	elseif action == "Engine" then
 		s.engine = not s.engine
 		Dive.warn(s,s.engine and "Propulsion restored." or "Propulsion offline.",2)
 	elseif action == "Light" then
@@ -265,7 +299,7 @@ local function interact(p, action)
 		s.aim = ((s.aim-1 + (action == "AimLeft" and -1 or 1)) % 4) + 1
 	elseif string.match(action, "^Repair[1-3]$") then
 		local section = tonumber(action:sub(-1))
-		if not s.cracks[section] then return end
+		if not s.cracks[section] or s.breaches[section]>0 then return end
 		s.cracks[section] = false
 		s.hull = math.min(100, s.hull+5)
 		Dive.warn(s,"Section 0"..section.." sealed.",2.5)
@@ -331,10 +365,12 @@ local function interact(p, action)
 	elseif action == "Artifact" then
 		Dive.pickup(s)
 	elseif action == "Sonar" then
+		if s.systemsOffline then return end
 		s.sonarOn = not s.sonarOn
 		s.echoes = nil
 		s.nextPing = 0
 	elseif action == "Camera" then
+		if s.systemsOffline then return end
 		local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
 		m.cameraOrigin = root and root.Position
 	else
@@ -378,6 +414,7 @@ local function updateCrawler(s)
 	end
 	if not victim then return end
 	local m=members[victim]
+	stopPatch(s,victim,m)
 	local toward=Vector3.new(outlet.Position.X-root.Position.X,0,outlet.Position.Z-root.Position.Z)
 	local direction=if toward.Magnitude>.2 then toward.Unit else Vector3.zAxis
 	local spot=Vector3.new(root.Position.X,outlet.Position.Y+1.7,root.Position.Z)+direction*2.35
@@ -415,6 +452,11 @@ local function handleCrew(s,dt)
 	for p,m in members do
 		if not m.alive then continue end
 		local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+		local repair=m.breachRepair
+		if repair and (not atBreach(p,repair.section) or Breach.hasExpired(repair,workspace:GetServerTimeNow())) then
+			stopPatch(s,p,m)
+			notice(p,"Patch was interrupted. Try again with the same plank.")
+		end
 		if m.cameraOrigin and root and (root.Position-m.cameraOrigin).Magnitude>9 then m.cameraOrigin=nil end
 		if m.outside then
 			Exterior.tick(p,m,s,dt)
@@ -460,6 +502,7 @@ for _,p in Players:GetPlayers() do joined(p) end
 Players.PlayerRemoving:Connect(function(p)
 	local m,s = members[p],active
 	if m then
+		if s then stopPatch(s,p,m) end
 		if s then releaseGrab(p,m,s) end
 		releaseTether(p,m)
 		clearExtinguisher(m)
@@ -481,6 +524,25 @@ net.Input.OnServerEvent:Connect(function(p, action, arg)
 	if not rate or now - rate.at > 1 then rate = {at=now,count=0} throttles[p]=rate end
 	rate.count += 1
 	if rate.count > 16 then return end
+	if action=="BreachHit" or action=="BreachCancel" then
+		local s,m=active,members[p]
+		local repair=m and m.breachRepair
+		if not s or settling or not repair or not m.alive or m.outside or m.grab then return end
+		local result=if action=="BreachCancel" then "Cancel" elseif not atBreach(p,repair.section) then "Miss"
+			else Breach.hit(repair,arg,workspace:GetServerTimeNow(),p:GetNetworkPing())
+		if result=="Complete" then
+			if m.planks>0 and Dive.patchBreach(s,repair.section) then
+				m.planks-=1
+				notice(p,if s.systemsOffline then "Plank fitted. Other leaks are still open." else "Hull sealed. Sonar and cameras are available.")
+			end
+			stopPatch(s,p,m)
+		elseif result=="Miss" or result=="Cancel" then
+			stopPatch(s,p,m)
+			notice(p,if result=="Miss" then "Timing missed. Your plank is still available." else "Patch cancelled.")
+		elseif result~="Hit" then return end
+		sync(s)
+		return
+	end
 	if members[p] and active and not settling and action=="CloseCamera" then
 		members[p].cameraOrigin=nil
 		sendSnapshot(p,members[p],active)

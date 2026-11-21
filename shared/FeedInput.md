@@ -16,6 +16,8 @@ The server sends Dive updates about four times per second during a run, with add
 
 The red extinguisher rack equips a physical Tool. `hasExtinguisher` reports possession and `extinguisherEquipped` reports whether it is in hand. The server validates boarder state, charges, range and line of sight before a discharge. The swim before the Flood or Squid finisher is a client-controlled presentation segment after the run is lost.
 
+Predator breaches are tracked by section in `Dive.breaches`. Any open breach sets `systemsOffline`, closes camera sessions, and disables the sonar. The searchlight remains available. `planks` is the player's carried supply. At a leak, `breachRepair` provides the challenge ID, section, completed count, normalized circle positions, synchronized target times and timing window. `BreachHit` takes the matching ID, target index and synchronized strike time. `BreachCancel` takes no payload. Misses and cancellations leave the plank available.
+
 `SpinTrait` spends `Lobby.spinCost` earned credits. The server samples using the catalog weights, then persists the balance and unlock together. `Lobby.spinResult` carries a unique `id`, `trait`, `duplicate` and `refund` for the reveal. `Trait` with an owned trait ID toggles equip.
 
 Dive actions include `CloseCamera`, `SwimMove` with direction and look vectors, `CleanStrike` with challenge id and strike time, and `CleanCancel`. Many station interactions originate from server-side ProximityPrompts. Review `DiveController`, `DiveExterior`, and `DiveLobby` for validation and exact fields before changing the interface.

@@ -12,7 +12,7 @@ local callbacks, feed
 local syncPending = {}
 local launching = false
 local receiving = false
-local difficulties = {Easy=.8,Normal=1,Hard=1.5}
+local difficulties = {Easy=.8,Normal=1,Hard=1.5,Nightmare=2}
 local function newGroup(plr)
 	local group={members={plr},difficulty="Normal"}
 	groups[plr]=group

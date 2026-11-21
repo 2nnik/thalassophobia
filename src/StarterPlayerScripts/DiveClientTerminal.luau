@@ -341,11 +341,14 @@ return function(gui,send)
         label("DIVE DIFFICULTY")
         if isHost() and not state.queued and not state.deploying then
             local options={}
-            for _,diff in ipairs({"Easy","Normal","Hard"}) do
+            for _,diff in ipairs({"Easy","Normal","Hard","Nightmare"}) do
                 table.insert(options,{diff,"Difficulty"..diff,function() send("Difficulty",diff) end,
                     level==diff and c.soft or c.raised,level==diff and c.black or c.white})
             end
             buttonRow(options,36)
+            if level=="Nightmare" then
+                para("A single angler hit or squid grab sinks the cage. Worms and barnacles appear more often.",38)
+            end
         else
             para(level,22)
         end
@@ -374,6 +377,7 @@ return function(gui,send)
         entry("Exterior video","Use the bridge camera desk to view four hull cameras. Track a contact or switch to a fixed feed.")
         entry("Leviathan angler","Cut the engine at the heavy-contact warning. Wait for the angler to pass, then restart.")
         entry("Giant squid","Turn the floodlight toward the squid's bearing. Hold the beam there until it retreats, then switch it off.")
+        entry("Hull breach","Take planks from the amber rack by the bridge. Fit one at a leak and click each circle when its outer ring meets it. The sonar and cameras return after all breaches are sealed. The searchlight stays available.")
         entry("Crack crawler","Seal the cracked window before the worms get in. Equip the red wall extinguisher between the bridge consoles, then get close and spray the boarder.")
         entry("Hull swarm","Check sonar for close predators before going outside. Swim to the hull patches, including the keel. Time three cuts per patch. Cancel and resume any time.")
         entry("Pursuer · ascent only","The cage coasts briefly after shutdown. Restart once the angler passes. Low power and hull damage reduce thrust.")
@@ -397,12 +401,8 @@ return function(gui,send)
             GuiService.SelectedObject=if key=="HOME" then heroButtons[1] else navItems[key]
         end
     end
-    local _,launchCaption,launchSub=heroButton("Launch solo","Private dive","HomeLaunch",231,function()
-        if isHost() and not state.loading and not state.deploying and not state.queued and not state.busy then
-            send("Launch")
-        else
-            open("DIVE")
-        end
+    local _,launchCaption,launchSub=heroButton("Solo dive","Choose difficulty","HomeLaunch",231,function()
+        open("DIVE")
     end,true)
     local _,queueCaption,queueSub=heroButton("Public queue","Find a crew","HomeQueue",288,function()
         if isHost() and not state.loading and not state.deploying and not state.queued and not state.busy then
@@ -434,8 +434,8 @@ return function(gui,send)
         home.Visible,shell.Visible=onHome,not onHome
         homeWallet.Text=state.money and string.format("%d  CR",state.money) or ""
         local party=state.party or {}
-        launchCaption.Text=#party>1 and "Launch crew" or "Launch solo"
-        launchSub.Text=if state.hostId and not isHost() then "Your dive leader launches the crew" else "Private dive  /  "..(state.difficulty or "Normal")
+        launchCaption.Text=#party>1 and "Crew dive" or "Solo dive"
+        launchSub.Text=if state.hostId and not isHost() then "Your dive leader launches the crew" else "Choose difficulty  /  "..(state.difficulty or "Normal")
         queueCaption.Text=state.queued and "View queue" or "Public queue"
         queueSub.Text=state.queued and "Searching for crew…" or "Find a crew"
         heroStatus.Text=if state.loading or not state.hostId then "CONNECTING TO DOCK"

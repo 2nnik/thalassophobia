@@ -3,6 +3,8 @@ local World = {}
 local world = workspace:WaitForChild("Thalassa")
 local stations = world.Stations
 local actors = world.Contacts
+local Breach = require(script.Parent:WaitForChild("DiveBreach"))
+local breachEffects = Breach.install(stations)
 require(script.Parent:WaitForChild("DiveExtinguisher")).install(stations)
 local WormFigure = require(script.Parent:WaitForChild("DiveWormFigure"))
 local ocean = world.Ocean
@@ -254,7 +256,9 @@ function World.update(state)
  local crawler, swarm, pursuer = state.crawler or 0, state.swarm or 0, state.pursuer or 0
  local powered = (state.battery or 100)>0
  local lit = active and powered and state.light==true
- for _,id in {"Engine","Light","AimLeft","AimRight","Extinguisher","Airlock","Return","Sonar","Camera"} do showPrompt(id,active) end
+ for _,id in {"Engine","Light","AimLeft","AimRight","Extinguisher","Airlock","Return","Planks"} do showPrompt(id,active) end
+ showPrompt("Sonar",active and not state.systemsOffline)
+ showPrompt("Camera",active and not state.systemsOffline)
  showPrompt("ClearSwarm",false)
  for i,parts in sites do
   local progress=state.cleanSites and state.cleanSites[i] or 0
@@ -269,7 +273,10 @@ function World.update(state)
  relic.Transparency=phase=="Bottom" and .12 or 1
  for i=1,3 do
   local cracked=active and state.cracks and state.cracks[i]==true or false
-  showPrompt("Repair"..i,cracked)
+  local breach=if active and state.breaches then state.breaches[i] else 0
+  showPrompt("Repair"..i,cracked and breach==0)
+  showPrompt("Patch"..i,active and breach>0)
+  Breach.render(breachEffects[i],breach)
   showPrompt("Spray"..i,active and state.boarded==true and crawler>0 and section==i)
   for _,line in leaks[i] do line.Transparency=cracked and .08 or 1 end
   local cell=stations["Battery stack"]["CellIndicator"..i]
@@ -279,7 +286,8 @@ function World.update(state)
  local depth=math.clamp(state.depth or 0,0,600)
  local message="CLEAR"
  if shark>0 then message="LARGE WAKE" elseif squid>0 then message="MASS / "..bearings[sqSide] elseif crawler>0 then message="HULL BREACH" elseif swarm>0 then message="HULL FOULING" elseif pursuer>.12 then message="WAKE BELOW" end
- if not state.sonarOn then message="PASSIVE" elseif message=="CLEAR" then message="PELAGIC RETURNS" end
+ if state.systemsOffline then message="OFFLINE / HULL BREACHED"
+ elseif not state.sonarOn then message="PASSIVE" elseif message=="CLEAR" then message="PELAGIC RETURNS" end
  screen.Text=string.format("%03d M    %02d%%\n%s   •   %s",math.floor(depth+.5),math.max(0,math.floor(state.battery or 100)),bearings[aim],message)
  engineLabel.Text=state.engine and "• RUN" or "○ STOP"
  engineLabel.TextColor3=state.engine and meterColor or amber

@@ -176,8 +176,8 @@ end
 local function issueChallenge(s,m,index,label,feedback)
 	nextId += 1
 	local difficulty = s.difficulty
-	local period = difficulty=="Hard" and 1.77 or difficulty=="Easy" and 2.42 or 2.08
-	local arc = difficulty=="Hard" and 51 or difficulty=="Easy" and 78 or 64
+	local period = difficulty=="Nightmare" and 1.6 or difficulty=="Hard" and 1.77 or difficulty=="Easy" and 2.42 or 2.08
+	local arc = difficulty=="Nightmare" and 43 or difficulty=="Hard" and 51 or difficulty=="Easy" and 78 or 64
 	local reverse = random:NextInteger(0,1)==0 and 1 or -1
 	local startAngle = random:NextInteger(0,359)
 	m.cleaning = {

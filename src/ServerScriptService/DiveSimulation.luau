@@ -1,13 +1,16 @@
 -- All state transitions and resource costs are evaluated by the server.
 local Dive = {}
 local TARGET_DEPTH = 600
+local MAX_BREACH = 3
 local rules = {
-	Easy = {pace = 0.80, damage = 0.78, power = 0.85},
-	Normal = {pace = 1, damage = 1, power = 1},
-	Hard = {pace = 1.28, damage = 1.18, power = 1.12},
+	Easy = {pace = 0.80, damage = 0.78, power = 0.85, anglerStrikes = 3, squidSqueezes = 4, squeezeInterval = 7},
+	Normal = {pace = 1, damage = 1, power = 1, anglerStrikes = 2, squidSqueezes = 3, squeezeInterval = 6},
+	Hard = {pace = 1.28, damage = 1.18, power = 1.12, anglerStrikes = 1, squidSqueezes = 2, squeezeInterval = 5},
+	Nightmare = {pace = 1.48, damage = 1.38, power = 1.26, anglerStrikes = 1, squidSqueezes = 1, squeezeInterval = 4},
 }
 local names = {"shark", "squid", "crawler", "swarm"}
 local bearings = {"FORE", "STARBOARD", "AFT", "PORT"}
+local squidSections = {1, 3, 3, 2}
 
 function Dive.new(difficulty, crewCount, traits, rng)
 	return {
@@ -15,9 +18,12 @@ function Dive.new(difficulty, crewCount, traits, rng)
 		crewCount = crewCount, traits = traits, rng = rng or Random.new(), bag = {},
 		depth = 0, maxDepth = TARGET_DEPTH, deepest = 0, battery = 100, hull = 100,
 		sonarOn = false, nextPing = 0, engine = true, light = false, aim = 1, cracks = {false, false, false},
+		breaches = {0, 0, 0}, breachCauses = {}, systemsOffline = false,
 		shark = 0, squid = 0, crawler = 0, swarm = 0, pursuer = 0,
+		anglerStrikes = 0, squidSqueezes = 0, squidLatched = false, squeezeRemaining = 0,
 		squidSide = 1, crawlerSection = 1, boarded = false, artifact = false,
 		coast = 0, sharkPass = 0, repelled = 0, catchup = 0, elapsed = 0,
+		nextInfestation = if difficulty == "Nightmare" then 8 else math.huge,
 		nextThreat = 13, nextCrack = 23, warning = "Descent underway. Listen for contacts.",
 		warningUntil = 7, 
 	}
@@ -44,6 +50,29 @@ function Dive.endRun(s, survived, reason, sequence)
 	s.sequence = sequence
 end
 
+local function openBreach(s, cause, preferred)
+	local section = preferred or 1
+	if not preferred or s.breaches[section] >= MAX_BREACH then
+		for i, severity in s.breaches do
+			if severity < s.breaches[section] then section = i end
+		end
+	end
+	s.breaches[section] = math.min(MAX_BREACH, s.breaches[section] + 1)
+	s.breachCauses[section] = cause
+	s.systemsOffline, s.sonarOn, s.echoes, s.pingAt, s.nextPing = true, false, nil, nil, 0
+	Dive.warn(s, string.format("%s breach in section %02d. Patch it with a plank. Cameras and sonar offline.", cause, section), 8)
+end
+
+function Dive.patchBreach(s, section)
+	if s.phase == "Results" or not s.breaches[section] or s.breaches[section] == 0 then return false end
+	s.breaches[section] -= 1
+	if s.breaches[section] == 0 then s.breachCauses[section] = nil end
+	s.hull = math.min(100, s.hull + 11)
+	s.systemsOffline = s.breaches[1] + s.breaches[2] + s.breaches[3] > 0
+	Dive.warn(s, if s.systemsOffline then "Plank secured. Other breaches remain." else "Hull sealed. Cameras and sonar are available.", 5)
+	return true
+end
+
 function Dive.spawn(s, name)
 	if s[name] > 0 then return false end
 	s[name] = 0.015
@@ -52,7 +81,7 @@ function Dive.spawn(s, name)
 		Dive.warn(s, "Angler closing on engine noise. Cut propulsion until it passes.", 6)
 	elseif name == "squid" then
 		s.squidSide = s.patrolSquidSide or s.rng:NextInteger(1, 4)
-		s.repelled = 0
+		s.repelled, s.squidSqueezes, s.squidLatched, s.squeezeRemaining = 0, 0, false, 0
 		Dive.warn(s, "Squid silhouette to " .. bearings[s.squidSide] .. ". Train the lamp on it.", 6)
 	elseif name == "crawler" then
 		s.boarded = false
@@ -83,19 +112,33 @@ local function drawContact(s)
 	end
 end
 
+local function squeeze(s)
+	s.squidSqueezes += 1
+	s.squidLatched = true
+	s.squeezeRemaining = s.rules.squeezeInterval
+	local damage = 17 * s.rules.damage
+	if s.squidSqueezes >= s.rules.squidSqueezes or (s.squidSqueezes > 1 and s.hull <= damage) then
+		Dive.endRun(s, false, "The giant squid split the cage.", "Squid")
+		return
+	end
+	-- Initial contact in the standard modes always leaves a window to repel it.
+	s.hull -= math.min(damage, math.max(0, s.hull - 1))
+	openBreach(s, "Squid", squidSections[s.squidSide])
+end
+
 local function contacts(s, dt, pace)
 	if s.shark > 0 then
 		s.shark = math.min(1, s.shark + dt * pace / (s.traits.Baffle and 14 or 11) * (s.artifact and 1.12 or 1))
 		if s.shark >= 0.93 then
 			if s.engine then
+				s.anglerStrikes += 1
 				s.hull -= 34 * s.rules.damage
-				if s.hull <= 0 then
+				if s.anglerStrikes >= s.rules.anglerStrikes or s.hull <= 0 then
 					Dive.endRun(s,false,"The angler swallowed the damaged cage.","Angler")
 					return
 				end
-				crack(s)
 				s.shark = 0
-				Dive.warn(s, "Angler impact. Inspect the hull.", 5)
+				openBreach(s, "Angler")
 			else
 				s.sharkPass += dt
 				if s.sharkPass >= 2.6 then
@@ -110,18 +153,22 @@ local function contacts(s, dt, pace)
 			s.repelled += dt
 			s.squid = math.max(0.015, s.squid - dt * 0.14)
 			if s.repelled >= (s.traits.Optics and 1.9 or 2.8) then
-				s.squid = 0
+				s.squid, s.squidLatched = 0, false
 				Dive.warn(s, "Squid retreating. Conserve the lamp.")
 			end
 		else
-			s.squid += dt * pace / 24
 			s.repelled = math.max(0, s.repelled - dt / 2)
-			if s.squid >= 1 then
-				Dive.endRun(s,false,"The giant squid split the cage.","Squid")
-				return
+			if s.squidLatched then
+				s.squid = 1
+				s.squeezeRemaining -= dt
+				if s.squeezeRemaining <= 0 then squeeze(s) end
+			else
+				s.squid = math.min(1, s.squid + dt * pace / 24)
+				if s.squid >= 1 then squeeze(s) end
 			end
 		end
 	end
+	if s.phase == "Results" then return end
 	if s.crawler > 0 and not s.victim then
 		s.crawler += dt * pace / (s.boarded and 26 or 17)
 		if not s.boarded and s.crawler >= 0.47 then
@@ -192,9 +239,22 @@ function Dive.step(s, dt)
 		drawContact(s)
 		s.nextThreat = s.elapsed + s.rng:NextNumber(17, 24) / (pace * (1 + depthRatio * 0.25))
 	end
-	local leaks = 0
-	for _, open in s.cracks do if open then leaks += 1 end end
-	s.hull -= leaks * dt * 0.105 * s.rules.damage
+	if s.elapsed >= s.nextInfestation then
+		local first = if s.rng:NextInteger(1, 2) == 1 then "crawler" else "swarm"
+		if not Dive.spawn(s, first) then Dive.spawn(s, if first == "crawler" then "swarm" else "crawler") end
+		s.nextInfestation = s.elapsed + s.rng:NextNumber(8, 12) / (1 + depthRatio * .25)
+	end
+	local cracks, breaches, breachCause = 0, 0, nil
+	for i, open in s.cracks do
+		if open then cracks += 1 end
+		breaches += s.breaches[i]
+		breachCause = s.breachCauses[i] or breachCause
+	end
+	s.hull -= (cracks * .105 + breaches * .32) * dt * s.rules.damage
+	if s.hull <= 0 then
+		Dive.endRun(s,false,"The pressure hull collapsed.",breachCause)
+		return
+	end
 	s.battery -= dt * (0.077 + (s.engine and 0.196 or 0) + (s.light and 0.46 or 0) + (s.sonarOn and 0.046 or 0)) * s.rules.power / (s.traits.Battery and 1.15 or 1)
 	contacts(s, dt, pace)
 	if s.phase == "Results" then return end
