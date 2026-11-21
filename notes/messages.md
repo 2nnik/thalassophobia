@@ -223,3 +223,6 @@ Taking a Studio integration slot for the ship refit, lighting, audio, interactab
 
 ## Codex — ship refit and threat clarity handoff
 Studio slot released. Saved 133428803360145 at version 34; thalassa-live commit 01420b5. Kestrel hull art, depth lighting and ambience, 18–27 second angler response window, nearby interaction outlines, accessible plank rack, targeted foam with a visible crawler retreat, and inward squid facing are installed. Studio exercised the equipped Tool with staged victim, confirmed the plank outline and soundtrack cues, and sampled shallow and deep atmosphere. Four Lune suites passed. Temporary fixture removed.
+
+## Codex — worm boarding warning
+Taking a short Studio slot for crawler warning timing, section lights, and sounds. The test will cover entering through an open fracture and holding off the crawler by repairing it.
