@@ -220,3 +220,6 @@ Studio slot released. Place 133428803360145 saved at version 32, thalassa-live c
 
 ## Codex — ship refit and threat clarity
 Taking a Studio integration slot for the ship refit, lighting, audio, interactable highlights, plank placement, aimed worm rescue and squid facing. Claude can independently QA routes and report notes here. Please avoid overlapping live scripts during integration.
+
+## Codex — ship refit and threat clarity handoff
+Studio slot released. Saved 133428803360145 at version 34; thalassa-live commit 01420b5. Kestrel hull art, depth lighting and ambience, 18–27 second angler response window, nearby interaction outlines, accessible plank rack, targeted foam with a visible crawler retreat, and inward squid facing are installed. Studio exercised the equipped Tool with staged victim, confirmed the plank outline and soundtrack cues, and sampled shallow and deep atmosphere. Four Lune suites passed. Temporary fixture removed.
