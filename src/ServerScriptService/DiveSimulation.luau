@@ -4,6 +4,7 @@ local TARGET_DEPTH = 10000
 local DESCENT_RATE = TARGET_DEPTH / (15 * 60)
 local ASCENT_RATE = TARGET_DEPTH / (7 * 60)
 local RECOVERY_WINDOW = {Easy = 22, Normal = 19, Hard = 16, Nightmare = 14}
+local ANGLER_APPROACH = {Easy = 27, Normal = 24, Hard = 21, Nightmare = 18}
 Dive.targetDepth = TARGET_DEPTH
 local MAX_BREACH = 3
 local rules = {
@@ -85,11 +86,12 @@ function Dive.isUnlocked(s, name)
 end
 
 function Dive.spawn(s, name)
+	if name == "crawler" and s.crawlerRetreat then return false end
 	if not firstDepth[name] or not Dive.isUnlocked(s, name) or s[name] > 0 then return false end
 	s[name] = 0.015
 	if name == "shark" then
 		s.sharkPass = 0
-		Dive.warn(s, "Angler closing on engine noise. Cut propulsion until it passes.", 6)
+		Dive.warn(s, "Angler closing on engine noise. Cut propulsion until it passes.", 9)
 	elseif name == "squid" then
 		s.squidSide = s.patrolSquidSide or s.rng:NextInteger(1, 4)
 		s.repelled, s.squidSqueezes, s.squidLatched, s.squeezeRemaining = 0, 0, false, 0
@@ -158,7 +160,8 @@ end
 
 local function contacts(s, dt, pace)
 	if s.shark > 0 then
-		s.shark = math.min(1, s.shark + dt * pace / (s.traits.Baffle and 14 or 11) * (s.artifact and 1.12 or 1))
+		local seconds = (ANGLER_APPROACH[s.difficulty] or ANGLER_APPROACH.Normal) + (s.traits.Baffle and 5 or 0)
+		s.shark = math.min(1, s.shark + dt * .915 / seconds)
 		if s.shark >= 0.93 then
 			if s.engine then
 				s.anglerStrikes += 1

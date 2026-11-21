@@ -75,12 +75,19 @@ return function(gui)
     end
     local noise=sound("Drive","action_falling.ogg",.37,true,6,-13,-35)
     UI.make("FlangeSoundEffect",noise,{Depth=.5,Mix=.55,Rate=.8})
-    local sea=sound("Current","action_swim.mp3",.45,true,2,-19,-40)
+    local pressure=sound("PressureBed","action_falling.ogg",.71,true,8,2,-17)
+    UI.make("FlangeSoundEffect",pressure,{Depth=.6,Mix=.35,Rate=.22})
+    local sea=sound("Current","action_swim.mp3",.45,true,2,-14,-31)
     local ping=sound("Sonar","volume_slider.ogg",1.19,false,2,-5,-13)
     UI.make("EchoSoundEffect",ping,{Delay=.23,Feedback=.32,DryLevel=-2,WetLevel=-11})
     local impact=sound("Strain","impact_explosion_03.mp3",.52,false,5,-15,-40)
     local groan=sound("Hull","action_jump_land.mp3",.5,false,4,-12,-32)
     UI.make("ReverbSoundEffect",groan,{DecayTime=2,DryLevel=-4,WetLevel=-10})
+    local cable=sound("TetherCreak","action_footsteps_plastic.mp3",.38,false,-7,1,-15)
+    UI.make("EchoSoundEffect",cable,{Delay=.17,Feedback=.3,DryLevel=-5,WetLevel=-12})
+    local bulkhead=sound("BulkheadRing","action_jump_land.mp3",.83,false,2,4,-10)
+    UI.make("ReverbSoundEffect",bulkhead,{DecayTime=1.7,DryLevel=-3,WetLevel=-8})
+    local driveShift=sound("DriveShift","action_get_up.mp3",.55,false,7,-2,-12)
     local distant=sound("DeepRumble","impact_water.mp3",.45,false,5,-11,-32)
     local scrape=sound("MetalScrape","impact_explosion_03.mp3",.59,false,0,-12,-23)
     local leak=sound("WaterIngress","action_swim.mp3",.78,true,0,-7,-14)
@@ -90,18 +97,24 @@ return function(gui)
     UI.make("EchoSoundEffect",recoveryAlarm,{Delay=.28,Feedback=.58,DryLevel=0,WetLevel=-5})
     UI.make("ReverbSoundEffect",distant,{DecayTime=3,DryLevel=-8,WetLevel=-12})
     UI.make("EchoSoundEffect",scrape,{Delay=.23,Feedback=.29,DryLevel=-7,WetLevel=-15})
+    local angler=sound("AnglerGroan","impact_water.mp3",.58,false,2,-1,-15)
+    UI.make("FlangeSoundEffect",angler,{Depth=.62,Mix=.46,Rate=.32})
+    UI.make("ReverbSoundEffect",angler,{DecayTime=3.6,DryLevel=-1,WetLevel=-8})
+    local anglerSource=UI.make("Part",workspace,{Name="LocalAnglerHydrophone",Anchored=true,CanCollide=false,
+        CanTouch=false,CanQuery=false,CastShadow=false,Transparency=1,Size=Vector3.one})
+    local anglerEcho=sound("AnglerBearing","impact_water.mp3",.47,false,3,1,-12)
+    anglerEcho.RollOffMinDistance,anglerEcho.RollOffMaxDistance=8,28
+    anglerEcho.Parent=anglerSource
+    UI.make("EchoSoundEffect",anglerEcho,{Delay=.38,Feedback=.25,DryLevel=-5,WetLevel=-10})
     local calls={
-        {field="shark", audio=sound("AnglerGroan","action_falling.ogg",.35,false,7,-12,-32), pitch=.35, volume=.19},
-        {field="squid", audio=sound("SquidGurgle","impact_water.mp3",.84,false,1,-9,-16), pitch=.84, volume=.17},
-        {field="crawler", audio=sound("CrawlerSkitter","action_footsteps_plastic.mp3",1.55,false,-9,-6,-13), pitch=1.55, volume=.11},
-        {field="swarm", audio=sound("BarnacleTick","action_jump_land.mp3",1.32,false,-9,-5,-18), pitch=1.32, volume=.10},
-        {field="pursuer", audio=sound("PursuerPulse","impact_explosion_03.mp3",.36,false,6,-22,-36), pitch=.36, volume=.18},
+        {field="squid", audio=sound("SquidGurgle","impact_water.mp3",.88,false,1,-5,-13), pitch=.88, volume=.26},
+        {field="crawler", audio=sound("CrawlerSkitter","action_footsteps_plastic.mp3",1.55,false,-9,1,-10), pitch=1.55, volume=.26},
+        {field="swarm", audio=sound("BarnacleTick","action_jump_land.mp3",1.32,false,-9,-1,-12), pitch=1.32, volume=.24},
+        {field="pursuer", audio=sound("PursuerPulse","impact_explosion_03.mp3",.36,false,6,-15,-28), pitch=.36, volume=.27},
     }
-    UI.make("FlangeSoundEffect",calls[1].audio,{Depth=.75,Mix=.55,Rate=.38})
-    UI.make("ReverbSoundEffect",calls[1].audio,{DecayTime=3.8,DryLevel=-1,WetLevel=-8})
-    UI.make("EchoSoundEffect",calls[2].audio,{Delay=.11,Feedback=.32,DryLevel=-4,WetLevel=-12})
-    UI.make("EchoSoundEffect",calls[4].audio,{Delay=.08,Feedback=.37,DryLevel=-4,WetLevel=-10})
-    UI.make("ReverbSoundEffect",calls[5].audio,{DecayTime=3.4,DryLevel=-4,WetLevel=-13})
+    UI.make("EchoSoundEffect",calls[1].audio,{Delay=.11,Feedback=.32,DryLevel=-4,WetLevel=-12})
+    UI.make("EchoSoundEffect",calls[3].audio,{Delay=.08,Feedback=.37,DryLevel=-4,WetLevel=-10})
+    UI.make("ReverbSoundEffect",calls[4].audio,{DecayTime=3.4,DryLevel=-4,WetLevel=-13})
     local function loop(s,volume)
         s.Volume=volume
         if volume>0 and not s.IsPlaying then s:Play()
@@ -119,6 +132,7 @@ return function(gui)
     haze.ZIndex=0
     haze.Visible=false
     local previous
+    local nextAnglerCue=0
     local nextContact=0
     local nextGroan=0
     local nextScare=nil
@@ -127,6 +141,16 @@ return function(gui)
     local rng=Random.new()
     local nextCall=0
     local bearings={"FORE","STARBOARD","AFT","PORT"}
+    local function aimAnglerAudio()
+        local camera=workspace.CurrentCamera
+        local world=workspace:FindFirstChild("Thalassa")
+        local contacts=world and world:FindFirstChild("Contacts")
+        local fish=contacts and contacts:FindFirstChild("Leviathan")
+        if not camera or not fish then return end
+        local origin=camera.CFrame.Position
+        local offset=fish:GetPivot().Position-origin
+        if offset.Magnitude>.01 then anglerSource.Position=origin+offset.Unit*7.5 end
+    end
     local function resize()
         local w=frame.AbsoluteSize.X
         local compact=w<670
@@ -163,14 +187,15 @@ return function(gui)
     local function reset()
         previous=nil
         nextScare,wasBoarded=nil,false
-        nextCall,nextContact,nextGroan,previousLeaks=0,0,0,0
+        nextCall,nextContact,nextGroan,previousLeaks,nextAnglerCue=0,0,0,0,0
         clearNotice()
         for _,call in calls do call.due=nil call.audio:Stop() end
         frame.Visible=false
         grade.Enabled=false
         blur.Enabled=false
         haze.Visible=false
-        for _,s in ipairs({noise,sea,ping,impact,groan,distant,scrape,leak,splash,bell,recoveryAlarm}) do s:Stop() end
+        for _,s in {noise,pressure,sea,ping,impact,groan,cable,bulkhead,driveShift,distant,scrape,leak,splash,bell,
+            recoveryAlarm,angler,anglerEcho} do s:Stop() end
     end
     local function update(s)
         frame.Visible=not s.cameraView
@@ -207,21 +232,44 @@ return function(gui)
         else status.Text="" end
         status.Visible=status.Text~=""
         grade.Enabled=true
-        grade.Brightness=outside and -.045 or -.006
+        local darkness=math.sqrt(math.clamp(at/math.max(1,s.maxDepth or 10000),0,1))
+        grade.Brightness=outside and (-.012-.035*darkness) or -.006
         grade.Contrast=outside and .07 or .025
         grade.Saturation=outside and -.30 or -.12
-        grade.TintColor=outside and Color3.fromRGB(164,205,215) or Color3.fromRGB(236,248,247)
+        grade.TintColor=outside and Color3.fromRGB(207,235,235):Lerp(Color3.fromRGB(160,200,215),darkness)
+            or Color3.fromRGB(236,248,247)
         blur.Enabled=outside==true
         haze.Visible=outside==true
-        loop(noise,s.alive~=false and s.engine and (outside and .065 or .12) or 0)
-        loop(sea,outside and .13 or 0)
         local now=os.clock()
+        local proximity=s.shark or 0
+        local before=previous and previous.shark or 0
+        local anglerPresent=s.alive~=false and proximity>0
+        local ambience=anglerPresent and .38 or 1
+        loop(noise,s.alive~=false and s.engine and (outside and .27 or .7)*ambience or 0)
+        loop(pressure,s.alive~=false and (.27+.52*darkness)*ambience or 0)
+        loop(sea,outside and .20*ambience or 0)
+        if anglerPresent then
+            aimAnglerAudio()
+            local gettingClose=before<.43 and proximity>=.43
+            if before==0 or gettingClose or now>=nextAnglerCue then
+                local gain=(.59+.23*proximity)*(outside and .88 or 1)
+                play(angler,gain,.61-.12*proximity)
+                play(anglerEcho,gain*.36,.49-.06*proximity)
+                nextAnglerCue=now+(proximity>=.43 and 4.4 or 6.5)
+                nextScare=now+8
+            end
+        else
+            nextAnglerCue=0
+        end
         local leaks=0
         for _,crack in s.cracks or {} do if crack then leaks+=1 end end
         for _,severity in s.breaches or {} do leaks+=severity*2 end
         local inside=not outside and s.alive~=false
-        loop(leak,inside and math.min(.24,leaks*.04) or 0)
-        if inside and leaks>previousLeaks then play(splash,.3) end
+        loop(leak,inside and math.min(.44,leaks*.08) or 0)
+        if inside and leaks>previousLeaks then play(splash,.44) end
+        if inside and previous and s.engine~=previous.engine then
+            play(driveShift,.38,s.engine and .72 or .51)
+        end
         previousLeaks=leaks
         if previous and previous.phase~=s.phase and (s.phase=="Bottom" or s.phase=="Ascent") then
             play(bell,.22,s.phase=="Bottom" and .66 or 1)
@@ -236,18 +284,16 @@ return function(gui)
         for _,call in calls do
             local intensity=s[call.field] or 0
             local before=previous and previous[call.field] or 0
-            local approach=intensity>0 and (before<=0 or (call.field=="shark" and before<.52 and intensity>=.52))
+            local approach=intensity>0 and before<=0
             if intensity<=0 or s.alive==false then
                 call.due=nil
             elseif approach then
-                local angler=call.field=="shark"
-                play(call.audio,(angler and (intensity>=.52 and .48 or .32) or call.volume*1.25)*(outside and .8 or 1),
-                    angler and (intensity>=.52 and .27 or .31) or call.pitch)
+                play(call.audio,call.volume*(anglerPresent and .72 or 1.25)*(outside and .85 or 1),call.pitch)
                 call.due=now+rng:NextNumber(11,24)
                 nextCall=now+4
             elseif not call.due then
                 call.due=now+rng:NextNumber(2.5,6.5)
-            elseif now>=call.due and now>=nextCall then
+            elseif now>=call.due and now>=nextCall and not anglerPresent then
                 local strength=(.78+math.min(intensity,1)*.35)*(outside and .8 or 1)
                 play(call.audio,call.volume*strength,call.pitch*rng:NextNumber(.93,1.07))
                 call.due=now+rng:NextNumber(11,24)
@@ -255,25 +301,32 @@ return function(gui)
                 nextScare=math.max(nextScare or now,now+4)
             end
         end
-        if not nextScare then nextScare=now+rng:NextNumber(16,27) end
+        if not nextScare then nextScare=now+rng:NextNumber(7,14) end
         if s.alive~=false and s.boarded and not wasBoarded and not outside then
-            play(scrape,.17,.59)
-            nextScare=now+rng:NextNumber(24,44)
-        elseif s.alive~=false and at>20 and now>=nextScare then
-            if outside or rng:NextNumber()<.65 then play(distant,outside and .13 or .15,rng:NextNumber(.39,.51))
-            else play(scrape,.11,rng:NextNumber(.50,.66)) end
-            nextScare=now+rng:NextNumber(23,47)
+            play(scrape,.35,.59)
+            nextScare=now+rng:NextNumber(12,19)
+        elseif s.alive~=false and at>20 and now>=nextScare and not anglerPresent then
+            if outside then
+                if rng:NextNumber()<.46 then play(cable,.24,rng:NextNumber(.35,.51))
+                else play(distant,.27,rng:NextNumber(.45,.61)) end
+            else
+                local roll=rng:NextNumber()
+                if roll<.34 then play(distant,.22,rng:NextNumber(.40,.57))
+                elseif roll<.61 then play(bulkhead,.36,rng:NextNumber(.70,.99))
+                else play(scrape,.16,rng:NextNumber(.48,.67)) end
+            end
+            nextScare=now+rng:NextNumber(8,16)
         end
         wasBoarded=s.boarded==true
-        if previous and (s.hull or 100)<(previous.hull or 100)-4 then play(impact,.36) end
-        local proximity=math.max(s.shark or 0,s.squid or 0,s.crawler or 0,s.pursuer or 0)
-        if proximity>0 and now>nextContact and not outside then
-            play(ping,.20,.8+proximity*.38)
-            nextContact=now+math.max(2,7-4*proximity)
+        if previous and (s.hull or 100)<(previous.hull or 100)-4 then play(impact,.55) end
+        local otherThreat=math.max(s.squid or 0,s.crawler or 0,s.pursuer or 0)
+        if otherThreat>0 and now>nextContact and not outside and not anglerPresent then
+            play(ping,.29,.8+otherThreat*.38)
+            nextContact=now+math.max(2,7-4*otherThreat)
         end
         if now>nextGroan and at>100 and not outside and s.engine then
-            play(groan,.14,.43+math.random()*.13)
-            nextGroan=now+math.random(15,33)
+            if not anglerPresent then play(groan,.27,.43+math.random()*.13) end
+            nextGroan=now+math.random(13,26)
         end
         previous=s
     end

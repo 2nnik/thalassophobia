@@ -9,6 +9,18 @@ local function fresh(difficulty)
 	return s
 end
 
+for difficulty, approach in {Easy=27, Normal=24, Hard=21, Nightmare=18} do
+	local warning = fresh(difficulty)
+	warning.deepest,warning.depth = 500,500
+	warning.crewCount = 4
+	assert(Dive.spawn(warning,"shark"))
+	for _ = 1, approach*4-1 do Dive.step(warning,.25) end
+	assert(warning.shark<.93 and warning.anglerStrikes==0, "The angler attacked before the warning window elapsed.")
+	warning.engine=false
+	for _ = 1, 13 do Dive.step(warning,.25) end
+	assert(warning.shark==0 and warning.anglerStrikes==0 and warning.phase=="Descent")
+end
+
 local s = fresh()
 s.shark, s.hull = .94, 20
 Dive.step(s,.25)

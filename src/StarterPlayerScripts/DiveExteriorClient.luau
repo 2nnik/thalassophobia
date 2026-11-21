@@ -45,19 +45,56 @@ local REVEAL_RANGE, BLACKOUT_RANGE = 25, 52
 local WINDOW_REVEAL_RANGE, WINDOW_BLACKOUT_RANGE = 74, 110
 local BEAM_REVEAL_RANGE, BEAM_BLACKOUT_RANGE = 122, 182
 local contactNames = {"Leviathan","GiantSquid","CrackCrawler","Pursuer"}
-local waterGrade = {
-	Color=Color3.fromRGB(20,50,54), Decay=Color3.fromRGB(8,22,29),
-	Density=.73, Haze=2.8, Glare=0, Offset=.04,
-}
+local shallowWater, deepWater = Color3.fromRGB(136,211,222), Color3.fromRGB(18,47,56)
+local shallowDecay, deepDecay = Color3.fromRGB(53,112,131), Color3.fromRGB(8,21,31)
 local invisible = NumberSequence.new(1)
 local footsteps, contacts = {}, {}
 local observedCharacter, footstepMode, footstepAdded
-local atmosphere, originalAtmosphere
+local atmosphere, originalAtmosphere, originalExposure, originalOutdoor
+local targetDarkness, darkness, nextWaterUpdate = 0, 0, 0
 local strokes, breathing, bubblePool, headlamp
 local steelStep, strideDistance = nil, 0
 local random = Random.new()
 local nextContactCheck, nextBubble, bubbleIndex = 0, 0, 0
 local inDive, searchlight, cabinSteps = false, false, false
+
+local function beginWater()
+	originalExposure,originalOutdoor=Lighting.ExposureCompensation,Lighting.OutdoorAmbient
+	atmosphere=Lighting:FindFirstChildOfClass("Atmosphere")
+	if atmosphere then
+		originalAtmosphere={}
+		for _,property in {"Color","Decay","Density","Haze","Glare","Offset"} do
+			originalAtmosphere[property]=atmosphere[property]
+		end
+	end
+	darkness,nextWaterUpdate=targetDarkness,0
+end
+
+local function stepWater(dt)
+	darkness+=(targetDarkness-darkness)*(1-math.exp(-2.2*dt))
+	local now=os.clock()
+	if now<nextWaterUpdate then return end
+	nextWaterUpdate=now+.075
+	Lighting.ExposureCompensation=originalExposure+.57*(1-darkness)-.18*darkness
+	Lighting.OutdoorAmbient=originalOutdoor:Lerp(Color3.fromRGB(102,158,173),(1-darkness)*.8)
+	if not atmosphere then return end
+	atmosphere.Color=shallowWater:Lerp(deepWater,darkness)
+	atmosphere.Decay=shallowDecay:Lerp(deepDecay,darkness)
+	atmosphere.Density=.20+.45*darkness
+	atmosphere.Haze=.65+1.9*darkness
+	atmosphere.Glare=0
+	atmosphere.Offset=.19-.16*darkness
+end
+
+local function resetWater()
+	if originalExposure~=nil then
+		Lighting.ExposureCompensation,Lighting.OutdoorAmbient=originalExposure,originalOutdoor
+	end
+	if atmosphere and atmosphere.Parent then
+		for property,value in originalAtmosphere do atmosphere[property]=value end
+	end
+	atmosphere,originalAtmosphere,originalExposure,originalOutdoor=nil,nil,nil,nil
+end
 
 local function muteFootstep(object)
 	if not (object:IsA("Sound") or object:IsA("AudioPlayer")) then return end
@@ -238,14 +275,6 @@ local function beginEffects()
 	if workspace.CurrentCamera then headlamp.CFrame=workspace.CurrentCamera.CFrame end
 	make("SpotLight",headlamp,{Name="HeadlampBeam",Face=Enum.NormalId.Front,Range=14,Angle=54,
 		Brightness=1.8,Color=Color3.fromRGB(189,230,226),Shadows=true})
-	atmosphere=Lighting:FindFirstChildOfClass("Atmosphere")
-	if atmosphere then
-		originalAtmosphere={}
-		for property,value in waterGrade do
-			originalAtmosphere[property]=atmosphere[property]
-			atmosphere[property]=value
-		end
-	end
 	bubblePool={}
 	nextContactCheck,nextBubble,bubbleIndex=0,0,0
 	for i=1,16 do
@@ -258,10 +287,6 @@ end
 local function endEffects()
 	listenToCharacter(nil)
 	if headlamp then headlamp:Destroy() headlamp=nil end
-	if atmosphere and atmosphere.Parent then
-		for property,value in originalAtmosphere do atmosphere[property]=value end
-	end
-	atmosphere,originalAtmosphere=nil,nil
 	if strokes then strokes:Destroy() strokes=nil end
 	if breathing then breathing:Destroy() breathing=nil end
 	if bubblePool then
@@ -282,9 +307,9 @@ local function stepEffects(camera,dt)
 	local now=os.clock()
 	if moving and not strokes.IsPlaying then strokes:Play() end
 	if not moving and strokes.IsPlaying then strokes:Stop() end
-	strokes.Volume=.09+.23*amount
+	strokes.Volume=.13+.30*amount
 	strokes.PlaybackSpeed=.88+.44*amount
-	breathing.Volume=moving and .035 or .065
+	breathing.Volume=moving and .045 or .09+darkness*.045
 	if now>=nextBubble then
 		nextBubble=now+random:NextNumber(.23,.48)*(moving and 1 or 2)
 		bubbleIndex=bubbleIndex%#bubblePool+1
@@ -486,6 +511,9 @@ function Client.init(network,rootGui)
 	end
 	if world then for _,item in world:GetDescendants() do register(item) end end
 	workspace.DescendantAdded:Connect(register)
+	RunService.Heartbeat:Connect(function(dt)
+		if inDive then stepWater(dt) end
+	end)
 	RunService.RenderStepped:Connect(function(dt)
 		if not inDive then return end
 		local camera=workspace.CurrentCamera
@@ -528,6 +556,8 @@ end
 function Client.update(s)
 	local oldActive,oldChallenge=active,challenge~=nil
 	local previousId=challenge and challenge.id
+	targetDarkness=math.sqrt(math.clamp((s.depth or 0)/math.max(1,s.maxDepth or 10000),0,1))
+	if not inDive then beginWater() end
 	inDive,searchlight=true,s.light==true and (s.battery or 100)>0
 	active=s.outside==true and s.alive~=false
 	local playSteps=s.alive~=false and not active and not s.cameraView
@@ -548,6 +578,7 @@ function Client.reset()
 	if not overlay then return end
 	local oldActive,oldChallenge=active,challenge~=nil
 	inDive,searchlight,cabinSteps=false,false,false
+	resetWater()
 	stopSteelSteps()
 	for _,record in contacts do releaseContact(record) end
 	table.clear(contacts)

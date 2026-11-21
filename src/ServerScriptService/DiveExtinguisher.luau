@@ -73,6 +73,7 @@ end
 function Rack.makeTool()
 	local tool=Instance.new("Tool")
 	tool.Name,tool.ToolTip,tool.CanBeDropped="Fire Extinguisher","Aim at the crawler and discharge foam",false
+	tool:SetAttribute("DiveExtinguisher",true)
 	tool.Grip=CFrame.new(0,-.34,0)*CFrame.Angles(0,0,-math.pi/2)
 	cylinder(tool,CFrame.identity,false)
 	return tool

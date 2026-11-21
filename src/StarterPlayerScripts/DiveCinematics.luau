@@ -816,7 +816,12 @@ function Cinematics.new(gui,onOwnershipChanged)
 		elseif kind=="WormRescue" then current.audio=sound(SoundService,"action_swim.mp3",1.1,.22) end
 		camera.CameraType=Enum.CameraType.Scriptable
 		if onOwnershipChanged then onOwnershipChanged(true) end
-		if kind=="Wake" then shade.BackgroundTransparency=0 end
+		if kind=="Wake" then
+			shade.BackgroundTransparency=0
+			task.delay(current.duration,function()
+				if scene==current then release() end
+			end)
+		end
 		RunService:BindToRenderStep(renderName,Enum.RenderPriority.Camera.Value+7,function(dt) render(current,dt) end)
 	end
 

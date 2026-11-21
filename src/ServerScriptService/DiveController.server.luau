@@ -263,26 +263,83 @@ local function validPrompt(p, prompt)
 	return prompt:GetAttribute("Action")
 end
 
-local function sprayFoam(p, target)
-	local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-	if not root then return end
-	local nozzle = Instance.new("Attachment")
-	nozzle.Parent = root
-	local origin = root.Position + root.CFrame.RightVector * 0.65 + Vector3.new(0,0.5,0)
-	nozzle.WorldCFrame = CFrame.lookAt(origin,target)
-	local foam = Instance.new("ParticleEmitter")
-	foam.Enabled = false
-	foam.Texture = "rbxasset://textures/particles/smoke_main.dds"
-	foam.EmissionDirection = Enum.NormalId.Front
-	foam.Color = ColorSequence.new(Color3.fromRGB(216,236,232))
-	foam.Size = NumberSequence.new(0.36,1.4)
-	foam.Transparency = NumberSequence.new(0.2,1)
-	foam.Lifetime = NumberRange.new(0.3,0.55)
-	foam.Speed = NumberRange.new(8,13)
-	foam.SpreadAngle = Vector2.new(13,13)
-	foam.Parent = nozzle
-	foam:Emit(28)
-	game:GetService("Debris"):AddItem(nozzle,1)
+local FOAM_RANGE = 14
+local function sprayFoam(nozzlePart, direction, distance)
+	local nozzle=Instance.new("Attachment")
+	nozzle.Name="Foam discharge"
+	nozzle.Parent=nozzlePart
+	nozzle.WorldCFrame=CFrame.lookAt(nozzlePart.Position,nozzlePart.Position+direction)
+	local foam=Instance.new("ParticleEmitter")
+	foam.Texture="rbxasset://textures/particles/smoke_main.dds"
+	foam.EmissionDirection=Enum.NormalId.Front
+	foam.Color=ColorSequence.new(Color3.fromRGB(235,248,242),Color3.fromRGB(151,198,205))
+	foam.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(.25,.55),NumberSequenceKeypoint.new(1,1.25)})
+	foam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.07),NumberSequenceKeypoint.new(.66,.27),NumberSequenceKeypoint.new(1,1)})
+	local speed=math.clamp(distance*2.6,3,34)
+	foam.Lifetime,foam.Speed=NumberRange.new(.24,.43),NumberRange.new(speed*.72,speed)
+	foam.Rate,foam.LightEmission,foam.LightInfluence=142,.22,.28
+	foam.SpreadAngle,foam.Acceleration=Vector2.new(14,14),Vector3.new(0,-9,0)
+	foam.Parent=nozzle
+	foam:Emit(16)
+	local hiss=Instance.new("Sound")
+	hiss.Name,hiss.SoundId="Foam pressure","rbxasset://sounds/action_swim.mp3"
+	hiss.RollOffMaxDistance,hiss.Volume,hiss.PlaybackSpeed=37,.76,1.38
+	hiss.Parent=nozzle
+	hiss:Play()
+	task.delay(.53,function() if foam.Parent then foam.Enabled=false end end)
+	game:GetService("Debris"):AddItem(nozzle,1.6)
+end
+
+local function aimAtCrawler(origin,direction,pose)
+	local torso=pose:PointToWorldSpace(Vector3.new(0,.8,-.25))
+	local toTorso=torso-origin
+	local distance=toTorso:Dot(direction)
+	if distance<=0 or distance>FOAM_RANGE or (toTorso-distance*direction).Magnitude>1.85 then return end
+	return origin+direction*distance
+end
+
+local function discharge(p,direction)
+	local s,m=active,members[p]
+	if not s or settling or s.elapsed<WAKE_DURATION or not m or not m.alive or m.outside
+		or m.grab or m.breachRepair or m.cameraOrigin or typeof(direction)~="Vector3" then return end
+	local size=direction.Magnitude
+	if not (size>.95 and size<1.05) then return end
+	local character,tool=p.Character,m.extinguisher
+	if not character or not tool or tool.Parent~=character or m.charges<=0 then return end
+	local head=character:FindFirstChild("Head")
+	local nozzle=tool:FindFirstChild("Foam nozzle")
+	if not head or not nozzle then return end
+	local now=os.clock()
+	if (m.nextFoam or 0)>now then return end
+	m.nextFoam=now+.68
+	local ray=RaycastParams.new()
+	local ignore={site.Contacts}
+	for player in members do if player.Character then table.insert(ignore,player.Character) end end
+	ray.FilterDescendantsInstances=ignore
+	ray.RespectCanCollide=true
+	local crawler=site.Contacts.CrackCrawler
+	local pose=s.crawlerGrip or crawler:GetPivot()
+	local hit=s.boarded and aimAtCrawler(head.Position,direction.Unit,pose)
+	local victim=s.victim
+	local trapped=victim and members[victim]
+	m.charges-=1
+	local reach=workspace:Raycast(head.Position,direction.Unit*FOAM_RANGE,ray)
+	local endAt=if reach then reach.Position else head.Position+direction.Unit*FOAM_RANGE
+	local jet=endAt-nozzle.Position
+	local obstruction=workspace:Raycast(nozzle.Position,jet,ray)
+	sprayFoam(nozzle,if jet.Magnitude>.1 then jet.Unit else direction.Unit,if obstruction then obstruction.Distance else jet.Magnitude)
+	if hit and (not reach or reach.Distance>(hit-head.Position).Magnitude-.12)
+		and not workspace:Raycast(nozzle.Position,hit-nozzle.Position,ray)
+		and not (trapped and trapped.grab and trapped.grab.fatal) then
+		s.crawlerRetreat={from=site.ShipEnvelope.CFrame:ToObjectSpace(pose),started=s.elapsed}
+		if trapped then
+			releaseGrab(victim,trapped,s)
+			cue(victim,"WormRescue",cueDuration.WormRescue,s.crawlerSection,pose.Position)
+		end
+		s.crawler, s.boarded = 0, false
+		Dive.warn(s,"The crawler recoiled and fled through the grate.")
+	end
+	sync(s)
 end
 
 local function interact(p, action)
@@ -326,45 +383,10 @@ local function interact(p, action)
 			local tool=Extinguisher.makeTool()
 			m.extinguisher=tool
 			tool.Parent=backpack
-			tool.Activated:Connect(function()
-				if active==s and members[p]==m and tool.Parent==p.Character then
-					interact(p,"Spray"..s.crawlerSection)
-				end
-			end)
 		end
 		m.charges=m.capacity
 		human:EquipTool(m.extinguisher)
 		notice(p,"Extinguisher equipped. Get close to the boarder and discharge foam.")
-	elseif string.match(action,"^Spray[1-3]$") then
-		if not s.boarded or s.crawlerSection ~= tonumber(action:sub(-1)) then return end
-		if not m.extinguisher or m.extinguisher.Parent~=p.Character or m.charges<=0 then
-			notice(p,"Equip a charged extinguisher from the red wall rack by the bridge.")
-			return
-		end
-		local char=p.Character
-		local root=char and char:FindFirstChild("HumanoidRootPart")
-		local crawler=site.Contacts.CrackCrawler
-		local target=if s.crawlerGrip then s.crawlerGrip.Position else crawler:GetPivot().Position
-		if not root or (root.Position-target).Magnitude>10 then notice(p,"Get closer to the boarder.") return end
-		local ray=RaycastParams.new()
-		ray.FilterType=Enum.RaycastFilterType.Exclude
-		local ignore={site.Contacts}
-		for player in members do if player.Character then table.insert(ignore,player.Character) end end
-		ray.FilterDescendantsInstances=ignore
-		ray.RespectCanCollide=true
-		local from=root.Position+Vector3.yAxis*.5
-		if workspace:Raycast(from,target-from,ray) then notice(p,"Move into the boarder's section.") return end
-		local victim=s.victim
-		local trapped=victim and members[victim]
-		if trapped and trapped.grab and trapped.grab.fatal then return end
-		m.charges -= 1
-		sprayFoam(p,target)
-		if trapped then
-			releaseGrab(victim,trapped,s)
-			cue(victim,"WormRescue",cueDuration.WormRescue,s.crawlerSection)
-		end
-		s.crawler, s.boarded = 0, false
-		Dive.warn(s,"The crawler fled through the grate.")
 	elseif action == "Airlock" then
 		for _,other in members do
 			if other.outside then notice(p,"Airlock occupied. One tether available.") return end
@@ -468,6 +490,7 @@ end)
 Prompts.PromptButtonHoldEnded:Connect(function(_,p) held[p] = nil end)
 
 local function handleCrew(s,dt)
+	s.squidTarget=nil
 	for p,m in members do
 		if not m.alive then continue end
 		local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
@@ -482,6 +505,7 @@ local function handleCrew(s,dt)
 			m.oxygen -= dt
 			if m.oxygen <= 0 then down(p,"The diver exhausted their oxygen.")
 			elseif root then
+				s.squidTarget=root.Position
 				local actors=site.Contacts
 				local anglerNear=s.shark>0.82 and World.predatorNear(actors.Leviathan,root.Position,22)
 				local squidNear=s.squid>0.86 and World.predatorNear(actors.GiantSquid,root.Position,18)
@@ -544,6 +568,7 @@ net.Input.OnServerEvent:Connect(function(p, action, arg)
 	if not rate or now - rate.at > 1 then rate = {at=now,count=0} throttles[p]=rate end
 	rate.count += 1
 	if rate.count > 16 then return end
+	if action=="SprayCrawler" then discharge(p,arg) return end
 	if action=="BreachHit" or action=="BreachCancel" then
 		local s,m=active,members[p]
 		local repair=m and m.breachRepair

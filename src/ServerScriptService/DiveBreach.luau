@@ -28,7 +28,8 @@ end
 function Breach.install(stations)
 	local rack=Instance.new("Model")
 	rack.Name="Breach repair supplies"
-	local at=CFrame.new(-10.7,122.1,-7.6)
+	-- Mount against the aft bridge bulkhead, with open floor on the approach side.
+	local at=CFrame.new(-8.6,122.1,9.15)*CFrame.Angles(0,math.pi,0)
 	local amber=Color3.fromRGB(232,170,70)
 	local metal=Enum.Material.Metal
 	local plate=panelPart(rack,"Supply placard",Vector3.new(3.1,.64,.15),at*CFrame.new(0,2.12,-.25),amber,metal,0)
@@ -40,13 +41,13 @@ function Breach.install(stations)
 	title.Font,title.TextScaled,title.TextColor3=Enum.Font.GothamBold,true,Color3.fromRGB(28,29,22)
 	title.Parent=sign
 	panelPart(rack,"Deck rack",Vector3.new(3.2,.48,.89),at*CFrame.new(0,-.9,0),amber,metal,0)
-	local first
+	local middle
 	for i=-2,2 do
 		local plank=panelPart(rack,"Timber plank",Vector3.new(.48,2.28,.19),
 			at*CFrame.new(i*.54,.33,0)*CFrame.Angles(.16,0,-i*.024),Color3.fromRGB(146+i*7,104+i*4,61+i*2),Enum.Material.WoodPlanks,0)
-		first=first or plank
+		if i==0 then middle=plank end
 	end
-	prompt(first,"Planks","Repair planks","Take a plank",Enum.KeyCode.E)
+	prompt(middle,"Planks","Repair planks","Take a plank",Enum.KeyCode.E)
 	rack.Parent=stations
 
 	local effects={}

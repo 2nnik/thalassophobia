@@ -4,6 +4,7 @@ local world = workspace:WaitForChild("Thalassa")
 local stations = world.Stations
 local actors = world.Contacts
 local Dive = require(script.Parent:WaitForChild("DiveSimulation"))
+require(script.Parent:WaitForChild("DiveShipRefit")).install(world)
 local Breach = require(script.Parent:WaitForChild("DiveBreach"))
 local breachEffects = Breach.install(stations)
 require(script.Parent:WaitForChild("DiveExtinguisher")).install(stations)
@@ -280,7 +281,7 @@ local function face(model,cf)
  if model.PrimaryPart and runService:IsRunning() then model.PrimaryPart.CFrame=cf else model:PivotTo(cf) end
 end
 local dormant={}
-local function megafauna(model,unlocked,angle,radius,height,clock,heading,aim,lit)
+local function megafauna(model,unlocked,angle,radius,height,clock,heading,aim,lit,target,turn)
  local fill=lighting[model]
  if not unlocked then
   if not dormant[model] then
@@ -297,7 +298,9 @@ local function megafauna(model,unlocked,angle,radius,height,clock,heading,aim,li
  local tangent=Vector3.new(math.cos(angle),0,math.sin(angle))
  local pos=center+radial*radius+Vector3.new(0,height,0)
  local forward=(tangent*heading.X+radial*heading.Z+Vector3.new(0,.036*math.sin(clock*.12),0)).Unit
- local cf=CFrame.lookAt(pos,pos+forward)*CFrame.Angles(0,0,.042*math.sin(clock*.21))
+ local cf=CFrame.lookAt(pos,pos+forward)
+ if target then cf=cf:Lerp(CFrame.lookAt(pos,target),turn) end
+ cf*=CFrame.Angles(0,0,.042*math.sin(clock*.21))
  face(model,cf)
  model:SetAttribute("Detectable",true)
  local illuminated=lit and (bearing(pos)==aim or dirs[aim]:Dot(radial)>.68)
@@ -348,7 +351,7 @@ function World.update(state)
   showPrompt("Repair"..i,cracked and breach==0)
   showPrompt("Patch"..i,active and breach>0)
   Breach.render(breachEffects[i],breach)
-  showPrompt("Spray"..i,active and state.boarded==true and crawler>0 and section==i)
+  showPrompt("Spray"..i,false)
   for _,line in leaks[i] do line.Transparency=cracked and .08 or 1 end
   local cell=stations["Battery stack"]["CellIndicator"..i]
   local charge=state.battery or 100
@@ -404,10 +407,28 @@ function World.update(state)
  squidRange=approach(squidRange,squidCruise-(squidCruise-88)*math.clamp(squid*1.55,0,1),23,dt)
  -- Megafauna stay beyond the pressure hull even when the feeding tentacles pass broadside.
  megafauna(leviathan,active and Dive.isUnlocked(state,"shark"),phaseAngle.angler,anglerRange,7.5+18*math.sin(elapsed*.035),elapsed,Vector3.new(1,0,-.08*shark),aim,lit)
- megafauna(actors.GiantSquid,active and Dive.isUnlocked(state,"squid"),phaseAngle.squid,squidRange,12+14*math.sin(elapsed*.028+1.4),elapsed,Vector3.new(-1,0,-.26*squid),aim,lit)
- local crawlerPresent=active and crawler>0
+ local target=if squid>0 then state.squidTarget or center else nil
+ megafauna(actors.GiantSquid,active and Dive.isUnlocked(state,"squid"),phaseAngle.squid,squidRange,12+14*math.sin(elapsed*.028+1.4),
+  elapsed,Vector3.new(-1,0,-.26*squid),aim,lit,target,math.min(1,.44+squid*2.8))
+ local retreat=state.crawlerRetreat
+ local escaping=active and retreat and elapsed-retreat.started<2.15
+ if retreat and not escaping then state.crawlerRetreat=nil end
+ local crawlerPresent=active and (crawler>0 or escaping==true)
  actors.CrackCrawler:SetAttribute("Detectable",crawlerPresent)
- if crawlerPresent then
+ if escaping then
+  local glass=windows[section].CFrame
+  local from=envelope.CFrame*retreat.from
+  local t=math.clamp((elapsed-retreat.started)/2.15,0,1)
+  local opening=glass.Position+glass.LookVector*(t*5-2)
+  local run=math.clamp((t-.16)/.84,0,1)
+  local at=from.Position:Lerp(opening-Vector3.yAxis*(1.88*run^3),run)
+  at+=Vector3.yAxis*(math.sin(elapsed*19)*.19*run)
+  local direction=opening-at
+  local look=if direction.Magnitude>.1 then CFrame.lookAt(at,opening) else glass.Rotation+at
+  local recoil=from:Lerp(look,math.min(1,t*5))
+  face(actors.CrackCrawler,recoil*CFrame.Angles(-.58*math.sin(t*math.pi),0,.28*math.sin(elapsed*16)))
+  animate(actors.CrackCrawler,elapsed,5.85)
+ elseif crawlerPresent then
   local glass=windows[section].CFrame
   local at=glass.Position+glass.LookVector*(state.boarded and -1.65 or .21)
   local cf=(state.crawlerGrip or CFrame.lookAt(at,at-glass.LookVector))*CFrame.Angles(0,0,.12*math.sin(elapsed*.43))

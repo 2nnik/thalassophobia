@@ -11,6 +11,12 @@
     {
       "group": "ServerScriptService",
       "class": "ModuleScript",
+      "name": "DiveShipRefit",
+      "path": "src/ServerScriptService/DiveShipRefit.luau"
+    },
+    {
+      "group": "ServerScriptService",
+      "class": "ModuleScript",
       "name": "DiveLobbyProfiles",
       "path": "src/ServerScriptService/DiveLobbyProfiles.luau"
     },
