@@ -3,6 +3,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local SoundService = game:GetService("SoundService")
+local Input = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 
 local player = Players.LocalPlayer
 local Cinematics = {}
@@ -13,7 +15,7 @@ local smooth = function(a)
 	return a * a * (3 - 2 * a)
 end
 
-local durations = {Wake=2.7,WormGrab=8,WormRescue=.85,WormDeath=2.8,Flood=7.2,Angler=5.0,Squid=6.4}
+local durations = {Wake=2.7,WormGrab=8,WormRescue=.85,WormDeath=2.8,Flood=15,Angler=5.0,Squid=13}
 local terminal = {Flood=true,Angler=true,Squid=true,WormDeath=true}
 local hullNames = {"Bell • KESTREL 04","Pressure hull • Survey refit","Stations","BarnacleSites","Dive stage"}
 
@@ -191,7 +193,9 @@ local function makeArms(scene,count,segments)
 			arm.segments[j]=ellipse(part(scene.folder,"Coiling arm",rgb(47+i*4,76-j*2,73-j*2),Enum.Material.Slate))
 			if j%2==1 and scene.kind=="Squid" then
 				arm.suckers[j]=ellipse(part(scene.folder,"Arm sucker",rgb(112,94,76)))
+				arm.suckers[j].Transparency=1
 			end
+			if scene.kind=="Squid" then arm.segments[j].Transparency=1 end
 		end
 		table.insert(scene.arms,arm)
 	end
@@ -225,12 +229,161 @@ local function armColor()
 	return body and body.RightArmColor3 or rgb(151,123,103)
 end
 
+local function hideWakeAvatar(scene)
+	local character=player.Character
+	if not character then return end
+	for _,body in character:GetDescendants() do
+		if body:IsA("BasePart") then
+			if scene.hidden[body]==nil then scene.hidden[body]=body.LocalTransparencyModifier end
+			body.LocalTransparencyModifier=1
+		end
+	end
+end
+
+local function constructPursuer(scene)
+	local squid=scene.kind=="Squid"
+	local skin=if squid then rgb(37,49,54) else rgb(32,59,66)
+	local pieces={}
+	local function feature(name,color,material,size,pose)
+		local piece=ellipse(part(scene.folder,name,color,material))
+		piece.Size,piece.Transparency=size,1
+		table.insert(pieces,{part=piece,offset=pose})
+		return piece
+	end
+	feature("Approaching head",skin,Enum.Material.Slate,if squid then Vector3.new(22,19,22) else Vector3.new(34,27,31),CFrame.new())
+	feature("Approaching mantle",skin,Enum.Material.Slate,if squid then Vector3.new(18,22,48) else Vector3.new(27,25,48),CFrame.new(0,2,21))
+	if not squid then
+		feature("Approaching tail",skin,Enum.Material.Slate,Vector3.new(12,14,36),CFrame.new(-4,1,46)*CFrame.Angles(0,-.24,0))
+		local lure=feature("Faint lure",rgb(81,185,196),Enum.Material.Neon,Vector3.new(.9,.9,.9),CFrame.new(0,15,-13))
+		scene.pursuerLight=make("PointLight",lure,{Brightness=0,Range=29,Color=rgb(105,195,201)})
+		feature("Lure stalk",skin,Enum.Material.Slate,Vector3.new(.9,.9,11),CFrame.new(0,14,-8)*CFrame.Angles(.25,0,0))
+	end
+	for _,side in {-1,1} do
+		feature("Approaching eye",if squid then rgb(173,100,48) else rgb(63,121,131),Enum.Material.Neon,
+			Vector3.new(1.35,1.1,1.05),CFrame.new(side*(if squid then 8 else 12),if squid then 3 else 5,if squid then -7 else -10))
+	end
+	scene.predator=pieces
+end
+
+local function beginEscape(scene)
+	local heading=scene.heading
+	local ship=scene.shipOrigin
+	local origin=scene.cameraFrame.Position+heading*7
+	if ship then
+		local localCamera=ship:PointToObjectSpace(scene.cameraFrame.Position)
+		local side=if localCamera.X<0 then -1 else 1
+		heading=ship.RightVector*side
+		origin=ship:PointToWorldSpace(Vector3.new(side*(scene.shipWidth*.5+8),2,math.clamp(localCamera.Z,-15,15)))
+	end
+	scene.escape={origin=origin,position=origin,heading=heading,yaw=0,pitch=0}
+	scene.bubbles=waterBubbles(scene.folder,CFrame.new(origin),16)
+	scene.bubbles.Parent.Name="Escaping bubbles"
+	scene.bubbles.Lifetime=NumberRange.new(.55,1.6)
+	scene.bubbles.Speed=NumberRange.new(.8,2.6)
+	scene.bubbles.Acceleration=Vector3.new(0,5,0)
+	scene.bubbles.Size=NumberSequence.new(.06,.2)
+	scene.bubbles.Rate,scene.bubbles.Enabled=9,true
+end
+
+local function swimView(scene, dt, lookTouch, moveTouch, locked)
+	local escape=scene.escape
+	local x,y,z,lookX,lookY=0,0,0,0,0
+	local preferred=Input.PreferredInput
+	if not locked and not GuiService.MenuIsOpen and not Input:GetFocusedTextBox() then
+		if preferred==Enum.PreferredInput.Touch then
+			local drag=moveTouch and moveTouch.delta or Vector2.zero
+			x,z=math.clamp(drag.X/64,-1,1),math.clamp(drag.Y/64,-1,1)
+			lookX,lookY=lookTouch.X*.006,lookTouch.Y*.006
+		elseif preferred==Enum.PreferredInput.Gamepad then
+			for _,event in Input:GetGamepadState(Enum.UserInputType.Gamepad1) do
+				if event.KeyCode==Enum.KeyCode.Thumbstick1 then
+					x,z=event.Position.X,-event.Position.Y
+				elseif event.KeyCode==Enum.KeyCode.Thumbstick2 then
+					lookX,lookY=event.Position.X*dt*2.4,-event.Position.Y*dt*2.2
+				elseif event.KeyCode==Enum.KeyCode.ButtonR2 then
+					y+=event.Position.Z
+				elseif event.KeyCode==Enum.KeyCode.ButtonL2 then
+					y-=event.Position.Z
+				end
+			end
+		else
+			local function key(code) return if Input:IsKeyDown(code) then 1 else 0 end
+			x=key(Enum.KeyCode.D)-key(Enum.KeyCode.A)
+			z=key(Enum.KeyCode.S)-key(Enum.KeyCode.W)
+			y=key(Enum.KeyCode.Space)-key(Enum.KeyCode.C)
+			Input.MouseBehavior=Enum.MouseBehavior.LockCenter
+			local delta=Input:GetMouseDelta()
+			lookX,lookY=delta.X*.004,delta.Y*.004
+		end
+	end
+	escape.yaw-=lookX
+	escape.pitch=math.clamp(escape.pitch-lookY,-1.05,1.05)
+	local facing=CFrame.lookAt(escape.position,escape.position+escape.heading)*CFrame.Angles(0,escape.yaw,0)*CFrame.Angles(escape.pitch,0,0)
+	local direction=facing.RightVector*x-facing.LookVector*z+Vector3.yAxis*y
+	local motion=if direction.Magnitude>.12 then direction.Unit*math.min(direction.Magnitude,1)*8 else escape.heading*.72
+	local offset=escape.position+motion*dt-escape.origin
+	local outward=math.clamp(offset:Dot(escape.heading),-3,24)
+	local side=Vector3.yAxis:Cross(escape.heading)
+	local lateral=math.clamp(offset:Dot(side),-22,22)
+	escape.position=escape.origin+escape.heading*outward+side*lateral+Vector3.yAxis*math.clamp(offset.Y,-9,9)
+	return facing.Rotation+escape.position
+end
+
+local function revealPursuer(scene,p,seconds,view,squid)
+	local escape=scene.escape
+	local reveal=smooth((p-.49)/.16)
+	local closing=smooth((p-.5)/(if squid then .33 else .19))
+	local gap=(if squid then 104 else 91)-closing*(if squid then 88 else 73)
+	local direction=escape.heading
+	local target=escape.origin+direction*gap
+	local playerOffset=escape.position-escape.origin
+	target+=playerOffset*(closing*.84)+Vector3.new(0,5-3*closing+math.sin(seconds*1.1),0)
+	local actor=CFrame.lookAt(target,escape.position)
+	for _,piece in scene.predator do
+		piece.part.CFrame=actor*piece.offset
+		piece.part.Transparency=1-reveal*.96
+	end
+	if scene.pursuerLight then scene.pursuerLight.Brightness=reveal*.75 end
+	-- Free look persists through the sighting. Reframe the predator when it reaches the player.
+	local focus=smooth((p-.60)/.14)
+	view=view:Lerp(CFrame.lookAt(view.Position,target),focus)
+	return view,actor,reveal,closing
+end
+
+local function spreadApproachArms(scene,actor,seconds,alpha)
+	for i,arm in scene.arms do
+		local a=i/#scene.arms*TAU
+		local outward=Vector3.new(math.cos(a),math.sin(a),0)
+		local right=Vector3.new(-outward.Y,outward.X,0)
+		local last=actor:PointToWorldSpace(outward*3.2+Vector3.new(0,0,-8))
+		for j,segment in arm.segments do
+			local u=j/#arm.segments
+			local at=actor:PointToWorldSpace(outward*(3.2+12*u)+right*(5*u*u*math.sin(u*3+seconds*2+i))
+				+Vector3.new(0,0,-8-31*u+8*u*u))
+			local diameter=2.3*(1-u*.86)
+			link(segment,last,at,diameter,diameter)
+			segment.Transparency=1-alpha
+			local sucker=arm.suckers[j]
+			if sucker then
+				sucker.Size=Vector3.new(diameter*.74,diameter*.74,diameter*.31)
+				local center=last:Lerp(at,.5)-actor:VectorToWorldSpace(outward)*diameter*.42
+				sucker.CFrame=CFrame.lookAt(center,actor.Position)
+				sucker.Transparency=1-alpha
+			end
+			last=at
+		end
+	end
+end
+
 function Cinematics.new(gui,onOwnershipChanged)
 	local self={}
 	local ui=make("ScreenGui",gui.Parent,{Name="DiveCinematics",IgnoreGuiInset=true,ResetOnSpawn=false,DisplayOrder=gui.DisplayOrder+40})
 	local shade=make("Frame",ui,{Name="Light exposure",Size=UDim2.fromScale(1,1),BorderSizePixel=0,
 		BackgroundColor3=Color3.new(),BackgroundTransparency=1})
 	local grade=make("ColorCorrectionEffect",Lighting,{Name="DiveIncidentGrade",Enabled=false})
+	local instructions=make("TextLabel",ui,{Name="Escape controls",AnchorPoint=Vector2.new(.5,1),
+		Position=UDim2.new(.5,0,.94,0),Size=UDim2.new(.95,0,0,26),Font=Enum.Font.GothamMedium,
+		TextSize=14,TextColor3=rgb(212,239,240),TextStrokeTransparency=.42,BackgroundTransparency=1,Visible=false})
 	local scene=nil
 	local renderName="ThalassaDiveIncident"
 
@@ -244,6 +397,12 @@ function Cinematics.new(gui,onOwnershipChanged)
 		end
 		old.folder:Destroy()
 		if old.audio then old.audio:Destroy() end
+		if old.escapeAudio then old.escapeAudio:Destroy() end
+		if old.inputConnections then
+			for _,connection in old.inputConnections do connection:Disconnect() end
+		end
+		if old.mouseBehavior then Input.MouseBehavior=old.mouseBehavior end
+		instructions.Visible=false
 		grade.Enabled=false
 		shade.BackgroundTransparency=1
 		local camera=workspace.CurrentCamera
@@ -263,7 +422,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 		return cue
 	end
 
-	local function render(current)
+	local function render(current,dt)
 		local camera=workspace.CurrentCamera
 		if not camera or current~=scene then return end
 		local seconds=math.max(0,os.clock()-current.started)
@@ -273,6 +432,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 			if terminal[kind] and kind~="WormDeath" then
 				-- Wait on black until the authoritative result arrives.
 				shade.BackgroundTransparency=0
+				instructions.Visible=false
 				return
 			end
 			release()
@@ -292,6 +452,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 		grade.Saturation=0
 
 		if kind=="Wake" then
+			hideWakeAvatar(current)
 			local rise=smooth((p-.14)/.74)
 			local floorHeight=if root then root.Position.Y-1.95 else start.Position.Y-2.9
 			local eye=Vector3.new(livePosition.X,floorHeight+.45+rise*2.81,livePosition.Z)-heading*(.36*(1-rise))
@@ -331,8 +492,8 @@ function Cinematics.new(gui,onOwnershipChanged)
 			end
 			opacity=if kind=="WormDeath" then smooth((p-.44)/.53) elseif kind=="WormRescue" then .2*(1-p) else .14*grip
 		elseif kind=="Squid" then
-			local breakOpen=smooth((p-.10)/.35)
-			local seize=smooth((p-.43)/.48)
+			local breakOpen=smooth((p-.035)/.21)
+			local seize=smooth((p-.73)/.21)
 			if current.halves then
 				local side=current.shipOrigin.RightVector
 				for i,model in current.halves do
@@ -342,17 +503,28 @@ function Cinematics.new(gui,onOwnershipChanged)
 				end
 				local ship=current.shipOrigin.Position
 				local wide=CFrame.lookAt(ship+current.shipOrigin.RightVector*(28+15*breakOpen)+Vector3.yAxis*(7+4*seize),ship)
-				view=start:Lerp(wide,smooth(p*4))
+				view=start:Lerp(wide,smooth(p*7))
 			end
-			view=view*CFrame.new(seize*.9,seize*2.2,-seize*3.5)*CFrame.Angles(.15*seize,0,.15*math.sin(seconds*19)*(1-seize)+seize*.45)
-			bendArms(current,view,seconds,seize)
-			closeBeak(current,view,seize)
+			if p>=.20 then
+				if not current.escape then beginEscape(current) end
+				local swim=swimView(current,dt,current.lookTouch,current.moveTouch,p>.65)
+				current.lookTouch=Vector2.zero
+				local actor,reveal,closing
+				view,actor,reveal,closing=revealPursuer(current,p,seconds,swim,true)
+				view=view*CFrame.new(seize*.9,seize*2.2,-seize*3.5)*CFrame.Angles(.15*seize,0,seize*.45)
+				if p>.76 then
+					bendArms(current,view,seconds,math.max(seize,closing*.8))
+				else
+					spreadApproachArms(current,actor,seconds,reveal)
+				end
+				closeBeak(current,view,seize)
+			end
 			grade.TintColor=rgb(180,216,210)
 			grade.Brightness=-.08-.22*seize
-			opacity=smooth((p-.72)/.25)
+			opacity=math.max(.86*(1-math.clamp(math.abs(p-.20)/.035,0,1)),smooth((p-.89)/.095))
 		elseif kind=="Angler" or kind=="Flood" then
 			local flood=kind=="Flood"
-			local gulp = if flood then .68 else .47
+			local gulp = if flood then .77 else .47
 			if p>=gulp then
 				if current.jaws then
 					for _,tooth in current.jaws do tooth.part.Transparency=1 end
@@ -365,7 +537,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 				grade.Brightness=-.12
 				opacity=math.max(1-smooth(q*10),smooth((q-.51)/.48))
 			elseif flood then
-				local liquid=smooth(p/gulp)
+				local liquid=smooth(p/.28)
 				local at=current.breach.Position
 				view=start:Lerp(CFrame.lookAt(start.Position+heading*.15,at),smooth(p*6))
 				view=view*CFrame.new(.13*math.sin(seconds*13)*liquid,.12*math.sin(seconds*7)*liquid,0)
@@ -386,10 +558,15 @@ function Cinematics.new(gui,onOwnershipChanged)
 				grade.TintColor=rgb(141,197,206)
 				grade.Brightness=-liquid*.23
 				grade.Saturation=-liquid*.32
-				local rush=smooth((p-.36)/.30)
-				view=view:Lerp(start*CFrame.new(0,-1.05,-2),rush)
-				approachJaws(current,view,40-rush*34,11.5-rush*5,smooth((p-.34)/.16))
-				opacity=smooth((p-(gulp-.075))/.075)
+				if p>=.22 then
+					if not current.escape then beginEscape(current) end
+					local swim=swimView(current,dt,current.lookTouch,current.moveTouch,p>.64)
+					current.lookTouch=Vector2.zero
+					local actor,reveal
+					view,actor,reveal=revealPursuer(current,p,seconds,swim,false)
+					approachJaws(current,actor*CFrame.Angles(0,math.pi,0),-12,11,reveal)
+				end
+				opacity=math.max(.86*(1-math.clamp(math.abs(p-.22)/.035,0,1)),smooth((p-(gulp-.075))/.075))
 			else
 				local rush=smooth(p/gulp)
 				view=start*CFrame.new(math.sin(seconds*21)*rush*.16,-.9*rush,-3*rush)
@@ -398,6 +575,24 @@ function Cinematics.new(gui,onOwnershipChanged)
 				grade.Brightness=-rush*.24
 				approachJaws(current,view,44-rush*38,11-rush*4,smooth(p*7))
 				opacity=smooth((p-(gulp-.16))/.16)
+			end
+		end
+		local swimming=(kind=="Flood" and p>=.22 and p<=.64) or (kind=="Squid" and p>=.20 and p<=.65)
+		instructions.Visible=swimming
+		if swimming then
+			instructions.Text=if Input.PreferredInput==Enum.PreferredInput.Touch then "Left drag: swim   •   Right drag: look"
+				elseif Input.PreferredInput==Enum.PreferredInput.Gamepad then "Left stick: swim   •   Right stick: look   •   Triggers: rise / sink"
+				else "WASD: swim   •   Mouse: look   •   Space / C: rise / sink"
+		end
+		if current.escape then
+			current.bubbles.Parent.CFrame=view*CFrame.new(.3,-.45,-1.45)
+			current.bubbles.Enabled=swimming
+			if swimming and not current.escapeAudio then
+				current.escapeAudio=sound(SoundService,"action_swim.mp3",.79,.24)
+				current.escapeAudio.Looped=true
+			elseif not swimming and current.escapeAudio then
+				current.escapeAudio:Destroy()
+				current.escapeAudio=nil
 			end
 		end
 		shade.BackgroundColor3=if kind=="WormRescue" then rgb(100,136,136) else Color3.new()
@@ -432,6 +627,35 @@ function Cinematics.new(gui,onOwnershipChanged)
 		scene=current
 		local world=workspace:FindFirstChild("Thalassa")
 		if kind=="Squid" or kind=="Flood" then cloneHull(current,world) end
+		if kind=="Squid" or kind=="Flood" then
+			local envelope=world and world:FindFirstChild("ShipEnvelope")
+			current.shipWidth=envelope and envelope.Size.X or 40
+			current.lookTouch=Vector2.zero
+			current.mouseBehavior=Input.MouseBehavior
+			constructPursuer(current)
+			current.inputConnections={
+				Input.InputBegan:Connect(function(touch,processed)
+					if processed or not current.escape or touch.UserInputType~=Enum.UserInputType.Touch then return end
+					local position=Vector2.new(touch.Position.X,touch.Position.Y)
+					if position.X<camera.ViewportSize.X*.48 then
+						current.moveTouch={id=touch,origin=position,delta=Vector2.zero}
+					else
+						current.touchLookId=touch
+					end
+				end),
+				Input.InputChanged:Connect(function(touch)
+					if current.moveTouch and touch==current.moveTouch.id then
+						current.moveTouch.delta=Vector2.new(touch.Position.X,touch.Position.Y)-current.moveTouch.origin
+					elseif touch==current.touchLookId then
+						current.lookTouch+=Vector2.new(touch.Delta.X,touch.Delta.Y)
+					end
+				end),
+				Input.InputEnded:Connect(function(touch)
+					if current.moveTouch and touch==current.moveTouch.id then current.moveTouch=nil end
+					if touch==current.touchLookId then current.touchLookId=nil end
+				end),
+			}
+		end
 		if kind=="Angler" or kind=="Flood" then
 			constructMouth(current)
 			constructJaws(current)
@@ -459,6 +683,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 			current.water=part(current.folder,"Floodwater",rgb(18,75,84),Enum.Material.Glass)
 			current.water.Transparency=1
 		elseif kind=="Wake" then
+			hideWakeAvatar(current)
 			current.hands={}
 			for i=1,2 do current.hands[i]=ellipse(part(current.folder,"Bracing forearm",armColor())) end
 		end
@@ -468,7 +693,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 		camera.CameraType=Enum.CameraType.Scriptable
 		if onOwnershipChanged then onOwnershipChanged(true) end
 		if kind=="Wake" then shade.BackgroundTransparency=0 end
-		RunService:BindToRenderStep(renderName,Enum.RenderPriority.Camera.Value+7,function() render(current) end)
+		RunService:BindToRenderStep(renderName,Enum.RenderPriority.Camera.Value+7,function(dt) render(current,dt) end)
 	end
 
 	function self:reset() release() end

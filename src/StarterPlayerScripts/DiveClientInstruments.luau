@@ -81,6 +81,17 @@ return function(gui)
     local scrape=sound("MetalScrape","impact_explosion_03.mp3",.59,false,0,-12,-23)
     UI.make("ReverbSoundEffect",distant,{DecayTime=3,DryLevel=-8,WetLevel=-12})
     UI.make("EchoSoundEffect",scrape,{Delay=.23,Feedback=.29,DryLevel=-7,WetLevel=-15})
+    local calls={
+        {field="shark", audio=sound("AnglerGroan","action_falling.ogg",.35,false,7,-12,-32), pitch=.35, volume=.19},
+        {field="squid", audio=sound("SquidGurgle","impact_water.mp3",.84,false,1,-9,-16), pitch=.84, volume=.17},
+        {field="crawler", audio=sound("CrawlerSkitter","action_footsteps_plastic.mp3",1.55,false,-9,-6,-13), pitch=1.55, volume=.11},
+        {field="swarm", audio=sound("BarnacleTick","action_jump_land.mp3",1.32,false,-9,-5,-18), pitch=1.32, volume=.10},
+        {field="pursuer", audio=sound("PursuerPulse","impact_explosion_03.mp3",.36,false,6,-22,-36), pitch=.36, volume=.18},
+    }
+    UI.make("FlangeSoundEffect",calls[1].audio,{Depth=.75,Mix=.55,Rate=.38})
+    UI.make("EchoSoundEffect",calls[2].audio,{Delay=.11,Feedback=.32,DryLevel=-4,WetLevel=-12})
+    UI.make("EchoSoundEffect",calls[4].audio,{Delay=.08,Feedback=.37,DryLevel=-4,WetLevel=-10})
+    UI.make("ReverbSoundEffect",calls[5].audio,{DecayTime=3.4,DryLevel=-4,WetLevel=-13})
     local function loop(s,volume)
         s.Volume=volume
         if volume>0 and not s.IsPlaying then s:Play()
@@ -103,6 +114,7 @@ return function(gui)
     local nextScare=nil
     local wasBoarded=false
     local rng=Random.new()
+    local nextCall=0
     local bearings={"FORE","STARBOARD","AFT","PORT"}
     local function resize()
         local w=frame.AbsoluteSize.X
@@ -140,6 +152,8 @@ return function(gui)
     local function reset()
         previous=nil
         nextScare,wasBoarded=nil,false
+        nextCall=0
+        for _,call in calls do call.due=nil call.audio:Stop() end
         frame.Visible=false
         grade.Enabled=false
         blur.Enabled=false
@@ -175,7 +189,8 @@ return function(gui)
         rail.BackgroundColor3=signal.TextColor3
         if s.alive==false then status.Text="DIVER LOST"
         elseif outside then status.Text="OXYGEN   "..math.max(0,math.ceil(s.oxygen or 0)).." s"
-        elseif s.hasExtinguisher then status.Text="EXTINGUISHER   "..tostring(s.charges or 0).." / "..tostring(s.capacity or 3)
+        elseif s.hasExtinguisher then status.Text=(s.extinguisherEquipped and "FOAM EQUIPPED   " or "FOAM STOWED   ")
+            ..tostring(s.charges or 0).." / "..tostring(s.capacity or 3)
         else status.Text="" end
         status.Visible=status.Text~=""
         grade.Enabled=true
@@ -188,6 +203,20 @@ return function(gui)
         loop(noise,s.alive~=false and s.engine and (outside and .065 or .12) or 0)
         loop(sea,outside and .13 or 0)
         local now=os.clock()
+        for _,call in calls do
+            local intensity=s[call.field] or 0
+            if intensity<=0 or s.alive==false then
+                call.due=nil
+            elseif not call.due then
+                call.due=now+rng:NextNumber(2.5,6.5)
+            elseif now>=call.due and now>=nextCall then
+                local strength=(.78+math.min(intensity,1)*.35)*(outside and .8 or 1)
+                play(call.audio,call.volume*strength,call.pitch*rng:NextNumber(.93,1.07))
+                call.due=now+rng:NextNumber(11,24)
+                nextCall=now+4
+                nextScare=math.max(nextScare or now,now+4)
+            end
+        end
         if not nextScare then nextScare=now+rng:NextNumber(16,27) end
         if s.alive~=false and s.boarded and not wasBoarded and not outside then
             play(scrape,.17,.59)

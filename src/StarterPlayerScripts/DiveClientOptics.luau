@@ -93,8 +93,28 @@ return function(net, screen)
 	local display=frame(screen,"ExteriorVideo",dark,UDim2.fromScale(1,1))
 	display.BackgroundTransparency=1
 	display.Visible=false
-	local top=frame(display,"CameraInfo",dark,UDim2.new(1,0,0,40))
-	top.BackgroundTransparency=.13
+	local signalLayer=frame(display,"VideoArtifacts",dark,UDim2.fromScale(1,1))
+	signalLayer.BackgroundTransparency=1
+	signalLayer.ClipsDescendants=true
+	local transmission=frame(signalLayer,"SignalLock",Color3.fromRGB(15,26,29),UDim2.fromScale(1,1))
+	transmission.BackgroundTransparency=1
+	for i=0,115 do
+		local line=frame(signalLayer,"Scanline",Color3.fromRGB(1,8,10),UDim2.new(1,0,0,1),UDim2.fromScale(0,i/116))
+		line.BackgroundTransparency=i%3==0 and .68 or .78
+	end
+	local rng=Random.new()
+	local noise={}
+	for i=1,46 do
+		local fleck=frame(signalLayer,"Static",i%3==0 and dark or pale,UDim2.fromOffset(4,1))
+		fleck.BackgroundTransparency=1
+		noise[i]=fleck
+	end
+	local border=frame(display,"VideoMask",dark,UDim2.new(1,-14,1,-14),UDim2.fromOffset(7,7))
+	border.BackgroundTransparency=1
+	stroke(border,soft,.55)
+	local top=frame(display,"CameraInfo",dark,UDim2.new(1,-20,0,40),size(10,10))
+	top.BackgroundTransparency=.06
+	stroke(top,soft,.6)
 	local title=label(top,"Feed","",UDim2.new(.53,0,1,0),size(12,0),17,green)
 	local subject=label(top,"Target","",UDim2.new(.47,-20,1,0),UDim2.fromScale(.53,0),14,pale)
 	subject.TextXAlignment=Enum.TextXAlignment.Right
@@ -114,11 +134,17 @@ return function(net, screen)
 	local track=btn("TRACK CONTACT",151,131)
 	local leave=btn("EXIT  Q",286,89)
 	local grade=make("ColorCorrectionEffect",Lighting,{Name="HullCameraGain",Enabled=false,Brightness=.055,
-		Contrast=.065,Saturation=-.25,TintColor=Color3.fromRGB(201,250,232)})
+		Contrast=.15,Saturation=-.8,TintColor=Color3.fromRGB(201,232,223)})
+	-- The camera softens the rendered scene while its overlay and controls stay sharp.
+	local lens=make("BlurEffect",Lighting,{Name="HullCameraSoftFocus",Enabled=false,Size=3})
 	local viewing=false
 	local slot=1
 	local target
 	local previousFOV=70
+	local displayedSlot
+	local syncUntil=0
+	local nextNoise=0
+	local nextFrame=0
 	local bindings={"CameraPrev","CameraNext","CameraTrack","CameraLeave"}
 	local ids={"Leviathan","GiantSquid","CrackCrawler","Pursuer"}
 	local function marker(i) return site:FindFirstChild("DiveCamera"..i,true) end
@@ -162,9 +188,12 @@ return function(net, screen)
 		viewing=on
 		display.Visible=on
 		grade.Enabled=on
+		lens.Enabled=on
 		local cam=workspace.CurrentCamera
 		if on then
 			slot=1 target=nil nextTarget()
+			displayedSlot=nil
+			nextNoise,nextFrame=0,0
 			previousFOV=cam.FieldOfView
 			cam.CameraType=Enum.CameraType.Scriptable
 			cam.FieldOfView=78
@@ -182,6 +211,26 @@ return function(net, screen)
 			if char then cam.CameraSubject=char:FindFirstChildOfClass("Humanoid") end
 			if GuiService.SelectedObject and GuiService.SelectedObject:IsDescendantOf(display) then GuiService.SelectedObject=nil end
 		end
+	end
+	local function updateSignal(now)
+		if displayedSlot~=slot then
+			displayedSlot=slot
+			syncUntil=now+.27
+			nextNoise,nextFrame=0,0
+		end
+		local tuning=math.clamp((syncUntil-now)/.27,0,1)
+		transmission.BackgroundTransparency=1-.65*tuning
+		if now<nextNoise then return tuning>0 end
+		nextNoise=now+1/14
+		for i,fleck in noise do
+			-- Short monochrome streaks imply interference without a full-screen flash.
+			local streak=i%9==0
+			local width=if streak then rng:NextNumber(.018,.065) else 0
+			fleck.Size=UDim2.new(width,if streak then 0 else rng:NextInteger(2,12),0,rng:NextInteger(1,2))
+			fleck.Position=UDim2.fromScale(rng:NextNumber(),rng:NextNumber())
+			fleck.BackgroundTransparency=rng:NextNumber(.77,.97)-tuning*.29
+		end
+		return tuning>0
 	end
 	RunService:BindToRenderStep("ThalassaExteriorOptics",Enum.RenderPriority.Camera.Value+2,function()
 		local cam=workspace.CurrentCamera
@@ -204,11 +253,17 @@ return function(net, screen)
 			slot=bestCamera(pos)
 			m=marker(slot) or m
 		end
-		cam.CameraType=Enum.CameraType.Scriptable
-		cam.CFrame=pos and CFrame.lookAt(m.Position,pos) or m.CFrame
-		cam.Focus=CFrame.new(pos or m.Position+m.CFrame.LookVector*70)
+		local now=os.clock()
+		local acquiring=updateSignal(now)
+		if now>=nextFrame then
+			-- Low-bandwidth feed cadence affects the image, never the UI.
+			nextFrame=now+1/18
+			cam.CameraType=Enum.CameraType.Scriptable
+			cam.CFrame=pos and CFrame.lookAt(m.Position,pos) or m.CFrame
+			cam.Focus=CFrame.new(pos or m.Position+m.CFrame.LookVector*70)
+		end
 		title.Text=string.format("CAM %02d  /  %s",slot,string.upper(m:GetAttribute("Label") or "HULL"))
-		subject.Text=animal and string.upper(animal:GetAttribute("ContactLabel") or animal.Name) or "FIXED VIEW"
+		subject.Text=if acquiring then "SYNCING" elseif animal then string.upper(animal:GetAttribute("ContactLabel") or animal.Name) else "LIVE  /  FIXED"
 	end)
 	return {
 		update=function(s)

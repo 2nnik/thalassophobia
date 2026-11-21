@@ -51,21 +51,21 @@ local waterGrade = {
 }
 local invisible = NumberSequence.new(1)
 local footsteps, contacts = {}, {}
-local observedCharacter, footstepAdded
+local observedCharacter, footstepMode, footstepAdded
 local atmosphere, originalAtmosphere
-local strokes, breathing, bubblePool
+local strokes, breathing, bubblePool, headlamp
+local steelStep, strideDistance = nil, 0
 local random = Random.new()
 local nextContactCheck, nextBubble, bubbleIndex = 0, 0, 0
-local inDive, searchlight = false, false
+local inDive, searchlight, cabinSteps = false, false, false
 
 local function muteFootstep(object)
 	if not (object:IsA("Sound") or object:IsA("AudioPlayer")) then return end
 	local name = object.Name:lower()
 	local asset = tostring(if object:IsA("Sound") then object.SoundId else object.AssetId)
-	if footsteps[object] or not (
-		name=="running" or name=="climbing" or name=="landing"
-		or name:find("footstep",1,true) or asset:find("action_footsteps",1,true)
-	) then return end
+	local walking = name=="running" or name:find("footstep",1,true) or asset:find("action_footsteps",1,true)
+	local exteriorContact = footstepMode=="Swim" and (name=="climbing" or name=="landing")
+	if footsteps[object] or not (walking or exteriorContact) then return end
 	local original = object.Volume
 	object.Volume = 0
 	footsteps[object] = {
@@ -76,19 +76,55 @@ local function muteFootstep(object)
 	}
 end
 
-local function listenToCharacter(character)
-	if observedCharacter==character then return end
+local function listenToCharacter(character,mode)
+	if observedCharacter==character and footstepMode==mode then return end
 	if footstepAdded then footstepAdded:Disconnect() footstepAdded=nil end
 	for object, state in footsteps do
 		state.connection:Disconnect()
 		if object.Parent then object.Volume=state.volume end
 	end
 	table.clear(footsteps)
-	observedCharacter=character
+	observedCharacter,footstepMode=character,mode
 	if character then
 		footstepAdded=character.DescendantAdded:Connect(muteFootstep)
 		for _,descendant in character:GetDescendants() do muteFootstep(descendant) end
 	end
+end
+
+local function stopSteelSteps()
+	if footstepMode=="Steel" then listenToCharacter(nil) end
+	if steelStep then steelStep:Destroy() steelStep=nil end
+	strideDistance=0
+end
+
+local function stepSteelSteps(dt)
+	local character=Players.LocalPlayer.Character
+	if observedCharacter~=character then stopSteelSteps() end
+	listenToCharacter(character,"Steel")
+	local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+	local root=character and character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or humanoid.Health<=0 or not root or humanoid.FloorMaterial==Enum.Material.Air
+		or humanoid.MoveDirection.Magnitude<.1 then
+		strideDistance=0
+		return
+	end
+	local velocity=root.AssemblyLinearVelocity
+	local speed=Vector3.new(velocity.X,0,velocity.Z).Magnitude
+	if speed<1 then strideDistance=0 return end
+	strideDistance+=speed*math.min(dt,.1)
+	if strideDistance<3.5 then return end
+	strideDistance%=3.5
+	if not steelStep then
+		-- A short stock impact plus closely spaced echoes gives the deck its metal ring.
+		steelStep=make("Sound",SoundService,{Name="SteelDeckStep",SoundId="rbxasset://sounds/action_jump_land.mp3"})
+		make("EqualizerSoundEffect",steelStep,{LowGain=-13,MidGain=3,HighGain=2})
+		make("EchoSoundEffect",steelStep,{Delay=.038,Feedback=.27,DryLevel=-2,WetLevel=-11})
+		make("ReverbSoundEffect",steelStep,{DecayTime=.32,Density=.46,Diffusion=.58,DryLevel=0,WetLevel=-13})
+	end
+	steelStep.Volume=.085+math.min(speed/16,1)*.045
+	steelStep.PlaybackSpeed=random:NextNumber(1.32,1.49)
+	steelStep:Stop()
+	steelStep:Play()
 end
 
 -- A model's pivot can be hundreds of studs from the tip of a fin or tentacle.
@@ -193,10 +229,15 @@ local function swimSound(name,speed,volume)
 end
 
 local function beginEffects()
-	listenToCharacter(Players.LocalPlayer.Character)
+	listenToCharacter(Players.LocalPlayer.Character,"Swim")
 	strokes=swimSound("EVAStrokes",1.13,0)
 	breathing=swimSound("EVABubbles",.68,.065)
 	breathing:Play()
+	headlamp=make("Part",workspace,{Name="LocalEVAHeadlamp",Size=Vector3.new(.1,.1,.1),Transparency=1,
+		Anchored=true,CanCollide=false,CanTouch=false,CanQuery=false,CastShadow=false})
+	if workspace.CurrentCamera then headlamp.CFrame=workspace.CurrentCamera.CFrame end
+	make("SpotLight",headlamp,{Name="HeadlampBeam",Face=Enum.NormalId.Front,Range=16,Angle=62,
+		Brightness=2.4,Color=Color3.fromRGB(189,230,226),Shadows=true})
 	atmosphere=Lighting:FindFirstChildOfClass("Atmosphere")
 	if atmosphere then
 		originalAtmosphere={}
@@ -216,6 +257,7 @@ end
 
 local function endEffects()
 	listenToCharacter(nil)
+	if headlamp then headlamp:Destroy() headlamp=nil end
 	if atmosphere and atmosphere.Parent then
 		for property,value in originalAtmosphere do atmosphere[property]=value end
 	end
@@ -230,7 +272,8 @@ end
 
 local function stepEffects(camera,dt)
 	local character=Players.LocalPlayer.Character
-	listenToCharacter(character)
+	listenToCharacter(character,"Swim")
+	headlamp.CFrame=camera.CFrame*CFrame.new(.18,.16,-.35)
 	local root=character and character:FindFirstChild("HumanoidRootPart")
 	local swim=root and root:FindFirstChild("SwimVelocity")
 	local speed=swim and swim:IsA("LinearVelocity") and not challenge and swim.VectorVelocity.Magnitude or 0
@@ -448,7 +491,10 @@ function Client.init(network,rootGui)
 			nextContactCheck=os.clock()+.10
 			updateContacts(camera.CFrame.Position)
 		end
-		if not active then return end
+		if not active then
+			if cabinSteps then stepSteelSteps(dt) end
+			return
+		end
 		stepEffects(camera,dt)
 		if challenge then
 			local t=math.max(0,workspace:GetServerTimeNow()-challenge.started)
@@ -481,6 +527,9 @@ function Client.update(s)
 	local previousId=challenge and challenge.id
 	inDive,searchlight=true,s.light==true and (s.battery or 100)>0
 	active=s.outside==true and s.alive~=false
+	local playSteps=s.alive~=false and not active and not s.cameraView
+	if cabinSteps and not playSteps then stopSteelSteps() end
+	cabinSteps=playSteps
 	challenge=active and s.cleaning or nil
 	if active and not oldActive then beginEffects()
 	elseif oldActive and not active then endEffects() end
@@ -495,7 +544,8 @@ end
 function Client.reset()
 	if not overlay then return end
 	local oldActive,oldChallenge=active,challenge~=nil
-	inDive,searchlight=false,false
+	inDive,searchlight,cabinSteps=false,false,false
+	stopSteelSteps()
 	for _,record in contacts do releaseContact(record) end
 	table.clear(contacts)
 	nextContactCheck=0

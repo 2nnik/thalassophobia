@@ -9,6 +9,7 @@ local Exterior = require(script.Parent:WaitForChild("DiveExterior"))
 local Sensors = require(script.Parent:WaitForChild("DiveSensors"))
 local World = require(script.Parent:WaitForChild("DiveWorld"))
 local Lobby = require(script.Parent:WaitForChild("DiveLobby"))
+local Extinguisher = require(script.Parent:WaitForChild("DiveExtinguisher"))
 local site = workspace:WaitForChild("Thalassa")
 local net = ReplicatedStorage:WaitForChild("DiveNet")
 local feed = net:WaitForChild("Feed")
@@ -18,7 +19,7 @@ local members, receipts, throttles, held = {}, {}, {}, {}
 local sceneIdle = Dive.new("Normal", 1, {})
 sceneIdle.phase, sceneIdle.engine = "Lobby", false
 local settle, down
-local cueDuration = {WormRescue=.95,WormDeath=2.8,Angler=5,Squid=6.4,Flood=7.2}
+local cueDuration = {WormRescue=.95,WormDeath=2.8,Angler=5,Squid=13,Flood=15}
 
 local function cue(p,kind,duration,section,position)
 	if p.Parent == Players then
@@ -48,6 +49,11 @@ local function releaseTether(p,m)
 	if m.anchor then m.anchor:Destroy() end
 	if m.attach then m.attach:Destroy() end
 	m.beam, m.anchor, m.attach, m.tetherMarker, m.outside = nil, nil, nil, nil, false
+end
+
+local function clearExtinguisher(m)
+	if m.extinguisher then m.extinguisher:Destroy() end
+	m.extinguisher,m.charges=nil,0
 end
 
 local function releaseGrab(p,m,s)
@@ -90,7 +96,9 @@ local function sendSnapshot(p, m, s)
 	out.battery, out.hull = math.max(0,s.battery), math.max(0,s.hull)
 	out.alive, out.outside, out.maxOxygen = m.alive, m.outside, m.maxOxygen
 	out.oxygen = m.outside and m.oxygen or nil
-	out.charges, out.capacity, out.hasExtinguisher = m.charges, m.capacity, m.hasExtinguisher
+	out.charges, out.capacity = m.charges,m.capacity
+	out.hasExtinguisher = m.extinguisher~=nil and m.extinguisher.Parent~=nil
+	out.extinguisherEquipped = out.hasExtinguisher and m.extinguisher.Parent==p.Character
 	out.sonarOn, out.sonarRange = s.sonarOn, Sensors.range
 	out.cameraView = m.cameraOrigin ~= nil
 	if s.sonarOn and not m.outside then out.echoes, out.pingAt = s.echoes,s.pingAt end
@@ -126,7 +134,7 @@ local function start(party, difficulty)
 			local trait = Lobby.trait(p) or ""
 			local capacity = trait == "Tank" and 5 or 3
 			crew[p] = {alive=true, outside=false, trait=trait, charges=0, capacity=capacity,
-				hasExtinguisher=false, maxOxygen=trait == "Diver" and 105 or 80, lastAction={}}
+				maxOxygen=trait == "Diver" and 105 or 80, lastAction={}}
 		end
 	end
 	if next(crew) == nil then return false end
@@ -148,6 +156,7 @@ local function finishResults(s)
 	local groups = {{},{}}
 	for p,m in members do
 		releaseGrab(p,m,s)
+		clearExtinguisher(m)
 		releaseTether(p,m)
 		if p.Parent == Players then
 			table.insert(groups[(s.survived and m.alive) and 1 or 2],p)
@@ -193,6 +202,7 @@ down = function(p, reason)
 	if not s or settling or not m or not m.alive then return end
 	m.alive, m.death = false, reason
 	releaseGrab(p,m,s)
+	clearExtinguisher(m)
 	releaseTether(p,m)
 	notice(p, reason)
 	relocate(p,"LobbySpawn")
@@ -215,15 +225,13 @@ local function validPrompt(p, prompt)
 	return prompt:GetAttribute("Action")
 end
 
-local function sprayFoam(p, section)
-	local rack = site.Stations:FindFirstChild("Section"..section)
-	local outlet = rack and rack:FindFirstChild("Spray point")
+local function sprayFoam(p, target)
 	local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-	if not outlet or not outlet:IsA("BasePart") or not root then return end
+	if not root then return end
 	local nozzle = Instance.new("Attachment")
 	nozzle.Parent = root
 	local origin = root.Position + root.CFrame.RightVector * 0.65 + Vector3.new(0,0.5,0)
-	nozzle.WorldCFrame = CFrame.lookAt(origin,outlet.Position)
+	nozzle.WorldCFrame = CFrame.lookAt(origin,target)
 	local foam = Instance.new("ParticleEmitter")
 	foam.Enabled = false
 	foam.Texture = "rbxasset://textures/particles/smoke_main.dds"
@@ -262,16 +270,46 @@ local function interact(p, action)
 		s.hull = math.min(100, s.hull+5)
 		Dive.warn(s,"Section 0"..section.." sealed.",2.5)
 	elseif action == "Extinguisher" then
-		m.hasExtinguisher, m.charges = true, m.capacity
-		notice(p,"Extinguisher ready. Use the spray point beside a boarder.")
+		local character,backpack=p.Character,p:FindFirstChildOfClass("Backpack")
+		local human=character and character:FindFirstChildOfClass("Humanoid")
+		if not human or not backpack then return end
+		if not m.extinguisher or not m.extinguisher.Parent then
+			local tool=Extinguisher.makeTool()
+			m.extinguisher=tool
+			tool.Parent=backpack
+			tool.Activated:Connect(function()
+				if active==s and members[p]==m and tool.Parent==p.Character then
+					interact(p,"Spray"..s.crawlerSection)
+				end
+			end)
+		end
+		m.charges=m.capacity
+		human:EquipTool(m.extinguisher)
+		notice(p,"Extinguisher equipped. Get close to the boarder and discharge foam.")
 	elseif string.match(action,"^Spray[1-3]$") then
 		if not s.boarded or s.crawlerSection ~= tonumber(action:sub(-1)) then return end
-		if m.charges == 0 then notice(p,"Collect a charged extinguisher from the rack.") return end
+		if not m.extinguisher or m.extinguisher.Parent~=p.Character or m.charges<=0 then
+			notice(p,"Equip a charged extinguisher from the red wall rack by the bridge.")
+			return
+		end
+		local char=p.Character
+		local root=char and char:FindFirstChild("HumanoidRootPart")
+		local crawler=site.Contacts.CrackCrawler
+		local target=if s.crawlerGrip then s.crawlerGrip.Position else crawler:GetPivot().Position
+		if not root or (root.Position-target).Magnitude>10 then notice(p,"Get closer to the boarder.") return end
+		local ray=RaycastParams.new()
+		ray.FilterType=Enum.RaycastFilterType.Exclude
+		local ignore={site.Contacts}
+		for player in members do if player.Character then table.insert(ignore,player.Character) end end
+		ray.FilterDescendantsInstances=ignore
+		ray.RespectCanCollide=true
+		local from=root.Position+Vector3.yAxis*.5
+		if workspace:Raycast(from,target-from,ray) then notice(p,"Move into the boarder's section.") return end
 		local victim=s.victim
 		local trapped=victim and members[victim]
 		if trapped and trapped.grab and trapped.grab.fatal then return end
 		m.charges -= 1
-		sprayFoam(p,s.crawlerSection)
+		sprayFoam(p,target)
 		if trapped then
 			releaseGrab(victim,trapped,s)
 			cue(victim,"WormRescue",cueDuration.WormRescue,s.crawlerSection)
@@ -282,6 +320,8 @@ local function interact(p, action)
 		for _,other in members do
 			if other.outside then notice(p,"Airlock occupied. One tether available.") return end
 		end
+		local human=p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+		if human then human:UnequipTools() end
 		tether(p,m)
 	elseif cleanIndex then
 		Exterior.beginClean(p,m,s,cleanIndex)
@@ -422,6 +462,7 @@ Players.PlayerRemoving:Connect(function(p)
 	if m then
 		if s then releaseGrab(p,m,s) end
 		releaseTether(p,m)
+		clearExtinguisher(m)
 		members[p] = nil
 		if s and not settling and recalculate(s) == 0 then
 			Dive.endRun(s,false,"The last crew member left the cage.")

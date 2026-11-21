@@ -3,6 +3,7 @@ local World = {}
 local world = workspace:WaitForChild("Thalassa")
 local stations = world.Stations
 local actors = world.Contacts
+require(script.Parent:WaitForChild("DiveExtinguisher")).install(stations)
 local WormFigure = require(script.Parent:WaitForChild("DiveWormFigure"))
 local ocean = world.Ocean
 local floor = ocean["Trench floor"]

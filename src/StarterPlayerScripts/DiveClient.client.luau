@@ -119,6 +119,10 @@ feed.OnClientEvent:Connect(function(kind,payload)
     elseif kind=="Cinematic" and mode=="Dive" and type(payload)=="table" then
         viewing=false
         optics.reset()
+        if payload.kind=="Angler" or payload.kind=="Squid" or payload.kind=="Flood" then
+            exterior.reset()
+            instruments.reset()
+        end
         cinematics:play(payload)
         dockControls()
     elseif kind=="Results" and type(payload)=="table" then
