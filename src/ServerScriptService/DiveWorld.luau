@@ -40,7 +40,7 @@ for _,item in world:GetDescendants() do
  elseif item:IsA("ParticleEmitter") and item.Name=="Suspended sediment" then
   table.insert(snow,item)
  elseif item:IsA("PointLight") and item.Parent.Name=="Work lamp" then
-  table.insert(lamps,item)
+  table.insert(lamps,{light=item,color=item.Color})
  end
 end
 for i=1,3 do leaks[i] = stations["Section"..i].Fracture:GetChildren() end
@@ -372,6 +372,11 @@ function World.update(state)
  local pursuerPos=center+Vector3.new(-6+math.cos(elapsed*.11)*3,-12-(1-pursuer)*19,-32-(1-pursuer)*32)
  pose(actors.Pursuer,trailing and CFrame.lookAt(pursuerPos,center) or hidden)
  local dim=(state.battery or 100)<21 and (.66+.12*math.sin(now*7)) or .86
- for _,lamp in lamps do lamp.Brightness=dim end
+ local emergency=active and state.systemsOffline
+ local pulse=.5+.5*math.cos(elapsed*math.pi*1.7)
+ for _,fixture in lamps do
+  fixture.light.Color=if emergency then Color3.fromRGB(255,43,30) else fixture.color
+  fixture.light.Brightness=if emergency then .3+pulse*1.65 else dim
+ end
 end
 return World

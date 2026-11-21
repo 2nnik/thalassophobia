@@ -281,7 +281,7 @@ function Dive.step(s, dt)
 	end
 	s.hull -= (cracks * .105 + breaches * .32) * dt * s.rules.damage
 	if s.hull <= 0 then
-		Dive.endRun(s,false,"The pressure hull collapsed.",breachCause)
+		Dive.endRun(s,false,"The pressure hull collapsed.",if breachCause == "Angler" then "Flood" else breachCause)
 		return
 	end
 	-- A continuous round trip uses 52.8% at Normal before lighting, sonar and contacts.

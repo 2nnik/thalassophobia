@@ -59,6 +59,10 @@ return function(gui)
     toast.TextWrapped=true
     toast.Visible=false
     local stamp=0
+    local function clearNotice()
+        stamp+=1
+        toast.Visible=false
+    end
     local function notify(text)
         if type(text)~="string" or text=="" then return end
         stamp+=1
@@ -79,6 +83,9 @@ return function(gui)
     UI.make("ReverbSoundEffect",groan,{DecayTime=2,DryLevel=-4,WetLevel=-10})
     local distant=sound("DeepRumble","impact_water.mp3",.45,false,5,-11,-32)
     local scrape=sound("MetalScrape","impact_explosion_03.mp3",.59,false,0,-12,-23)
+    local leak=sound("WaterIngress","action_swim.mp3",.78,true,0,-7,-14)
+    local splash=sound("BreachSplash","impact_water.mp3",.83,false,2,-6,-17)
+    local bell=sound("StationBell","volume_slider.ogg",.66,false,0,-4,-13)
     UI.make("ReverbSoundEffect",distant,{DecayTime=3,DryLevel=-8,WetLevel=-12})
     UI.make("EchoSoundEffect",scrape,{Delay=.23,Feedback=.29,DryLevel=-7,WetLevel=-15})
     local calls={
@@ -89,6 +96,7 @@ return function(gui)
         {field="pursuer", audio=sound("PursuerPulse","impact_explosion_03.mp3",.36,false,6,-22,-36), pitch=.36, volume=.18},
     }
     UI.make("FlangeSoundEffect",calls[1].audio,{Depth=.75,Mix=.55,Rate=.38})
+    UI.make("ReverbSoundEffect",calls[1].audio,{DecayTime=3.8,DryLevel=-1,WetLevel=-8})
     UI.make("EchoSoundEffect",calls[2].audio,{Delay=.11,Feedback=.32,DryLevel=-4,WetLevel=-12})
     UI.make("EchoSoundEffect",calls[4].audio,{Delay=.08,Feedback=.37,DryLevel=-4,WetLevel=-10})
     UI.make("ReverbSoundEffect",calls[5].audio,{DecayTime=3.4,DryLevel=-4,WetLevel=-13})
@@ -113,6 +121,7 @@ return function(gui)
     local nextGroan=0
     local nextScare=nil
     local wasBoarded=false
+    local previousLeaks=0
     local rng=Random.new()
     local nextCall=0
     local bearings={"FORE","STARBOARD","AFT","PORT"}
@@ -152,13 +161,14 @@ return function(gui)
     local function reset()
         previous=nil
         nextScare,wasBoarded=nil,false
-        nextCall=0
+        nextCall,nextContact,nextGroan,previousLeaks=0,0,0,0
+        clearNotice()
         for _,call in calls do call.due=nil call.audio:Stop() end
         frame.Visible=false
         grade.Enabled=false
         blur.Enabled=false
         haze.Visible=false
-        for _,s in ipairs({noise,sea,ping,impact,groan,distant,scrape}) do s:Stop() end
+        for _,s in ipairs({noise,sea,ping,impact,groan,distant,scrape,leak,splash,bell}) do s:Stop() end
     end
     local function update(s)
         frame.Visible=not s.cameraView
@@ -170,16 +180,15 @@ return function(gui)
         engine.Text=s.engine and "ENGINE   RUNNING" or (s.coast or 0)>.2 and "ENGINE   COASTING" or "ENGINE   SILENT"
         flood.Text="LIGHT    "..(s.light and (bearings[s.aim] or "FORE") or "OFF")
         local outside=s.outside
-        local insideWarning=s.warning
+        local tutorial=s.difficulty=="Easy"
+        local insideWarning=tutorial and s.warning
         local sonar=s.sonar
         local hint=""
-        if s.alive==false then hint="Your crew is still on the dive."
+        if s.alive==false then hint=tutorial and "Your crew is still on the dive." or ""
         elseif outside then hint=""
         elseif sonar and sonar~="" then hint=sonar
         elseif insideWarning and insideWarning~="" then hint=insideWarning
-        elseif s.phase=="Bottom" then hint="Retrieve the artifact to begin ascent."
-        elseif not previous or previous.phase~=s.phase then
-            if s.phase=="Ascent" then notify("Artifact aboard. Keep the cage rising.") end
+        elseif tutorial and s.phase=="Bottom" then hint="Retrieve the artifact to begin ascent."
         end
         panel.Visible=hint~=""
         signal.Text=outside and "TETHER LINK" or sonar and sonar~="" and "SONAR RETURN" or "CAGE TELEMETRY"
@@ -205,10 +214,29 @@ return function(gui)
         loop(noise,s.alive~=false and s.engine and (outside and .065 or .12) or 0)
         loop(sea,outside and .13 or 0)
         local now=os.clock()
+        local leaks=0
+        for _,crack in s.cracks or {} do if crack then leaks+=1 end end
+        for _,severity in s.breaches or {} do leaks+=severity*2 end
+        local inside=not outside and s.alive~=false
+        loop(leak,inside and math.min(.24,leaks*.04) or 0)
+        if inside and leaks>previousLeaks then play(splash,.3) end
+        previousLeaks=leaks
+        if previous and previous.phase~=s.phase and (s.phase=="Bottom" or s.phase=="Ascent") then
+            play(bell,.22,s.phase=="Bottom" and .66 or 1)
+            if tutorial and s.phase=="Ascent" then notify("Artifact aboard. Keep the cage rising.") end
+        end
         for _,call in calls do
             local intensity=s[call.field] or 0
+            local before=previous and previous[call.field] or 0
+            local approach=intensity>0 and (before<=0 or (call.field=="shark" and before<.52 and intensity>=.52))
             if intensity<=0 or s.alive==false then
                 call.due=nil
+            elseif approach then
+                local angler=call.field=="shark"
+                play(call.audio,(angler and (intensity>=.52 and .48 or .32) or call.volume*1.25)*(outside and .8 or 1),
+                    angler and (intensity>=.52 and .27 or .31) or call.pitch)
+                call.due=now+rng:NextNumber(11,24)
+                nextCall=now+4
             elseif not call.due then
                 call.due=now+rng:NextNumber(2.5,6.5)
             elseif now>=call.due and now>=nextCall then
@@ -241,5 +269,5 @@ return function(gui)
         end
         previous=s
     end
-    return {update=update,reset=reset,notify=notify}
+    return {update=update,reset=reset,notify=notify,clearNotice=clearNotice}
 end

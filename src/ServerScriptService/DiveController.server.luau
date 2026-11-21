@@ -20,7 +20,8 @@ local members, receipts, throttles, held = {}, {}, {}, {}
 local sceneIdle = Dive.new("Normal", 1, {})
 sceneIdle.phase, sceneIdle.engine = "Lobby", false
 local settle, down
-local cueDuration = {WormRescue=.95,WormDeath=2.8,Angler=5,Squid=13,Flood=15}
+local WAKE_DURATION = 2.7
+local cueDuration = {WormRescue=.95,WormDeath=2.8,Angler=8,Squid=13,Flood=15}
 
 local function cue(p,kind,duration,section,position)
 	if p.Parent == Players then
@@ -164,7 +165,13 @@ local function start(party, difficulty)
 	for index,p in party do
 		if members[p] then
 			receipts[p] = nil
-			relocate(p,"CageSpawn",Vector3.new((index-1)%2 * 2.5,0,math.floor((index-1)/2) * 2.5))
+			if relocate(p,"CageSpawn",Vector3.new((index-1)%2 * 2.5,0,math.floor((index-1)/2) * 2.5)) then
+				local weld = Instance.new("WeldConstraint")
+				weld.Name = "DiveWakeHold"
+				weld.Part0, weld.Part1 = site.ShipEnvelope, p.Character.HumanoidRootPart
+				weld.Parent = weld.Part1
+				task.delay(WAKE_DURATION, function() weld:Destroy() end)
+			end
 		end
 	end
 	sync(active)
@@ -239,7 +246,7 @@ end
 
 local function validPrompt(p, prompt)
 	local m = members[p]
-	if not active or active.elapsed<2.7 or settling or not m or not m.alive or m.grab or m.breachRepair or not prompt.Enabled or not prompt:IsDescendantOf(site) then return end
+	if not active or active.elapsed<WAKE_DURATION or settling or not m or not m.alive or m.grab or m.breachRepair or not prompt.Enabled or not prompt:IsDescendantOf(site) then return end
 	local base = prompt:FindFirstAncestorWhichIsA("BasePart")
 	local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
 	if not base or not root then return end

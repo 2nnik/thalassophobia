@@ -27,6 +27,7 @@ local terminal
 local cinematics
 local breach
 local promptEligible=false
+local showDiveNotices=false
 local function dockControls()
     local sequence=cinematics and cinematics:isPlaying()
     local patching=breach and breach:isActive()
@@ -91,7 +92,7 @@ PromptService.Enabled=false
 dockControls()
 feed.OnClientEvent:Connect(function(kind,payload)
     if kind=="Notice" then
-        instruments.notify(payload)
+        if mode=="Lobby" or (mode=="Dive" and showDiveNotices) then instruments.notify(payload) end
     elseif kind=="Lobby" and type(payload)=="table" then
         received=true
         pendingLobby=payload
@@ -107,8 +108,10 @@ feed.OnClientEvent:Connect(function(kind,payload)
     elseif kind=="Dive" and type(payload)=="table" then
         if payload.phase=="Results" or payload.phase=="Lobby" or mode=="Results" then return end
         received=true
+        showDiveNotices=payload.difficulty=="Easy"
         if mode~="Dive" then
             mode="Dive"
+            instruments.clearNotice()
             terminal.show(false)
             cinematics:play({kind="Wake",duration=2.7})
         end

@@ -18,6 +18,13 @@ s.shark, s.hull, s.engine = .94, 20, false
 Dive.step(s,.25)
 assert(s.phase=="Descent" and s.hull==20)
 
+s = fresh("Easy")
+s.shark = .94
+Dive.step(s,.25)
+s.hull = .01
+Dive.step(s,.25)
+assert(s.phase=="Results" and s.sequence=="Flood","An angler breach that later collapses should play the wreck ending")
+
 for difficulty, strikes in {Easy=3,Normal=2,Hard=1,Nightmare=1} do
 	s = fresh(difficulty)
 	s.sonarOn,s.echoes,s.light = true,{},true

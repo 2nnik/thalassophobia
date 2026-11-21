@@ -15,7 +15,7 @@ local smooth = function(a)
 	return a * a * (3 - 2 * a)
 end
 
-local durations = {Wake=2.7,WormGrab=8,WormRescue=.85,WormDeath=2.8,Flood=15,Angler=5.0,Squid=13}
+local durations = {Wake=2.7,WormGrab=8,WormRescue=.85,WormDeath=2.8,Flood=15,Angler=8,Squid=13}
 local terminal = {Flood=true,Angler=true,Squid=true,WormDeath=true}
 local hullNames = {"Bell • KESTREL 04","Pressure hull • Survey refit","Stations","BarnacleSites","Dive stage"}
 
@@ -134,6 +134,72 @@ local function constructMouth(scene)
 	lamp.Transparency=1
 	scene.throatLamp=lamp
 	scene.throatLight=make("PointLight",lamp,{Range=28,Brightness=2.4,Color=rgb(242,177,160)})
+end
+
+local function constructBelly(scene, world)
+	local envelope=world and world:FindFirstChild("ShipEnvelope")
+	local ship=envelope and envelope.CFrame or scene.cameraFrame
+	local size=envelope and envelope.Size or Vector3.new(45,13,50)
+	scene.belly={ship=ship,size=size,folds={},lights={}}
+	local belly=scene.belly
+	local function wallPoint(row,angle)
+		local taper=1-.6*(math.abs(row)/6)^3
+		local ruffle=1+.06*math.cos(angle*5+row*.8)
+		return ship:PointToWorldSpace(Vector3.new(
+			math.cos(angle)*(size.X*.56+20)*taper*ruffle,
+			math.sin(angle)*(size.Y*.55+30)*taper*ruffle,
+			row*(size.Z+58)/12))
+	end
+	for row=-6,6 do
+		for i=1,16 do
+			local angle=i/16*TAU
+			local a,b=wallPoint(row,angle),wallPoint(row,angle+TAU/16)
+			local fold=ellipse(part(scene.folder,"Muscle fold",rgb(94+i%4*8,32+i%3*7,52+i%3*5)))
+			fold.Reflectance=.08
+			link(fold,a,b,7+(i%3),5)
+			table.insert(belly.folds,{part=fold,rest=fold.CFrame,row=row})
+			if row<6 then
+				local tissue=part(scene.folder,"Belly wall",rgb(70+i%3*7,24,38),Enum.Material.SmoothPlastic)
+				local nextA,nextB=wallPoint(row+1,angle),wallPoint(row+1,angle+TAU/16)
+				local across=((b-a)+(nextB-nextA)).Unit
+				local along=((nextA-a)+(nextB-b)).Unit
+				tissue.CFrame=CFrame.fromMatrix((a+b+nextA+nextB)*.25,across,along:Cross(across).Unit,-along)
+				tissue.Size=Vector3.new(math.max((b-a).Magnitude,(nextB-nextA).Magnitude)+2,3,(nextA-a).Magnitude+3)
+			end
+		end
+	end
+	for _,z in {-1,1} do
+		local cap=ellipse(part(scene.folder,"Closed stomach passage",rgb(56,17,29)))
+		cap.Size=Vector3.new(size.X*.62+22,size.Y+39,12)
+		cap.CFrame=ship*CFrame.new(0,0,z*(size.Z+58)*.5)
+	end
+	for _,side in {-1,1} do
+		for _,z in {-.34,.34} do
+			local source=part(scene.folder,"Reflected cabin light",rgb(255,151,130))
+			source.Transparency=1
+			source.CFrame=ship*CFrame.new(side*(size.X*.5+7),4,size.Z*z)
+			table.insert(belly.lights,make("PointLight",source,{Range=57,Brightness=0,Color=rgb(235,123,122)}))
+		end
+	end
+	local nearest=math.huge
+	for i=1,3 do
+		local window=world and world:FindFirstChild("WormWindow"..i)
+		if window then
+			local distance=(window.Position-scene.cameraFrame.Position).Magnitude
+			if distance<nearest then belly.window,nearest=window.CFrame,distance end
+		end
+	end
+end
+
+local function breakingLights(scene)
+	scene.emergency={}
+	local ship=scene.shipOrigin or scene.cameraFrame
+	for _,z in {-15,0,15} do
+		local lamp=part(scene.folder,"Emergency lamp",rgb(255,52,37))
+		lamp.Transparency=1
+		lamp.CFrame=ship*CFrame.new(0,3,z)
+		table.insert(scene.emergency,make("PointLight",lamp,{Color=lamp.Color,Range=30,Brightness=0}))
+	end
 end
 
 local function constructJaws(scene)
@@ -474,6 +540,10 @@ function Cinematics.new(gui,onOwnershipChanged)
 		grade.Contrast=0
 		grade.Saturation=0
 		if kind=="Angler" or kind=="Squid" or kind=="Flood" then hideAvatar(current) end
+		if current.emergency then
+			local pulse=.5+.5*math.cos(seconds*math.pi*1.7)
+			for _,lamp in current.emergency do lamp.Brightness=(.2+2.5*pulse)*(1-smooth((p-.20)/.16)) end
+		end
 
 		if kind=="Wake" then
 			hideAvatar(current)
@@ -548,9 +618,32 @@ function Cinematics.new(gui,onOwnershipChanged)
 			grade.TintColor=rgb(180,216,210)
 			grade.Brightness=-.035+.045*seize
 			opacity=math.max(.86*(1-math.clamp(math.abs(p-.20)/.035,0,1)),smooth((p-.94)/.045))
-		elseif kind=="Angler" or kind=="Flood" then
-			local flood=kind=="Flood"
-			local gulp = if flood then .77 else .47
+		elseif kind=="Angler" then
+			local belly=current.belly
+			local ship,size=belly.ship,belly.size
+			local swallowed=smooth((p-.06)/.36)
+			local pulse=.5+.5*math.sin(seconds*3.2)
+			for _,lamp in belly.lights do lamp.Brightness=swallowed*(1.65+.6*pulse) end
+			for _,fold in belly.folds do
+				local radial=fold.rest.Position-ship:PointToWorldSpace(Vector3.new(0,0,fold.row*(size.Z+58)/12))
+				fold.part.CFrame=fold.rest-radial*(.025+.025*math.sin(seconds*3-fold.row*.65))*swallowed
+			end
+			if p<.46 then
+				local window=belly.window
+				if window then
+					local eye=window:PointToWorldSpace(Vector3.new(.9-.7*swallowed,.3,6-1.5*swallowed))
+					view=CFrame.lookAt(eye,window.Position+window.LookVector*12)
+				end
+			else
+				local glide=smooth((p-.46)/.46)
+				local eye=ship:PointToWorldSpace(Vector3.new(size.X*(.67-.25*glide),10+7*glide,size.Z*(.32+.63*glide)))
+				view=CFrame.lookAt(eye,ship:PointToWorldSpace(Vector3.new(0,-1,-size.Z*.06)))
+			end
+			grade.TintColor=rgb(249,208,210)
+			grade.Brightness=.015-swallowed*.07
+			opacity=math.max(1-smooth(p/.06),.92*(1-math.clamp(math.abs(p-.46)/.044,0,1)),smooth((p-.88)/.115))
+		elseif kind=="Flood" then
+			local gulp = .77
 			if p>=gulp then
 				if current.jaws then
 					for _,tooth in current.jaws do
@@ -568,7 +661,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 				grade.TintColor=rgb(244,221,222)
 				grade.Brightness=.035
 				opacity=math.max(1-smooth((p-gulp)/.026),smooth((q-.76)/.24))
-			elseif flood then
+			else
 				local liquid=smooth(p/.28)
 				local at=current.breach.Position
 				view=start:Lerp(CFrame.lookAt(start.Position+heading*.15,at),smooth(p*6))
@@ -601,28 +694,6 @@ function Cinematics.new(gui,onOwnershipChanged)
 					approachJaws(current,lips,1-.65*bite,reveal)
 				end
 				opacity=math.max(.86*(1-math.clamp(math.abs(p-.22)/.035,0,1)),smooth((p-(gulp-.032))/.032))
-			else
-				local rush=smooth(p/gulp)
-				for _,piece in current.fragments or {} do
-					local peel=smooth((rush-piece.stagger*.24)/.48)
-					piece.part.Transparency=piece.transparency+(1-piece.transparency)*peel
-				end
-				local brace=math.sin(rush*math.pi)
-				view=start*CFrame.new(.13*brace,-.32*rush,.65*brace)
-					*CFrame.Angles(.065*brace,-.025*brace,.09*rush)
-				grade.TintColor=rgb(162,201,205)
-				grade.Brightness=-rush*.045
-				local bite=smooth((p-gulp*.60)/(gulp*.40))
-				local lips=start*CFrame.new(.7*(1-rush),.35*(1-rush),-36+34*rush)*CFrame.Angles(0,0,.1*(1-rush))
-				local reveal=smooth(p*9)
-				local skull=lips*CFrame.new(0,1,-16)*CFrame.Angles(0,math.pi,0)
-				for _,piece in current.predator do
-					piece.part.CFrame=skull*piece.offset
-					piece.part.Transparency=1-reveal
-				end
-				current.pursuerLight.Brightness=reveal*1.4
-				approachJaws(current,lips,1-.69*bite,reveal)
-				opacity=smooth((p-(gulp-.055))/.055)
 			end
 		end
 		local swimming=(kind=="Flood" and p>=.22 and p<=.64) or (kind=="Squid" and p>=.20 and p<=.65)
@@ -674,7 +745,10 @@ function Cinematics.new(gui,onOwnershipChanged)
 		end
 		scene=current
 		local world=workspace:FindFirstChild("Thalassa")
-		if kind=="Squid" or kind=="Flood" or kind=="Angler" then cloneHull(current,world) end
+		if kind=="Squid" or kind=="Flood" then
+			cloneHull(current,world)
+			breakingLights(current)
+		end
 		if kind=="Squid" or kind=="Flood" then
 			local envelope=world and world:FindFirstChild("ShipEnvelope")
 			current.shipWidth=envelope and envelope.Size.X or 40
@@ -704,8 +778,8 @@ function Cinematics.new(gui,onOwnershipChanged)
 				end),
 			}
 		end
-		if kind=="Angler" or kind=="Flood" then
-			if kind=="Angler" then constructPursuer(current) end
+		if kind=="Angler" then constructBelly(current,world) end
+		if kind=="Flood" then
 			constructMouth(current)
 			constructJaws(current)
 		end
@@ -737,6 +811,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 			for i=1,2 do current.hands[i]=ellipse(part(current.folder,"Bracing forearm",armColor())) end
 		end
 		if kind=="Flood" then current.audio=sound(SoundService,"impact_water.mp3",.55,.4)
+		elseif kind=="Angler" then current.audio=sound(SoundService,"action_falling.ogg",.27,.42)
 		elseif terminal[kind] then current.audio=sound(SoundService,"impact_explosion_03.mp3",.49,.42)
 		elseif kind=="WormRescue" then current.audio=sound(SoundService,"action_swim.mp3",1.1,.22) end
 		camera.CameraType=Enum.CameraType.Scriptable
