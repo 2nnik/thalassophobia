@@ -2,7 +2,6 @@ local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local PromptService=game:GetService("ProximityPromptService")
 local InputService=game:GetService("UserInputService")
-local SocialService=game:GetService("SocialService")
 local RunService=game:GetService("RunService")
 local player=Players.LocalPlayer
 local net=ReplicatedStorage:WaitForChild("DiveNet")
@@ -42,17 +41,6 @@ local function dockControls()
 end
 cinematics=require(script.Parent:WaitForChild("DiveCinematics")).new(screen,dockControls)
 local function send(action,arg)
-    if action=="InviteFriends" then
-        task.spawn(function()
-            local ok,can=pcall(SocialService.CanSendGameInviteAsync,SocialService,player)
-            if ok and can then
-                local opened=pcall(SocialService.PromptGameInvite,SocialService,player)
-                if opened then return end
-            end
-            instruments.notify("Roblox friend invites are unavailable for this session.")
-        end)
-        return
-    end
     if action=="DismissResults" then
         mode="Lobby"
         cinematics:reset()

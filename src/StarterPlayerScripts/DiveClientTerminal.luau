@@ -2,6 +2,7 @@ local Players=game:GetService("Players")
 local GuiService=game:GetService("GuiService")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
+local TweenService=game:GetService("TweenService")
 local UI=require(script.Parent.DiveClientStyle)
 local c=UI.c
 local off=UDim2.fromOffset
@@ -145,10 +146,53 @@ local function chart(parent)
     UI.label(f,"10,000 M",15,c.white,UI.mono,off(220,340),off(114,23),Enum.TextXAlignment.Right)
     return f
 end
+local function menuScore(parent)
+    local function layer(name,asset,looped,rate,volume)
+        local sound=UI.make("Sound",parent,{Name=name,SoundId="rbxasset://sounds/"..asset,Looped=looped,
+            PlaybackSpeed=rate,Volume=volume})
+        UI.make("EqualizerSoundEffect",sound,{LowGain=5,MidGain=-10,HighGain=-31})
+        return sound
+    end
+    local drone=layer("MenuDrone","action_falling.ogg",true,.29,0)
+    local pulse=layer("MenuPulse","volume_slider.ogg",false,.48,.11)
+    local pressure=layer("MenuPressure","impact_water.mp3",false,.33,.10)
+    UI.make("ReverbSoundEffect",pulse,{DecayTime=4.2,DryLevel=-5,WetLevel=-8})
+    UI.make("ReverbSoundEffect",pressure,{DecayTime=4,DryLevel=-8,WetLevel=-10})
+    local playing=false
+    local fade
+    return function(enabled)
+        if enabled==playing then return end
+        playing=enabled
+        if fade then fade:Cancel() end
+        if enabled and not drone.Playing then drone:Play() end
+        if not enabled then pulse:Stop() pressure:Stop() end
+        fade=TweenService:Create(drone,TweenInfo.new(enabled and 1.65 or .5),{Volume=enabled and .12 or 0})
+        local transition=fade
+        transition.Completed:Once(function()
+            if not playing and transition==fade then drone:Stop() end
+        end)
+        transition:Play()
+        if enabled then
+            task.spawn(function()
+                local beat=1
+                while playing and transition==fade and parent.Parent do
+                    task.wait(beat==4 and 3.8 or 1.8)
+                    if not playing or transition~=fade or not parent.Parent then break end
+                    pulse.PlaybackSpeed=if beat==2 then .51 else .48
+                    pulse:Play()
+                    if beat==3 then pressure:Play() end
+                    beat=beat%4+1
+                end
+            end)
+        end
+    end
+end
+
 return function(gui,send)
     local backdrop=UI.frame(gui,c.black)
     backdrop.Name="CrewTerminal"
     titleScene(backdrop)
+    local score=menuScore(backdrop)
     local home=UI.frame(backdrop,c.black,nil,nil,1)
     local hero=UI.frame(home,c.black,nil,off(520,495),1)
     local heroZoom=UI.make("UIScale",hero,{Scale=1})
@@ -203,6 +247,10 @@ return function(gui,send)
     local selectedResult
     local render
     local navItems={}
+    local difficultyOptions={"Easy","Normal","Hard","Nightmare"}
+    local soloDifficulty,createDifficulty,capacity="Normal","Normal",4
+    local createPassword,joinPassword="", ""
+    local joinTarget
     local order=0
     local function row(height)
         order+=1
@@ -250,35 +298,103 @@ return function(gui,send)
     local function isHost()
         return state.hostId==Players.LocalPlayer.UserId
     end
+    local function passwordField(id,placeholder,value,onChange)
+        local f=row(43)
+        local field=UI.make("TextBox",f,{Name=id,Size=scale(1,1),ClearTextOnFocus=false,Text=value,
+            PlaceholderText=placeholder,PlaceholderColor3=c.soft,TextColor3=c.white,BackgroundColor3=c.panel,
+            BorderSizePixel=0,Font=UI.mono,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
+        UI.edge(field,c.line)
+        UI.make("UIPadding",field,{PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)})
+        field:GetPropertyChangedSignal("Text"):Connect(function()
+            if #field.Text>24 then field.Text=field.Text:sub(1,24) end
+            onChange(field.Text)
+        end)
+    end
+    local function difficultyPicker(selected,selectDifficulty)
+        label("DIVE DIFFICULTY")
+        local options={}
+        for _,diff in difficultyOptions do
+            table.insert(options,{diff,"Difficulty"..diff,function() selectDifficulty(diff) render() end,
+                selected==diff and c.soft or c.raised,selected==diff and c.black or c.white})
+        end
+        buttonRow(options,36)
+    end
     local function crew()
         local party=state.party or {}
-        if state.loading then para("Connecting to the crew terminal…") return end
-        title("Crew manifest")
+        title("Your lobby")
+        para(state.difficulty.."  ·  "..#party.." / "..(state.capacity or 4).." divers  ·  "..(state.locked and "Password required" or "Open lobby"),28)
         for _,p in ipairs(party) do
-            entry(p.name,p.id==state.hostId and "Dive leader" or "Crew member")
+            entry(p.name,p.id==state.hostId and "Lobby owner" or "Crew member")
         end
-        if not state.studio and not state.reserved and isHost() and #party<4 and not state.queued and not state.deploying then
-            buttonRow({{"Invite Roblox friends","InviteFriends",function() send("InviteFriends") end}})
-        end
-        if state.reserved and not state.busy and not state.queued and not state.deploying then
-            buttonRow({{"Return to public dock","PublicLobby",function() send("PublicLobby") end}})
-        end
-        if #party>1 and not state.deploying and not state.queued then
-            buttonRow({{"Leave party","LeaveParty",function() send("LeaveParty") end}})
-        end
-        for _,p in ipairs(state.invites or {}) do
-            entry(p.name,"Party invitation","Join","Accept"..p.id,function() send("Accept",p.id) end)
-        end
-        if isHost() and #party<4 and not state.deploying and not state.queued then
-            local available=state.available or {}
-            if #available>0 then
-                label("AT THE DOCK")
-                for _,p in ipairs(available) do
-                    entry(p.name,"Available crew","Invite","Invite"..p.id,function() send("Invite",p.id) end)
-                end
+        if state.deploying then
+            para("Preparing departure…",32)
+        elseif state.busy then
+            para("Cage in use. Stand by at the dock.",32)
+        else
+            if isHost() then
+                buttonRow({{"Launch dive","Launch",function() send("Launch") end,c.green,c.black}})
             else
-                para("Other players at this dock appear here. Use the public queue to find more crew.",42)
+                para("Waiting for the lobby owner to launch.",32)
             end
+            buttonRow({{isHost() and "Close lobby" or "Leave lobby","LeaveParty",function() send("LeaveParty") end}})
+        end
+    end
+    local function create()
+        if state.lobbyId then crew() return end
+        if state.loading or not state.hostId then title("Connecting to dock") return end
+        title("Create lobby")
+        if #(state.party or {})>1 then para("Return to the public dock to create a lobby.") return end
+        difficultyPicker(createDifficulty,function(diff) createDifficulty=diff end)
+        label("MAXIMUM DIVERS")
+        local slots={}
+        for size=2,4 do
+            table.insert(slots,{tostring(size),"Capacity"..size,function() capacity=size render() end,
+                capacity==size and c.soft or c.raised,capacity==size and c.black or c.white})
+        end
+        buttonRow(slots,36)
+        label("OPTIONAL PASSWORD")
+        passwordField("CreatePassword","4–24 letters or numbers",createPassword,function(value) createPassword=value end)
+        if not state.busy and not state.deploying then
+            buttonRow({{"Create lobby","CreateLobby",function()
+                send("CreateLobby",{difficulty=createDifficulty,capacity=capacity,password=createPassword})
+            end,c.green,c.black}})
+        end
+    end
+    local function browse()
+        if state.lobbyId then crew() return end
+        local rooms=state.lobbies or {}
+        if joinTarget then
+            local room
+            for _,candidate in rooms do if candidate.id==joinTarget then room=candidate break end end
+            if room then
+                title(room.hostName.."'s lobby")
+                para(room.difficulty.."  ·  "..room.count.." / "..room.capacity.." divers",24)
+                label("LOBBY PASSWORD")
+                passwordField("JoinPassword","Enter lobby password",joinPassword,function(value) joinPassword=value end)
+                buttonRow({{"Back","CancelPassword",function() joinTarget,joinPassword=nil,"" render() end},
+                    {"Join lobby","JoinProtectedLobby",function() send("JoinLobby",{id=room.id,password=joinPassword}) end,c.green,c.black}})
+                return
+            end
+            joinTarget,joinPassword=nil,""
+        end
+        title("Join a lobby")
+        para("Lobbies on this server",24)
+        if state.loading or not state.hostId then para("Connecting to dock…") return end
+        for _,room in rooms do
+            local full=room.count>=room.capacity
+            entry(room.hostName.."'s lobby",room.difficulty.."  ·  "..room.count.." / "..room.capacity.."  ·  "..
+                (full and "Full" or room.locked and "Password required" or "Open"),
+                not full and (room.locked and "Password" or "Join") or nil,"Join"..room.id,function()
+                    if room.locked then
+                        joinTarget,joinPassword=room.id,""
+                        content.CanvasPosition=Vector2.zero
+                        render()
+                    else send("JoinLobby",{id=room.id}) end
+                end)
+        end
+        if #rooms==0 then para("No lobbies are open on this server.",32) end
+        if state.reserved and not state.busy and not state.deploying and isHost() then
+            buttonRow({{"Return to public dock","PublicLobby",function() send("PublicLobby") end}})
         end
     end
     local function gear()
@@ -302,7 +418,7 @@ return function(gui,send)
             elseif result then "Unlocked in your loadout" else "Equip one unlocked trait per dive"
         UI.label(display,caption,12,c.soft,UI.mono,off(13,58),UDim2.new(1,-26,0,18))
         if type(cost)=="number" then
-            local ready=not busy and not state.loading and not state.deploying and not state.queued and not state.busy
+            local ready=not busy and not state.loading and not state.deploying and not state.busy
             if ready and (state.money or 0)>=cost then
                 buttonRow({{"Spin  ·  "..cost.." CR","SpinTrait",function()
                     if os.clock()<spinUntil then return end
@@ -330,45 +446,21 @@ return function(gui,send)
             entry(t.name..odds..suffix,t.description,caption,"Trait"..t.id,function() send("Trait",t.id) end)
         end
     end
-    local function dive()
-        if state.loading or not state.hostId then
-            title("Connecting to dock")
-            return
+    local function solo()
+        if state.lobbyId then crew() return end
+        if state.loading or not state.hostId then title("Connecting to dock") return end
+        title("Solo dive")
+        if #(state.party or {})>1 then para("Return to the public dock to launch solo.") return end
+        difficultyPicker(soloDifficulty,function(diff) soloDifficulty=diff end)
+        if soloDifficulty=="Nightmare" then
+            para("A single angler hit or squid grab sinks the cage. Worms and barnacles appear more often.",42)
         end
-        title("Artifact recovery")
-        para("Descend to 10,000 m, recover the artifact, and surface. Allow about 15 minutes down and 7 minutes up under power.",60)
-        local level=state.difficulty or "Normal"
-        label("DIVE DIFFICULTY")
-        if isHost() and not state.queued and not state.deploying then
-            local options={}
-            for _,diff in ipairs({"Easy","Normal","Hard","Nightmare"}) do
-                table.insert(options,{diff,"Difficulty"..diff,function() send("Difficulty",diff) end,
-                    level==diff and c.soft or c.raised,level==diff and c.black or c.white})
-            end
-            buttonRow(options,36)
-            if level=="Nightmare" then
-                para("A single angler hit or squid grab sinks the cage. Worms and barnacles appear more often.",38)
-            end
-        else
-            para(level,22)
-        end
-        local party=state.party or {}
-        local members={}
-        for _,p in ipairs(party) do table.insert(members,p.name) end
-        label("CREW  "..#party.." / 4")
-        para(table.concat(members,"   /   "),24)
         if state.deploying then
             para("Preparing departure…",32)
-        elseif state.queued then
-            para("Searching for crew  ·  "..tostring(state.queueSeconds or 0).." s",28)
-            if isHost() then buttonRow({{"Cancel queue","CancelQueue",function() send("CancelQueue") end}}) end
         elseif state.busy then
             para("Cage in use. Stand by at the dock.",32)
-        elseif isHost() then
-            buttonRow({{#party>1 and "Launch crew" or "Launch solo","Launch",function() send("Launch") end,c.green,c.black},
-                {"Public queue","Queue",function() send("Queue") end}})
         else
-            para("Waiting for your dive leader to launch.",32)
+            buttonRow({{"Launch solo","LaunchSolo",function() send("LaunchSolo",soloDifficulty) end,c.green,c.black}})
         end
     end
     local function guide()
@@ -391,32 +483,30 @@ return function(gui,send)
         entry("Crew payout","+"..tostring(report.money or 0).." credits")
         buttonRow({{"Return to dock","DismissResults",function() send("DismissResults") end,c.green,c.black}})
     end
-    local pages={DIVE=dive,CREW=crew,TRAITS=gear,GUIDE=guide}
+    local pages={SOLO=solo,CREATE=create,LOBBIES=browse,TRAITS=gear,GUIDE=guide}
     local function open(key)
         if tab==key then return end
         tab=key
         content.CanvasPosition=Vector2.zero
         render()
         if UIS.PreferredInput==Enum.PreferredInput.Gamepad then
-            GuiService.SelectedObject=if key=="HOME" then heroButtons[1] else navItems[key]
+            GuiService.SelectedObject=if key=="HOME" then heroButtons[1] else navItems[key] or navItems.LOBBIES
         end
     end
     local _,launchCaption,launchSub=heroButton("Solo dive","Choose difficulty","HomeLaunch",231,function()
-        open("DIVE")
+        open(state.lobbyId and "LOBBIES" or "SOLO")
     end,true)
-    local _,queueCaption,queueSub=heroButton("Public queue","Find a crew","HomeQueue",288,function()
-        if isHost() and not state.loading and not state.deploying and not state.queued and not state.busy then
-            send("Queue")
-        end
-        open("DIVE")
+    heroButton("Create lobby","Set difficulty and optional password","HomeCreate",288,function() open("CREATE") end)
+    heroButton("Join a lobby","Browse this server","HomeJoin",345,function()
+        joinTarget,joinPassword=nil,""
+        open("LOBBIES")
     end)
-    heroButton("Trait station","Spin for a loadout upgrade","HomeTraits",345,function() open("TRAITS") end)
-    heroButton("Dive setup","Difficulty, crew and procedures","HomeSetup",402,function() open("DIVE") end)
+    heroButton("Trait station","Spin for a loadout upgrade","HomeTraits",402,function() open("TRAITS") end)
     for i,b in ipairs(heroButtons) do
         b.NextSelectionUp=heroButtons[i-1]
         b.NextSelectionDown=heroButtons[i+1]
     end
-    local keys={"HOME","DIVE","CREW","TRAITS","GUIDE"}
+    local keys={"HOME","SOLO","LOBBIES","TRAITS","GUIDE"}
     for idx,key in ipairs(keys) do
         local b=UI.button(nav,key,"Tab"..key,c.panel,c.soft,function() open(key) end)
         b.Size=UDim2.new(1/#keys,-4,1,0)
@@ -433,11 +523,9 @@ return function(gui,send)
         local onHome=tab=="HOME" and not report
         home.Visible,shell.Visible=onHome,not onHome
         homeWallet.Text=state.money and string.format("%d  CR",state.money) or ""
-        local party=state.party or {}
-        launchCaption.Text=#party>1 and "Crew dive" or "Solo dive"
-        launchSub.Text=if state.hostId and not isHost() then "Your dive leader launches the crew" else "Choose difficulty  /  "..(state.difficulty or "Normal")
-        queueCaption.Text=state.queued and "View queue" or "Public queue"
-        queueSub.Text=state.queued and "Searching for crew…" or "Find a crew"
+        launchCaption.Text=state.lobbyId and "Your lobby" or "Solo dive"
+        launchSub.Text=state.lobbyId and "View the crew and departure status" or "Choose difficulty"
+        score(backdrop.Visible and not report and not state.deploying)
         heroStatus.Text=if state.loading or not state.hostId then "CONNECTING TO DOCK"
             elseif state.deploying then "PREPARING DEPARTURE"
             elseif state.busy then "CAGE IN USE" else ""
@@ -448,6 +536,10 @@ return function(gui,send)
             end
             return
         end
+        local inputField=UIS:GetFocusedTextBox()
+        if inputField and inputField:IsDescendantOf(content)
+            and (tab=="CREATE" or (tab=="LOBBIES" and joinTarget)) and not state.lobbyId then return end
+        local selectedNav=navItems[tab] or navItems.LOBBIES
         local focused=GuiService.SelectedObject
         local selected=focused and focused:IsDescendantOf(content) and focused.Name or nil
         local scroll=content.CanvasPosition
@@ -458,8 +550,8 @@ return function(gui,send)
         spinPreview=nil
         wallet.Text=state.money and string.format("%d  CR",state.money) or ""
         for key,btn in pairs(navItems) do
-            btn.BackgroundColor3=(key==tab and not report) and c.soft or c.panel
-            btn.TextColor3=(key==tab and not report) and c.black or c.soft
+            btn.BackgroundColor3=(btn==selectedNav and not report) and c.soft or c.panel
+            btn.TextColor3=(btn==selectedNav and not report) and c.black or c.soft
         end
         nav.Visible=report==nil
         if report then
@@ -482,14 +574,14 @@ return function(gui,send)
             end
         end
         for _,btn in pairs(navItems) do btn.NextSelectionDown=first end
-        if first and not report then first.NextSelectionUp=navItems[tab] end
+        if first and not report then first.NextSelectionUp=selectedNav end
         if backdrop.Visible and UIS.PreferredInput==Enum.PreferredInput.Gamepad then
             if report then
                 GuiService.SelectedObject=content:FindFirstChild("DismissResults",true)
             elseif selected then
-                GuiService.SelectedObject=content:FindFirstChild(selected,true) or first or navItems[tab]
+                GuiService.SelectedObject=content:FindFirstChild(selected,true) or first or selectedNav
             elseif not GuiService.SelectedObject or not GuiService.SelectedObject:IsDescendantOf(backdrop) then
-                GuiService.SelectedObject=navItems[tab]
+                GuiService.SelectedObject=selectedNav
             end
         end
     end
@@ -526,7 +618,7 @@ return function(gui,send)
     UIS.LastInputTypeChanged:Connect(function()
         if backdrop.Visible and UIS.PreferredInput==Enum.PreferredInput.Gamepad and not GuiService.SelectedObject then
             GuiService.SelectedObject=if report then content:FindFirstChild("DismissResults",true)
-                elseif tab=="HOME" then heroButtons[1] else navItems[tab]
+                elseif tab=="HOME" then heroButtons[1] else navItems[tab] or navItems.LOBBIES
         end
     end)
     local spinStep
@@ -544,9 +636,15 @@ return function(gui,send)
     return {
         show=function(visible)
             backdrop.Visible=visible
+            score(visible and not report and not state.deploying)
             if not visible then GuiService.SelectedObject=nil end
         end,
         lobby=function(s)
+            if s.lobbyId~=state.lobbyId then
+                tab="LOBBIES"
+                createPassword,joinPassword,joinTarget="","",nil
+                content.CanvasPosition=Vector2.zero
+            end
             state=s
             report=nil
             backdrop.Visible=true

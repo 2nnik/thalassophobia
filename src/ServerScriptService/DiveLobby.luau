@@ -1,4 +1,4 @@
--- Lobby, local crew invitations, difficulty, deployment and end-of-dive accounting.
+-- Same-server crews, reserved dive deployment and end-of-dive accounting.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
@@ -8,7 +8,7 @@ local Dive = require(script.Parent.DiveSimulation)
 local studio = RunService:IsStudio() or game.GameId==0
 local NetworkQueue = if studio then nil else require(script.Parent.DiveLobbyQueue)
 local L = {}
-local groups, invitations, running, cooldown = {}, {}, {}, {}
+local groups, lobbies, running, cooldown, joinCooldown = {}, {}, {}, {}, {}
 local callbacks, feed
 local syncPending = {}
 local launching = false
@@ -28,50 +28,62 @@ end
 local function busy(plr)
 	return receiving or running[plr] or (studio and (launching or callbacks.isBusy())) or false
 end
-local function view(plr)
+local function lobbyDirectory()
+	local rooms={}
+	for id,group in lobbies do
+		local host=group.members[1]
+		if host and host.Parent==Players and not group.deploying and not running[host] then
+			table.insert(rooms,{id=id,hostName=host.DisplayName,difficulty=group.difficulty,
+				count=#group.members,capacity=group.capacity,locked=group.password~=nil})
+		end
+	end
+	table.sort(rooms,function(a,b)
+		if a.hostName==b.hostName then return a.id<b.id end
+		return a.hostName<b.hostName
+	end)
+	return rooms
+end
+
+local function view(plr,rooms)
 	if plr.Parent~=Players then return end
 	local group=groups[plr]
 	if not group then return end
-	local roster,available,invites={},{},{}
+	local roster={}
 	for _,member in group.members do table.insert(roster,info(member)) end
-	for _,other in Players:GetPlayers() do
-		local crew=groups[other]
-		if crew and other~=plr and crew~=group and #crew.members==1 and not crew.ticket and not crew.deploying and not running[other] then
-			table.insert(available,info(other))
-		end
-	end
-	for host,expires in invitations[plr] or {} do
-		local crew=groups[host]
-		if not crew or crew.members[1]~=host or expires<=os.time() or crew.deploying or crew.ticket or running[host] or #crew.members>=4 then
-			invitations[plr][host]=nil
-		else
-			table.insert(invites,info(host))
-		end
-	end
 	local money,equipped,traits,spinResult=Profiles.view(plr)
 	feed:FireClient(plr,"Lobby",{
-		difficulty=group.difficulty,party=roster,hostId=group.members[1].UserId,available=available,invites=invites,
+		difficulty=group.difficulty,party=roster,hostId=group.members[1].UserId,
+		lobbyId=group.id,lobbies=rooms or lobbyDirectory(),capacity=group.capacity,locked=group.password~=nil,
 		money=money,equipped=equipped,traits=traits,spinCost=Profiles.spinCost,spinResult=spinResult,
-		queued=group.ticket~=nil,deploying=group.deploying==true,
-		queueSeconds=if group.joined then math.max(0,os.time()-group.joined) else 0,
-		studio=studio,reserved=game.PrivateServerId~="",busy=busy(plr),loading=not Profiles.ready(plr),
+		deploying=group.deploying==true,studio=studio,reserved=game.PrivateServerId~="",
+		busy=busy(plr),loading=not Profiles.ready(plr),
 	})
 end
 function L.refresh()
-	for _,plr in Players:GetPlayers() do view(plr) end
+	local rooms=lobbyDirectory()
+	for _,plr in Players:GetPlayers() do view(plr,rooms) end
 end
-local function cancel(group)
-	group.ticket=nil
-	group.joined=nil
-end
+
 local function removeFromGroup(plr)
 	local group=groups[plr]
 	if not group then return end
-	cancel(group)
-	local index=table.find(group.members,plr)
-	if index then table.remove(group.members,index) end
+	if group.members[1]==plr then
+		if group.id then lobbies[group.id]=nil end
+		for _,member in group.members do
+			if member~=plr and member.Parent==Players then newGroup(member) end
+		end
+		table.clear(group.members)
+	else
+		local index=table.find(group.members,plr)
+		if index then table.remove(group.members,index) end
+	end
 	groups[plr]=nil
 end
+
+local function validPassword(value)
+	return typeof(value)=="string" and (#value==0 or (#value>=4 and #value<=24 and value:match("^[a-zA-Z0-9]+$")~=nil))
+end
+
 local function crewReady(group)
 	for _,plr in group.members do
 		if plr.Parent~=Players or not Profiles.ready(plr) or busy(plr) then return false end
@@ -90,15 +102,12 @@ local function beginLocal(roster,difficulty)
 	launching=false
 	return ok and started==true
 end
-local function remoteDeploy(group,code)
+local function remoteDeploy(group)
 	local members=table.clone(group.members)
-	cancel(group)
 	group.deploying=true
 	L.refresh()
 	task.spawn(function()
-		local ok,err
-		if code then ok,err=NetworkQueue.send(members,code)
-		else ok,err=NetworkQueue.private(members,group.difficulty) end
+		local ok,err=NetworkQueue.private(members,group.difficulty)
 		if not ok then
 			warn("Dive deployment failed",err)
 			group.deploying=nil
@@ -114,59 +123,9 @@ local function remoteDeploy(group,code)
 		end
 	end)
 end
-local function localMatch()
-	if launching or callbacks.isBusy() then return end
-	local queue,seen={},{}
-	for _,group in groups do
-		if group.ticket and not seen[group] and crewReady(group) then
-			seen[group]=true
-			table.insert(queue,group)
-		end
-	end
-	table.sort(queue,function(a,b)
-		if a.joined==b.joined then return a.ticket<b.ticket end
-		return a.joined<b.joined
-	end)
-	for _,leader in queue do
-		local teams,crew={},{}
-		for _,group in queue do
-			if group.difficulty==leader.difficulty and #crew+#group.members<=4 then
-				table.insert(teams,group)
-				for _,p in group.members do table.insert(crew,p) end
-			end
-		end
-		if #crew==4 or os.time()-leader.joined>=18 then
-			for _,team in teams do cancel(team) end
-			beginLocal(crew,leader.difficulty)
-			L.refresh()
-			break
-		end
-	end
-end
-local function snapshots()
-	local result={}
-	for _,group in groups do
-		if group.ticket then
-			local diff=group.difficulty
-			result[diff]=result[diff] or {}
-			if not result[diff][group.ticket] then
-				local ids={}
-				for _,p in group.members do table.insert(ids,p.UserId) end
-				result[diff][group.ticket]={ids=ids,joined=group.joined}
-			end
-		end
-	end
-	return result
-end
-local function deliver(ticket,code)
-	for _,group in groups do
-		if group.ticket==ticket then remoteDeploy(group,code) return end
-	end
-end
 local function register(plr)
 	if groups[plr] then return end
 	newGroup(plr)
-	invitations[plr]={}
 	task.spawn(Profiles.load,plr)
 	L.refresh()
 end
@@ -209,16 +168,13 @@ function L.init(config)
 	Players.PlayerAdded:Connect(register)
 	Players.PlayerRemoving:Connect(function(plr)
 		removeFromGroup(plr)
-		invitations[plr]=nil
-		for _,offers in invitations do offers[plr]=nil end
 		running[plr]=nil
-		cooldown[plr]=nil
+		cooldown[plr],joinCooldown[plr],syncPending[plr]=nil,nil,nil
 		Profiles.forget(plr)
 		L.refresh()
 	end)
 	for _,plr in Players:GetPlayers() do register(plr) end
 	if not studio then
-		NetworkQueue.run(snapshots,deliver)
 		TeleportService.TeleportInitFailed:Connect(function(plr)
 			local g=groups[plr]
 			if g and g.deploying then
@@ -229,18 +185,6 @@ function L.init(config)
 		end)
 		if receiving then task.spawn(receive) end
 	end
-	task.spawn(function()
-		while true do
-			task.wait(1)
-			if studio then localMatch() end
-			for p,g in groups do
-				if g.ticket then
-					if os.time()-g.joined==45 then notice(p,"Dispatch is delayed. You can leave the queue and launch a private crew.") end
-					view(p)
-				end
-			end
-		end
-	end)
 end
 function L.input(plr,action,arg)
 	local group=groups[plr]
@@ -263,37 +207,45 @@ function L.input(plr,action,arg)
 	if (cooldown[plr] or 0)>os.clock() then return end
 	cooldown[plr]=os.clock()+.13
 	if busy(plr) or group.deploying then return end
-	if (action=="Invite" or action=="Accept") and (typeof(arg)~="number" or arg~=arg or math.abs(arg)>9007199254740991 or arg%1~=0) then return end
 	local host=group.members[1]==plr
-	if action=="CancelQueue" and host then
-		cancel(group)
-	elseif group.ticket then return
-	elseif action=="SpinTrait" then
+	if action=="SpinTrait" then
 		notice(plr,Profiles.spin(plr))
 	elseif action=="Trait" and typeof(arg)=="string" then
 		notice(plr,Profiles.choose(plr,arg))
-	elseif action=="Difficulty" and host and typeof(arg)=="string" and difficulties[arg] then
-		group.difficulty=arg
-	elseif action=="LeaveParty" and #group.members>1 then
+	elseif action=="CreateLobby" then
+		if group.id or #group.members~=1 or not Profiles.ready(plr) or typeof(arg)~="table" then return end
+		if typeof(arg.difficulty)~="string" or not difficulties[arg.difficulty] then return end
+		local capacity=arg.capacity
+		if capacity~=2 and capacity~=3 and capacity~=4 then return end
+		if not validPassword(arg.password) then
+			notice(plr,"Use 4–24 letters or numbers for the lobby password, or leave it blank.")
+			return
+		end
+		group.id=HttpService:GenerateGUID(false)
+		group.difficulty,group.capacity=arg.difficulty,capacity
+		group.password=if arg.password~="" then arg.password else nil
+		lobbies[group.id]=group
+	elseif action=="JoinLobby" then
+		if group.id or #group.members~=1 or not Profiles.ready(plr) or typeof(arg)~="table"
+			or typeof(arg.id)~="string" or #arg.id~=36 then return end
+		local now=os.clock()
+		if (joinCooldown[plr] or 0)>now then return end
+		joinCooldown[plr]=now+.8
+		local room=lobbies[arg.id]
+		local leader=room and room.members[1]
+		if not leader or leader.Parent~=Players or room.deploying or busy(leader) then
+			notice(plr,"That lobby is no longer available.")
+		elseif #room.members>=room.capacity then
+			notice(plr,"That lobby is full.")
+		elseif room.password and (not validPassword(arg.password) or room.password~=arg.password) then
+			notice(plr,"Incorrect lobby password.")
+		else
+			table.insert(room.members,plr)
+			groups[plr]=room
+		end
+	elseif action=="LeaveParty" and group.id then
 		removeFromGroup(plr)
 		newGroup(plr)
-	elseif action=="Invite" and host and #group.members<4 and typeof(arg)=="number" then
-		local other=Players:GetPlayerByUserId(arg)
-		local otherGroup=groups[other]
-		if otherGroup and otherGroup~=group and #otherGroup.members==1 and not otherGroup.ticket and not otherGroup.deploying and not busy(other) then
-			invitations[other][plr]=os.time()+60
-			notice(other,plr.DisplayName.." invited you to a dive crew.")
-			notice(plr,"Invitation sent to "..other.DisplayName..".")
-		end
-	elseif action=="Accept" and #group.members==1 and typeof(arg)=="number" then
-		local leader=Players:GetPlayerByUserId(arg)
-		local crew=groups[leader]
-		if crew and crew.members[1]==leader and (invitations[plr][leader] or 0)>os.time() and #crew.members<4 and not crew.ticket and not crew.deploying and not busy(leader) then
-			removeFromGroup(plr)
-			table.insert(crew.members,plr)
-			groups[plr]=crew
-			table.clear(invitations[plr])
-		end
 	elseif action=="PublicLobby" and host and not studio and game.PrivateServerId~="" then
 		if not crewReady(group) then notice(plr,"Waiting for the crew to be ready.") return end
 		local members=table.clone(group.members)
@@ -309,12 +261,13 @@ function L.input(plr,action,arg)
 				task.delay(35,function() group.deploying=nil L.refresh() end)
 			end
 		end)
-	elseif (action=="Launch" or action=="Queue") and host then
+	elseif (action=="Launch" or action=="LaunchSolo") and host then
+		if action=="LaunchSolo" then
+			if group.id or #group.members~=1 or typeof(arg)~="string" or not difficulties[arg] then return end
+			group.difficulty=arg
+		elseif not group.id then return end
 		if not crewReady(group) then notice(plr,"Waiting for crew profiles to finish loading.") return end
-		if action=="Queue" then
-			group.ticket=HttpService:GenerateGUID(false)
-			group.joined=os.time()
-		elseif studio then
+		if studio then
 			if not beginLocal(table.clone(group.members),group.difficulty) then notice(plr,"The cage is occupied.") end
 		else
 			remoteDeploy(group)
