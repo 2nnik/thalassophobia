@@ -30,10 +30,15 @@ for _, difficulty in {"Easy", "Normal", "Hard", "Nightmare"} do
 	while s.phase == "Descent" and s.elapsed < 902 do tick() end
 	assert(s.phase == "Bottom" and s.depth == 10000 and math.abs(s.elapsed - 900) <= dt)
 	for name in unlocks do assert(seen[name]) end
-	local atBottom = s.elapsed
-	Dive.pickup(s)
-	while s.phase == "Ascent" and s.elapsed - atBottom < 422 do tick() end
-	assert(s.survived and s.depth == 0 and math.abs(s.elapsed - atBottom - 420) <= dt)
+	assert(not Dive.isUnlocked(s,"pursuer") and not Dive.reboard(s))
+	assert(Dive.pickup(s) and not Dive.pickup(s))
+	assert(s.phase=="Bottom" and not s.artifact and Dive.isUnlocked(s,"pursuer"))
+	for _ = 1, 20 do tick() end
+	assert(s.depth==10000 and s.phase=="Bottom" and s.pursuer>.2)
+	assert(Dive.reboard(s) and s.artifact and s.phase=="Ascent")
+	local boardedAt = s.elapsed
+	while s.phase == "Ascent" and s.elapsed - boardedAt < 422 do tick() end
+	assert(s.survived and s.depth == 0 and math.abs(s.elapsed - boardedAt - 420) <= dt)
 	for name in unlocks do assert(Dive.isUnlocked(s, name)) end
 	assert(s.battery > 17.5, "Sustained normal equipment use caused an unavoidable stall")
 end
@@ -46,4 +51,15 @@ for _ = 1, 400 do
 end
 for name in unlocks do assert(s[name] == 0) end
 assert(s.depth == 0, "Engine off should delay the first encounter")
-print("PASS: four difficulties, milestone first sightings, quiet held descent, 900 s down, 420 s up, battery and ascent unlocks")
+assert(not Dive.pickup(s))
+
+local late = Dive.new("Nightmare",1,{},rng)
+late.phase,late.depth,late.deepest="Bottom",10000,10000
+assert(Dive.pickup(late))
+for _ = 1, 28 do Dive.step(late,dt) end
+local deadline=late.recoveryDeadline
+late.salvageTaken=false
+assert(Dive.pickup(late) and late.recoveryDeadline==deadline)
+for _ = 1, 28 do Dive.step(late,dt) end
+assert(late.phase=="Results" and not late.artifact and not Dive.reboard(late))
+print("PASS: four difficulties, milestone first sightings, 900 s down, timed exterior recovery, 420 s up and ascent unlocks")

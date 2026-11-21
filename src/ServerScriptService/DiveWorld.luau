@@ -17,7 +17,7 @@ local screen = stations.SONAR.SonarScreen.Face.Legend
 local engineLabel = stations.ENGINE.EngineStatus.Face.Legend
 local engineLever = stations.ENGINE.EngineLever
 local lampSwitch = stations.OPTICS.Light
-local relic = stations.Sampler.Artifact
+local samplerRelic = stations.Sampler.Artifact
 local dirs = {Vector3.new(0,0,-1), Vector3.new(1,0,0), Vector3.new(0,0,1), Vector3.new(-1,0,0)}
 local bearings = {"FORE", "STBD", "AFT", "PORT"}
 local lamps, prompts, leaks, snow = {}, {}, {}, {}
@@ -118,6 +118,46 @@ end
 floor:ScaleTo(2.6)
 floor:PivotTo(CFrame.new(0,-350,0))
 
+-- Put the pickup across open water from the starboard hatch, within the existing tether.
+local salvageSite=Instance.new("Model")
+salvageSite.Name="Seabed salvage"
+salvageSite.Parent=ocean
+local cacheLocation=world.OutsideSpawn.Position+Vector3.new(20,0,6)
+local floorRay=RaycastParams.new()
+floorRay.FilterType=Enum.RaycastFilterType.Include
+floorRay.FilterDescendantsInstances={floor}
+local ground=workspace:Raycast(Vector3.new(cacheLocation.X,-305,cacheLocation.Z),Vector3.new(0,-90,0),floorRay)
+local cacheBase=Vector3.new(cacheLocation.X,ground and ground.Position.Y or -350,cacheLocation.Z)
+local stand=Instance.new("Part")
+stand.Name="Survey cradle"
+stand.Size=Vector3.new(5,1.3,4)
+stand.CFrame=CFrame.new(cacheBase+Vector3.yAxis*.6)*CFrame.Angles(0,math.rad(15),0)
+stand.Color=Color3.fromRGB(56,80,75)
+stand.Material=Enum.Material.DiamondPlate
+stand.Anchored,stand.CanCollide,stand.CanTouch=true,false,false
+stand.Parent=salvageSite
+local relic=samplerRelic:Clone()
+relic:ClearAllChildren()
+relic.Name="Trench artifact"
+relic.CFrame=stand.CFrame*CFrame.new(0,1.5,0)
+relic.Anchored,relic.CanCollide,relic.CanTouch=true,false,false
+relic.Parent=salvageSite
+local pickup=prompts.Artifact
+pickup.Parent=relic
+pickup.ActionText,pickup.ObjectText="Recover","Trench artifact"
+pickup.RequiresLineOfSight=true
+samplerRelic.Transparency=1
+local beacon=Instance.new("PointLight")
+beacon.Name="Salvage beacon"
+beacon.Color=Color3.fromRGB(86,236,208)
+beacon.Range=24
+beacon.Parent=relic
+local returnLight=Instance.new("PointLight")
+returnLight.Name="Airlock return light"
+returnLight.Color=Color3.fromRGB(255,169,69)
+returnLight.Range=21
+returnLight.Parent=prompts.Return:FindFirstAncestorWhichIsA("BasePart")
+
 local leviathan = actors.Leviathan
 local _, anglerSize = leviathan:GetBoundingBox()
 local scale = (20 * math.max(envelope.Size.X,envelope.Size.Z)) / math.max(anglerSize.X,anglerSize.Y,anglerSize.Z)
@@ -159,6 +199,7 @@ function World.resetDepth()
 	setShipY(0)
 end
 local cameraHeads, windows, sites, joints, lighting = {}, {}, {}, {}, {}
+local pursuerPosition
 local labels={Leviathan="ANGLER",GiantSquid="GIANT SQUID",CrackCrawler="HULL CRAWLER",Pursuer="DEEP PURSUER"}
 local runService=game:GetService("RunService")
 for i=1,4 do
@@ -283,6 +324,7 @@ function World.update(state)
  showPrompt("Sonar",active and not state.systemsOffline)
  showPrompt("Camera",active and not state.systemsOffline)
  showPrompt("ClearSwarm",false)
+ local recovering=phase=="Bottom" and state.recoveryDeadline~=nil
  for i,parts in sites do
   local progress=state.cleanSites and state.cleanSites[i] or 0
   local show=active and swarm>0 and progress<3
@@ -292,8 +334,14 @@ function World.update(state)
    if item.part.Transparency~=faded then item.part.Transparency=faded end
   end
  end
- showPrompt("Artifact",phase=="Bottom")
- relic.Transparency=phase=="Bottom" and .12 or 1
+ local artifactAvailable=phase=="Bottom" and not state.salvageTaken
+ showPrompt("Artifact",artifactAvailable)
+ relic.Transparency=if artifactAvailable then .1 else 1
+ stand.Transparency=if phase=="Bottom" then 0 else 1
+ beacon.Enabled=artifactAvailable
+ beacon.Brightness=1.9+.45*math.sin((state.elapsed or 0)*3)
+ returnLight.Enabled=phase=="Bottom"
+ returnLight.Brightness=if recovering then 2.8+.7*math.sin((state.elapsed or 0)*5) else 1.5
  for i=1,3 do
   local cracked=active and state.cracks and state.cracks[i]==true or false
   local breach=if active and state.breaches then state.breaches[i] else 0
@@ -367,10 +415,22 @@ function World.update(state)
   animate(actors.CrackCrawler,elapsed,1.64)
  else face(actors.CrackCrawler,hidden) end
  pose(actors.HullSwarm,hidden)
- local trailing=active and phase=="Ascent" and pursuer>0
+ local trailing=active and pursuer>0 and (recovering or phase=="Ascent")
  actors.Pursuer:SetAttribute("Detectable",trailing)
- local pursuerPos=center+Vector3.new(-6+math.cos(elapsed*.11)*3,-12-(1-pursuer)*19,-32-(1-pursuer)*32)
- pose(actors.Pursuer,trailing and CFrame.lookAt(pursuerPos,center) or hidden)
+ if trailing then
+  local target=if recovering then world.OutsideSpawn.Position else center
+  local approachPoint=cacheBase+Vector3.new(51,7,-43)
+  local nearHatch=target+Vector3.new(5,0,-9)
+  local trail=if recovering then approachPoint:Lerp(nearHatch,pursuer)
+   else center+Vector3.new(-6+math.cos(elapsed*.11)*3,-12-(1-pursuer)*19,-32-(1-pursuer)*32)
+  if not pursuerPosition then pursuerPosition=trail end
+  local offset=trail-pursuerPosition
+  if offset.Magnitude>0 then pursuerPosition+=offset.Unit*math.min(offset.Magnitude,dt*26) end
+  pose(actors.Pursuer,CFrame.lookAt(pursuerPosition,target))
+ else
+  pursuerPosition=nil
+  pose(actors.Pursuer,hidden)
+ end
  local dim=(state.battery or 100)<21 and (.66+.12*math.sin(now*7)) or .86
  local emergency=active and state.systemsOffline
  local pulse=.5+.5*math.cos(elapsed*math.pi*1.7)

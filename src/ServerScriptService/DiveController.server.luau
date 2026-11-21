@@ -111,6 +111,7 @@ local function sendSnapshot(p, m, s)
 	out.battery, out.hull = math.max(0,s.battery), math.max(0,s.hull)
 	out.alive, out.outside, out.maxOxygen = m.alive, m.outside, m.maxOxygen
 	out.oxygen = m.outside and m.oxygen or nil
+	out.carryingArtifact = s.artifactCarrier == p
 	out.charges, out.capacity = m.charges,m.capacity
 	out.hasExtinguisher = m.extinguisher~=nil and m.extinguisher.Parent~=nil
 	out.extinguisherEquipped = out.hasExtinguisher and m.extinguisher.Parent==p.Character
@@ -209,6 +210,12 @@ local function finishResults(s)
 	World.update(sceneIdle)
 end
 
+local function dropArtifact(s,p)
+	if s.artifactCarrier ~= p then return end
+	s.artifactCarrier, s.salvageTaken = nil, false
+	Dive.warn(s,"The artifact fell back to the seabed. The Pursuer is still closing.",6)
+end
+
 settle = function(s)
 	if active ~= s or settling then return end
 	settling=true
@@ -230,6 +237,7 @@ down = function(p, reason)
 	local s,m = active,members[p]
 	if not s or settling or not m or not m.alive then return end
 	m.alive, m.death = false, reason
+	dropArtifact(s,p)
 	stopPatch(s,p,m)
 	releaseGrab(p,m,s)
 	clearExtinguisher(m)
@@ -282,7 +290,7 @@ local function interact(p, action)
 	if not m or not s or settling or not m.alive or m.grab or m.breachRepair then return end
 	if m.cleaning or m.cameraOrigin then return end
 	local cleanIndex = tonumber(action:match("^Clean([1-4])$"))
-	local exterior = cleanIndex ~= nil or action == "Return"
+	local exterior = cleanIndex ~= nil or action == "Return" or action == "Artifact"
 	if exterior ~= m.outside then return end
 	if (m.lastAction[action] or -2) + 0.35 > s.elapsed then return end
 	m.lastAction[action] = s.elapsed
@@ -365,12 +373,16 @@ local function interact(p, action)
 		if human then human:UnequipTools() end
 		tether(p,m)
 	elseif cleanIndex then
+		if s.artifactCarrier == p then return end
 		Exterior.beginClean(p,m,s,cleanIndex)
 	elseif action == "Return" then
 		releaseTether(p,m)
-		relocate(p,"InsideLockSpawn")
+		if relocate(p,"InsideLockSpawn") and s.artifactCarrier == p and Dive.reboard(s) then
+			s.artifactCarrier = nil
+		end
 	elseif action == "Artifact" then
-		Dive.pickup(s)
+		if not Dive.pickup(s) then return end
+		s.artifactCarrier=p
 	elseif action == "Sonar" then
 		if s.systemsOffline then return end
 		s.sonarOn = not s.sonarOn
@@ -509,6 +521,7 @@ for _,p in Players:GetPlayers() do joined(p) end
 Players.PlayerRemoving:Connect(function(p)
 	local m,s = members[p],active
 	if m then
+		if s then dropArtifact(s,p) end
 		if s then stopPatch(s,p,m) end
 		if s then releaseGrab(p,m,s) end
 		releaseTether(p,m)

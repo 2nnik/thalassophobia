@@ -86,6 +86,8 @@ return function(gui)
     local leak=sound("WaterIngress","action_swim.mp3",.78,true,0,-7,-14)
     local splash=sound("BreachSplash","impact_water.mp3",.83,false,2,-6,-17)
     local bell=sound("StationBell","volume_slider.ogg",.66,false,0,-4,-13)
+    local recoveryAlarm=sound("RecoveryAlarm","volume_slider.ogg",.76,false,0,-2,-8)
+    UI.make("EchoSoundEffect",recoveryAlarm,{Delay=.28,Feedback=.58,DryLevel=0,WetLevel=-5})
     UI.make("ReverbSoundEffect",distant,{DecayTime=3,DryLevel=-8,WetLevel=-12})
     UI.make("EchoSoundEffect",scrape,{Delay=.23,Feedback=.29,DryLevel=-7,WetLevel=-15})
     local calls={
@@ -168,7 +170,7 @@ return function(gui)
         grade.Enabled=false
         blur.Enabled=false
         haze.Visible=false
-        for _,s in ipairs({noise,sea,ping,impact,groan,distant,scrape,leak,splash,bell}) do s:Stop() end
+        for _,s in ipairs({noise,sea,ping,impact,groan,distant,scrape,leak,splash,bell,recoveryAlarm}) do s:Stop() end
     end
     local function update(s)
         frame.Visible=not s.cameraView
@@ -188,7 +190,7 @@ return function(gui)
         elseif outside then hint=""
         elseif sonar and sonar~="" then hint=sonar
         elseif insideWarning and insideWarning~="" then hint=insideWarning
-        elseif tutorial and s.phase=="Bottom" then hint="Retrieve the artifact to begin ascent."
+        elseif tutorial and s.phase=="Bottom" then hint="Take the airlock and follow the salvage beacon."
         end
         panel.Visible=hint~=""
         signal.Text=outside and "TETHER LINK" or sonar and sonar~="" and "SONAR RETURN" or "CAGE TELEMETRY"
@@ -224,6 +226,12 @@ return function(gui)
         if previous and previous.phase~=s.phase and (s.phase=="Bottom" or s.phase=="Ascent") then
             play(bell,.22,s.phase=="Bottom" and .66 or 1)
             if tutorial and s.phase=="Ascent" then notify("Artifact aboard. Keep the cage rising.") end
+        end
+        if s.alive~=false and s.phase=="Bottom" and (s.pursuer or 0)>0 then
+            local last=previous and previous.pursuer or 0
+            if last==0 or (last<.68 and s.pursuer>=.68) then
+                play(recoveryAlarm,.33,last==0 and .76 or 1.02)
+            end
         end
         for _,call in calls do
             local intensity=s[call.field] or 0

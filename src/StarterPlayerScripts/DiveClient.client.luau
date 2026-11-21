@@ -70,7 +70,7 @@ local function filterPrompt(p)
     local action=p:GetAttribute("Action")
     if not action then return end
     if not distances[p] then distances[p]=p.MaxActivationDistance end
-    local exterior=action:match("^Clean[1-4]$")~=nil or action=="Return"
+    local exterior=action:match("^Clean[1-4]$")~=nil or action=="Return" or action=="Artifact"
     p.MaxActivationDistance=exterior==outside and distances[p] or 0
 end
 if world then

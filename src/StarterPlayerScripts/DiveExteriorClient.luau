@@ -236,8 +236,8 @@ local function beginEffects()
 	headlamp=make("Part",workspace,{Name="LocalEVAHeadlamp",Size=Vector3.new(.1,.1,.1),Transparency=1,
 		Anchored=true,CanCollide=false,CanTouch=false,CanQuery=false,CastShadow=false})
 	if workspace.CurrentCamera then headlamp.CFrame=workspace.CurrentCamera.CFrame end
-	make("SpotLight",headlamp,{Name="HeadlampBeam",Face=Enum.NormalId.Front,Range=16,Angle=62,
-		Brightness=2.4,Color=Color3.fromRGB(189,230,226),Shadows=true})
+	make("SpotLight",headlamp,{Name="HeadlampBeam",Face=Enum.NormalId.Front,Range=14,Angle=54,
+		Brightness=1.8,Color=Color3.fromRGB(189,230,226),Shadows=true})
 	atmosphere=Lighting:FindFirstChildOfClass("Atmosphere")
 	if atmosphere then
 		originalAtmosphere={}
@@ -383,7 +383,10 @@ local function travelStatus(s)
 	else
 		text="Swim where you look  ·  Space rise  /  C dive"
 	end
-	if s.swarm and s.swarm>0 and s.cleanSites then
+	if s.difficulty=="Easy" and s.phase=="Bottom" then
+		local destination=if s.carryingArtifact then "RETURN TO THE AIRLOCK" else "FOLLOW THE SALVAGE BEACON"
+		text=destination.."\n"..text
+	elseif s.swarm and s.swarm>0 and s.cleanSites then
 		local origin=Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 		local near,distance=nil,math.huge
 		for i,point in travelPoints do

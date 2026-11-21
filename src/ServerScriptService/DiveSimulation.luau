@@ -3,6 +3,7 @@ local Dive = {}
 local TARGET_DEPTH = 10000
 local DESCENT_RATE = TARGET_DEPTH / (15 * 60)
 local ASCENT_RATE = TARGET_DEPTH / (7 * 60)
+local RECOVERY_WINDOW = {Easy = 22, Normal = 19, Hard = 16, Nightmare = 14}
 Dive.targetDepth = TARGET_DEPTH
 local MAX_BREACH = 3
 local rules = {
@@ -78,7 +79,7 @@ function Dive.patchBreach(s, section)
 end
 
 function Dive.isUnlocked(s, name)
-	if name == "pursuer" then return s.artifact end
+	if name == "pursuer" then return s.recoveryDeadline ~= nil end
 	local threshold = firstDepth[name]
 	return threshold ~= nil and s.deepest >= threshold
 end
@@ -236,11 +237,25 @@ local function contacts(s, dt, pace)
 end
 
 function Dive.pickup(s)
-	if s.phase ~= "Bottom" then return end
-	s.artifact, s.phase, s.coast = true, "Ascent", 2.7
-	s.pursuer = 0.035
+	if s.phase ~= "Bottom" or s.salvageTaken then return false end
+	s.salvageTaken = true
+	if not s.recoveryDeadline then
+		s.recoveryWindow = RECOVERY_WINDOW[s.difficulty] or RECOVERY_WINDOW.Normal
+		s.recoveryDeadline = s.elapsed + s.recoveryWindow
+		s.pursuer = 0.035
+	end
+	Dive.warn(s, "Something woke up. Get the artifact back through the airlock!", 9)
+	return true
+end
+
+function Dive.reboard(s)
+	if s.phase ~= "Bottom" or not s.salvageTaken or s.elapsed >= s.recoveryDeadline then return false end
+	s.artifact, s.phase = true, "Ascent"
+	s.coast = if s.engine then 2.7 else 0
+	s.catchup = math.min(0.52, s.pursuer * 0.55)
 	s.nextThreat = math.min(s.nextThreat, s.elapsed + 9)
-	Dive.warn(s, "Artifact secured. Keep climbing. Something is following below.", 7)
+	Dive.warn(s, "Artifact aboard. Keep the engine running and outrun the Pursuer.", 7)
+	return true
 end
 
 function Dive.scan(s)
@@ -258,6 +273,14 @@ function Dive.step(s, dt)
 	s.elapsed += dt
 	if s.elapsed > s.warningUntil then s.warning = "" end
 	local ascent = s.phase == "Ascent"
+	if s.phase == "Bottom" and s.recoveryDeadline then
+		local progress = 1 - (s.recoveryDeadline - s.elapsed) / s.recoveryWindow
+		s.pursuer = 0.035 + 0.965 * math.clamp(progress, 0, 1)
+		if s.elapsed >= s.recoveryDeadline then
+			Dive.endRun(s, false, "The Pursuer reached the ship before the artifact was brought aboard.")
+			return
+		end
+	end
 	local pace = s.rules.pace * (0.72 + 0.095 * (s.crewCount - 1)) * (ascent and 1.27 or 1)
 	local depthRatio = s.depth / TARGET_DEPTH
 	if s.elapsed >= s.nextCrack then
@@ -311,7 +334,7 @@ function Dive.step(s, dt)
 		if s.deepest > previousDepth then introduceContacts(s, previousDepth, pace) end
 		if s.depth >= TARGET_DEPTH then
 			s.phase = "Bottom"
-			Dive.warn(s, "Seabed reached. Recover the artifact at the salvage hatch.", 12)
+			Dive.warn(s, "Seabed reached. Take the airlock and follow the beacon down to the artifact.", 12)
 		end
 	end
 end
