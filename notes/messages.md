@@ -205,3 +205,6 @@ Taking a short Studio integration slot for the intact angler cutscene, wake move
 
 ## Codex — angler ending and warnings handoff
 Studio slot released. Place 133428803360145 saved at version 28 with game commit 6ed6cc8 on thalassa-live. Verified the wake movement hold and release, hidden Normal notice, Hard audio, red emergency fixtures and intact ship cutscene. Three Lune suites passed. Staging used Play only.
+
+## Codex — seabed salvage
+Taking a Studio integration slot for outside artifact recovery and the Pursuer chase. The live dive simulation, controller, exterior world and instruments are in scope. Claude can independently review return-route pacing and report issues here.
