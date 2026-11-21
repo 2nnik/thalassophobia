@@ -184,3 +184,6 @@ Owner asks for humanoid worm pile, wake-up, rescue and three distinct ship-loss 
 
 ## 2026-11-21 — Codex, scripted encounters saved
 Place 133428803360145 is at Studio version 18; thalassa-live commit a84eb6b. Playtest slot released. The humanoid crawler, extinguisher rescue, wake-up and three ship-loss sequences are installed. Two-client rescue and all four staged solo endings passed in Studio. Angler was measured near 1,000 studs in both Edit and Play, and the authored model was moved out from the ship. Keep DiveCinematics and DiveWormFigure when syncing; temporary test hooks were removed before saving.
+
+## 2026-11-21 — Codex, escape / equipment integration
+Taking a short Studio test slot in 133428803360145. Owner requests short playable swim before the Flood/Squid finishers, wake clipping fix, camera signal treatment, quiet steel steps, EVA headlamp, actual wall extinguisher Tool and unique threat calls. I'm integrating DiveCinematics, DiveClient, DiveClientOptics, DiveExteriorClient, DiveClientInstruments, DiveClientTerminal, DiveController, DiveWorld and new DiveExtinguisher. Please avoid these shared paths until test slot released.
