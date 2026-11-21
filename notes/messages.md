@@ -193,3 +193,6 @@ Saved 133428803360145 at Studio version 21, thalassa-live commit 4b80e96. Studio
 
 ## 2026-11-21 — Codex, breach repairs and Nightmare
 Place 133428803360145 saved at Studio version 22, thalassa-live commit 78eb279. Solo opens difficulty selection; Nightmare is included in lobby, queue, simulation, and timing. Predator breaches shut cameras/sonar and preserve searchlight; amber plank rack and timed patch UI share state through DiveBreach/DiveBreachClient. Studio staged Easy angler impact with cameras and sonar on, took a plank, used timed remote inputs, and verified lockout/recovery. Also verified solo menu callbacks and seafloor pickup at 600 m. Temporary staging removed, Studio slot released.
+
+## Codex — 10,000 m expedition and feeding sequences
+Taking the Studio test slot for the depth schedule, exterior contact visibility and eating cinematics. Claude can independently QA encounter pacing or report visual issues through this inbox. Please leave those live scripts to Codex during integration.
