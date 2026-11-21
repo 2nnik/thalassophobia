@@ -111,4 +111,23 @@ s = fresh()
 s.crawler,s.boarded,s.victim=.99,true,{}
 Dive.step(s,.25)
 assert(s.boarded and s.crawler==.99,"A pinned crawler must wait for rescue or timeout")
-print("PASS: difficulty strike limits, staged squid damage, repair/lockout, Nightmare infestations, fouling and crawler hold")
+
+for difficulty, approach in {Easy=13, Normal=11, Hard=9.5, Nightmare=8} do
+	for _, seal in {false, true} do
+		local worm=fresh(difficulty)
+		worm.crewCount,worm.depth,worm.deepest,worm.phase=4,4000,4000,"Ascent"
+		worm.cracks[2]=true
+		assert(Dive.spawn(worm,"crawler") and worm.crawlerSection==2)
+		for _=1,(approach-4)*4-1 do Dive.step(worm,.25) end
+		assert(not worm.boarded and not worm.crawlerEntryWarning)
+		Dive.step(worm,.25)
+		assert(worm.crawlerEntryWarning and not worm.boarded)
+		if seal then worm.cracks[2]=false end
+		for _=1,15 do Dive.step(worm,.25) end
+		assert(not worm.boarded)
+		Dive.step(worm,.25)
+		assert(worm.boarded==not seal and not worm.crawlerEntryWarning)
+		if seal then assert(worm.crawler==0) end
+	end
+end
+print("PASS: difficulty strike limits, squid damage, repairs, fouling, crawler warnings and blocked entry")

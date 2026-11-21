@@ -5,6 +5,8 @@ local DESCENT_RATE = TARGET_DEPTH / (15 * 60)
 local ASCENT_RATE = TARGET_DEPTH / (7 * 60)
 local RECOVERY_WINDOW = {Easy = 22, Normal = 19, Hard = 16, Nightmare = 14}
 local ANGLER_APPROACH = {Easy = 27, Normal = 24, Hard = 21, Nightmare = 18}
+local CRAWLER_APPROACH = {Easy = 13, Normal = 11, Hard = 9.5, Nightmare = 8}
+local CRAWLER_ENTRY = .47
 Dive.targetDepth = TARGET_DEPTH
 local MAX_BREACH = 3
 local rules = {
@@ -98,10 +100,11 @@ function Dive.spawn(s, name)
 		Dive.warn(s, "Squid silhouette to " .. bearings[s.squidSide] .. ". Train the lamp on it.", 6)
 	elseif name == "crawler" then
 		s.boarded = false
+		s.crawlerStartedAt, s.crawlerBoardAt, s.crawlerEntryWarning = s.elapsed, nil, false
 		local open = {}
 		for i,value in s.cracks do if value then table.insert(open,i) end end
 		s.crawlerSection = #open>0 and open[s.rng:NextInteger(1,#open)] or s.rng:NextInteger(1,3)
-		Dive.warn(s, "Scraping on the hull. Seal open fractures.", 5)
+		Dive.warn(s, string.format("Worms outside section %02d. Check the window seal.",s.crawlerSection), 7)
 	elseif name == "swarm" then
 		s.foulingExposure, s.floodWarned = 0, false
 		Dive.warn(s, "Barnacles spreading across four hull faces. Check sonar before exiting.", 6)
@@ -203,15 +206,22 @@ local function contacts(s, dt, pace)
 	end
 	if s.phase == "Results" then return end
 	if s.crawler > 0 and not s.victim then
-		s.crawler += dt * pace / (s.boarded and 26 or 17)
-		if not s.boarded and s.crawler >= 0.47 then
+		local approach=CRAWLER_APPROACH[s.difficulty] or CRAWLER_APPROACH.Normal
+		local approachingFor=s.elapsed-(s.crawlerStartedAt or s.elapsed)
+		s.crawler=if s.boarded then s.crawler+dt*pace/26 else .015+(CRAWLER_ENTRY-.015)*math.min(1,approachingFor/approach)
+		if not s.boarded and approachingFor>=approach then
+			s.crawlerEntryWarning=false
 			if not s.cracks[s.crawlerSection] then
 				s.crawler = 0
 				Dive.warn(s, "Crawler contact fading. The seals held.")
 			else
-				s.boarded = true
+				s.boarded, s.crawlerBoardAt = true, s.elapsed
 				Dive.warn(s, "Boarder in section 0" .. s.crawlerSection .. ". Use the extinguisher.", 7)
 			end
+		elseif not s.boarded and approachingFor>=approach-4
+			and not s.crawlerEntryWarning and s.cracks[s.crawlerSection] then
+			s.crawlerEntryWarning=true
+			Dive.warn(s, string.format("Worms at the open window in section %02d. Seal it now!",s.crawlerSection), 5)
 		elseif s.crawler >= 1 then
 			s.hull -= 26 * s.rules.damage
 			s.battery -= 5

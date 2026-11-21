@@ -106,15 +106,19 @@ return function(gui)
     anglerEcho.RollOffMinDistance,anglerEcho.RollOffMaxDistance=8,28
     anglerEcho.Parent=anglerSource
     UI.make("EchoSoundEffect",anglerEcho,{Delay=.38,Feedback=.25,DryLevel=-5,WetLevel=-10})
+    local wormScrape=sound("WormOutside","action_footsteps_plastic.mp3",1.35,false,-5,1,-8)
+    local wormAlarm=sound("WormWindowAlarm","volume_slider.ogg",.95,false,-2,0,-7)
+    local wormIngress=sound("WormIngress","impact_water.mp3",.84,false,0,-1,-13)
+    UI.make("EchoSoundEffect",wormScrape,{Delay=.15,Feedback=.48,DryLevel=0,WetLevel=-6})
+    UI.make("EchoSoundEffect",wormAlarm,{Delay=.25,Feedback=.57,DryLevel=0,WetLevel=-5})
     local calls={
         {field="squid", audio=sound("SquidGurgle","impact_water.mp3",.88,false,1,-5,-13), pitch=.88, volume=.26},
-        {field="crawler", audio=sound("CrawlerSkitter","action_footsteps_plastic.mp3",1.55,false,-9,1,-10), pitch=1.55, volume=.26},
         {field="swarm", audio=sound("BarnacleTick","action_jump_land.mp3",1.32,false,-9,-1,-12), pitch=1.32, volume=.24},
         {field="pursuer", audio=sound("PursuerPulse","impact_explosion_03.mp3",.36,false,6,-15,-28), pitch=.36, volume=.27},
     }
     UI.make("EchoSoundEffect",calls[1].audio,{Delay=.11,Feedback=.32,DryLevel=-4,WetLevel=-12})
-    UI.make("EchoSoundEffect",calls[3].audio,{Delay=.08,Feedback=.37,DryLevel=-4,WetLevel=-10})
-    UI.make("ReverbSoundEffect",calls[4].audio,{DecayTime=3.4,DryLevel=-4,WetLevel=-13})
+    UI.make("EchoSoundEffect",calls[2].audio,{Delay=.08,Feedback=.37,DryLevel=-4,WetLevel=-10})
+    UI.make("ReverbSoundEffect",calls[3].audio,{DecayTime=3.4,DryLevel=-4,WetLevel=-13})
     local function loop(s,volume)
         s.Volume=volume
         if volume>0 and not s.IsPlaying then s:Play()
@@ -136,7 +140,7 @@ return function(gui)
     local nextContact=0
     local nextGroan=0
     local nextScare=nil
-    local wasBoarded=false
+    local nextWormCue=0
     local previousLeaks=0
     local rng=Random.new()
     local nextCall=0
@@ -186,8 +190,8 @@ return function(gui)
     resize()
     local function reset()
         previous=nil
-        nextScare,wasBoarded=nil,false
-        nextCall,nextContact,nextGroan,previousLeaks,nextAnglerCue=0,0,0,0,0
+        nextScare=nil
+        nextCall,nextContact,nextGroan,previousLeaks,nextAnglerCue,nextWormCue=0,0,0,0,0,0
         clearNotice()
         for _,call in calls do call.due=nil call.audio:Stop() end
         frame.Visible=false
@@ -195,7 +199,7 @@ return function(gui)
         blur.Enabled=false
         haze.Visible=false
         for _,s in {noise,pressure,sea,ping,impact,groan,cable,bulkhead,driveShift,distant,scrape,leak,splash,bell,
-            recoveryAlarm,angler,anglerEcho} do s:Stop() end
+            recoveryAlarm,angler,anglerEcho,wormScrape,wormAlarm,wormIngress} do s:Stop() end
     end
     local function update(s)
         frame.Visible=not s.cameraView
@@ -301,11 +305,28 @@ return function(gui)
                 nextScare=math.max(nextScare or now,now+4)
             end
         end
+        local crawlerActive=s.alive~=false and (s.crawler or 0)>0
+        if crawlerActive then
+            local wasOutside=previous and (previous.crawler or 0)>0 and not previous.boarded
+            if s.boarded and not (previous and previous.boarded) then
+                play(wormIngress,outside and .40 or .56)
+                nextScare=now+6
+            elseif not s.boarded then
+                local urgent=s.crawlerEntryWarning and s.cracks and s.cracks[s.crawlerSection]
+                local wasUrgent=previous and previous.crawlerEntryWarning
+                if urgent and not wasUrgent then
+                    play(wormAlarm,outside and .42 or .60)
+                    nextWormCue=now+1.9
+                    nextScare=now+5
+                elseif not wasOutside or now>=nextWormCue then
+                    play(wormScrape,outside and .43 or .58,urgent and 1.6 or 1.35)
+                    nextWormCue=now+(urgent and 1.55 or 3.6)
+                    nextScare=now+4
+                end
+            end
+        end
         if not nextScare then nextScare=now+rng:NextNumber(7,14) end
-        if s.alive~=false and s.boarded and not wasBoarded and not outside then
-            play(scrape,.35,.59)
-            nextScare=now+rng:NextNumber(12,19)
-        elseif s.alive~=false and at>20 and now>=nextScare and not anglerPresent then
+        if s.alive~=false and at>20 and now>=nextScare and not anglerPresent then
             if outside then
                 if rng:NextNumber()<.46 then play(cable,.24,rng:NextNumber(.35,.51))
                 else play(distant,.27,rng:NextNumber(.45,.61)) end
@@ -317,7 +338,6 @@ return function(gui)
             end
             nextScare=now+rng:NextNumber(8,16)
         end
-        wasBoarded=s.boarded==true
         if previous and (s.hull or 100)<(previous.hull or 100)-4 then play(impact,.55) end
         local otherThreat=math.max(s.squid or 0,s.crawler or 0,s.pursuer or 0)
         if otherThreat>0 and now>nextContact and not outside and not anglerPresent then

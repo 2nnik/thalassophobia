@@ -199,7 +199,7 @@ function World.resetDepth()
 	driver.AssemblyLinearVelocity=Vector3.zero
 	setShipY(0)
 end
-local cameraHeads, windows, sites, joints, lighting = {}, {}, {}, {}, {}
+local cameraHeads, windows, sites, joints, lighting, crawlerLamps = {}, {}, {}, {}, {}, {}
 local pursuerPosition
 local labels={Leviathan="ANGLER",GiantSquid="GIANT SQUID",CrackCrawler="HULL CRAWLER",Pursuer="DEEP PURSUER"}
 local runService=game:GetService("RunService")
@@ -214,7 +214,24 @@ for i=1,4 do
   end
  end
 end
-for i=1,3 do windows[i]=world:WaitForChild("WormWindow"..i) end
+for i=1,3 do
+ local window=world:WaitForChild("WormWindow"..i)
+ windows[i]=window
+ local lens=Instance.new("Part")
+ lens.Name="Window contact alarm"
+ lens.Size=Vector3.new(.68,.25,.25)
+ lens.CFrame=window.CFrame*CFrame.new(0,1.45,.9)
+ lens.Material,lens.Color=Enum.Material.SmoothPlastic,Color3.fromRGB(51,45,32)
+ lens.CanCollide,lens.CanTouch,lens.CanQuery,lens.Massless=false,false,false,true
+ lens.Parent=world["Dive stage"]
+ local weld=Instance.new("WeldConstraint")
+ weld.Part0,weld.Part1=window,lens
+ weld.Parent=lens
+ local lamp=Instance.new("PointLight")
+ lamp.Range,lamp.Enabled=14,false
+ lamp.Parent=lens
+ crawlerLamps[i]=lamp
+end
 for name,label in labels do
  local model=actors[name]
  model:SetAttribute("ContactLabel",label)
@@ -353,6 +370,16 @@ function World.update(state)
   Breach.render(breachEffects[i],breach)
   showPrompt("Spray"..i,false)
   for _,line in leaks[i] do line.Transparency=cracked and .08 or 1 end
+  local lamp=crawlerLamps[i]
+  local warned=active and crawler>0 and i==section
+  local urgent=state.crawlerEntryWarning and cracked
+  local pulse=.5+.5*math.cos((state.elapsed or 0)*(urgent and 13 or 6))
+  local color=if not warned then Color3.fromRGB(51,45,32) elseif state.boarded
+   then Color3.fromRGB(255,61,43) else Color3.fromRGB(255,174,65)
+  lamp.Enabled,lamp.Color=warned,color
+  lamp.Brightness=if warned then .55+1.4*pulse else 0
+  lamp.Parent.Color=if warned then color:Lerp(Color3.fromRGB(55,38,25),.52*(1-pulse)) else color
+  lamp.Parent.Material=if warned then Enum.Material.Neon else Enum.Material.SmoothPlastic
   local cell=stations["Battery stack"]["CellIndicator"..i]
   local charge=state.battery or 100
   cell.Color=charge>((i-1)*100/3) and (charge<27 and amber or meterColor) or offColor
@@ -430,7 +457,9 @@ function World.update(state)
   animate(actors.CrackCrawler,elapsed,5.85)
  elseif crawlerPresent then
   local glass=windows[section].CFrame
-  local at=glass.Position+glass.LookVector*(state.boarded and -1.65 or .21)
+  local entry=if state.boarded then math.clamp((elapsed-(state.crawlerBoardAt or elapsed-1.25))/1.25,0,1) else 0
+  local offset=if state.boarded then .21-1.86*entry else .21+5*math.clamp(1-crawler/.47,0,1)
+  local at=glass.Position+glass.LookVector*offset
   local cf=(state.crawlerGrip or CFrame.lookAt(at,at-glass.LookVector))*CFrame.Angles(0,0,.12*math.sin(elapsed*.43))
   face(actors.CrackCrawler,cf)
   animate(actors.CrackCrawler,elapsed,1.64)

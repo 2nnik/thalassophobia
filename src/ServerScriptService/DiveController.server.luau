@@ -104,7 +104,7 @@ local function tether(p, m)
 	Exterior.startSwim(p,m,active)
 end
 
-local public = {"phase","difficulty","depth","maxDepth","battery","hull","engine","light","aim","cracks","shark","squid","crawler","swarm","pursuer","squidSide","crawlerSection","boarded","warning","coast","artifact","breaches","systemsOffline","anglerStrikes","squidLatched"}
+local public = {"phase","difficulty","depth","maxDepth","battery","hull","engine","light","aim","cracks","shark","squid","crawler","swarm","pursuer","squidSide","crawlerSection","crawlerEntryWarning","boarded","warning","coast","artifact","breaches","systemsOffline","anglerStrikes","squidLatched"}
 local function sendSnapshot(p, m, s)
 	local out = {}
 	for _,key in public do out[key] = s[key] end
@@ -441,7 +441,7 @@ local function updateCrawler(s)
 		end)
 		return
 	end
-	if s.crawler<.57 then return end
+	if s.crawler<.57 or (s.crawlerBoardAt and s.elapsed-s.crawlerBoardAt<1.25) then return end
 	local outlet=site.Stations["Section"..s.crawlerSection]["Spray point"]
 	local victim,distance,root,humanoid=nil,13,nil,nil
 	for p,m in members do
