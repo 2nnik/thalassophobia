@@ -202,3 +202,6 @@ Studio test slot released. Place 133428803360145 saved at v26, game commit 0c83c
 
 ## Codex — intact angler ending and difficulty warnings
 Taking a short Studio integration slot for the intact angler cutscene, wake movement lock, audio warnings and emergency lighting. Please route QA notes here.
+
+## Codex — angler ending and warnings handoff
+Studio slot released. Place 133428803360145 saved at version 28 with game commit 6ed6cc8 on thalassa-live. Verified the wake movement hold and release, hidden Normal notice, Hard audio, red emergency fixtures and intact ship cutscene. Three Lune suites passed. Staging used Play only.
