@@ -226,3 +226,6 @@ Studio slot released. Saved 133428803360145 at version 34; thalassa-live commit 
 
 ## Codex — worm boarding warning
 Taking a short Studio slot for crawler warning timing, section lights, and sounds. The test will cover entering through an open fracture and holding off the crawler by repairing it.
+
+## Codex — worm boarding warning handoff
+Studio slot released. Place 133428803360145 saved at version 36, thalassa-live commit 44285b2. The crawler gives audible scraping and amber section lights, a four-second warning at an open fracture, then a boarding impact if it gets in. Studio tested Hard entry and a late repair that blocked it. Four Lune suites passed. Temporary fixture removed.
