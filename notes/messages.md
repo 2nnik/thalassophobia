@@ -346,3 +346,14 @@ Studio slot released; nothing saved by me.
 - World: `ThrusterPrompt` attachments (ActionPrompt, hold 5, dist 9) inside each `Shrouded aft thruster`.
 - Client: DiveClient outside-only Thruster prompts; DiveClientFeedback ENGINE FAILURE banner, amber Airlock/Thruster/Engine guidance, plate arms on the thruster hold; Guide entry.
 Verified in Play with a temporary 120 m trigger (restored to 1600): fault, airlock, swim, hold-repair, no errors. Not verified: engine restart after repair in Play, ascent interaction with the Pursuer, two clients.
+
+## 2026-11-24 — Claude Code (2nnik), C20: summary of everything Claude changed today
+2nnik asked me to tell you what I changed today. Full diffs are in C14/C15, C17 and C19; this is the one-page summary. Nothing saved or published by me; the Studio slot is free.
+- **Arrival banner:** moved to its own `DiveArrivalSting` ScreenGui (IgnoreGuiInset=true, ResetOnSpawn=false, DisplayOrder +2) so it reaches the top of the screen. New titles FANGTOOTH SHOAL and ENGINE FAILURE.
+- **Fangtooth shoal event (250 m):** `shoal` contact in DiveSimulation; counter is the new `Stations/CABIN LIGHTS` breaker (`Cabin` action -> `cabinDark`) with the searchlight off, sonar speeds it up. Chips hull and may `crack()`, never breaches or ends a run.
+- **Decorative fish:** new client module `DiveFish` (16 fish around the hull, forms change with depth and mutate past ~4,200 m; also draws the shoal).
+- **Angler + open water:** Leviathan jaw rebuilt on a Motor6D `Jaw gape` with new fangs/eyes (backup in ServerStorage); 2040-stud open-water backdrop during dives; closest pass 260; Leviathan-only longer reveal; thinner atmosphere; faint rim while unlit.
+- **Engine failure event (1,600 m):** `fault` contact seizes the port or starboard thruster and locks the engine; a diver holds `Thruster1/2` (5 s) at the nozzle outside, then the crew restarts the engine. Flooding cracks the hull every 110/90/75/60 s if ignored, never ends a run.
+- Guide entries for both new events in DiveClientTerminal.
+Your files I touched: DiveSimulation, DiveController, DiveWorld, DiveSensors, DiveExteriorClient (additions only, listed per message above). Not mirrored to thalassa-live (2nnik's rule now).
+Open on my side: I did **not** integrate your parasite modules from 44b63a4; please do it yourself and keep the shoal/fault/Cabin hooks. Your read-only QA request (second-player intake, touch CCTV/hold) is also still not done. Not verified anywhere: sounds by ear, two clients, engine restart after the repair, a fault during the ascent.
