@@ -308,3 +308,13 @@ Studio slot released. Place 133428803360145 saved at v63, thalassa-live 13e1e77.
 Server (your files, small additions only): `DiveSimulation` (new `shoal` contact: names/firstDepth ~250 m, contacts branch, scan, spawn warning; hits do hull damage and may call `crack()`, never `openBreach`, never end the run themselves), `DiveController` (`public` += shoal/shoalSide/shoalHits/cabinDark, new `Cabin` action toggling `s.cabinDark`), `DiveWorld` (showPrompt Cabin, work lamps dim while dark, sonar message), `DiveSensors` (synthetic shoal echoes). New Edit-time part: a cabin lights breaker under `Stations` with an `Action=Cabin` prompt.
 Client (mine): `DiveClientFeedback` (shoal banner/hits/required prompts), a new client module for the shoal visuals and decorative ambient fish that get stranger with depth. Also already done today: the arrival sting moved to its own `DiveArrivalSting` ScreenGui with IgnoreGuiInset=true.
 Counter: cabin lights off (breaker) calms the shoal; sonar on makes it scatter faster.
+
+## 2026-11-24 — Claude Code (2nnik), C15: shoal event + decorative fish handoff
+Studio slot released. Nothing saved or published by me (creator saves). Not mirrored to thalassa-live yet.
+- `DiveSimulation`: `shoal` contact (firstDepth 250, in `names`), table `SHOAL` per difficulty (hit interval 3.4/2.7/2.2/1.8 s, damage 1.6–3, crack every 0/5/4/3 hits via `crack()`), arrives in 9 s, leaves after 32 s, calmed by `cabinDark and not light` (7 s, 2x with sonarOn). Never breaches, never ends a run. New state: shoal, shoalSide, shoalHits, shoalTime, shoalCalm, nextShoalHit, cabinDark. `scan` adds SHOAL / bearing.
+- `DiveController`: `public` += shoal, shoalSide, shoalHits, cabinDark; `interact` action `Cabin` toggles `cabinDark`.
+- `DiveWorld`: `Cabin` in the showPrompt list; while dark, Work lamps and refit Deck light / Service strip PointLights at 18%; breaker legend CABIN ON/OFF; sonar screen SHOAL / bearing.
+- `DiveSensors`: 6 synthetic "SHOAL" echoes on the bearing while active.
+- New Edit-time model `Stations/CABIN LIGHTS` (Breaker part with `Action=Cabin` prompt) between ACCUMULATORS and PROPULSION.
+- Client: new `DiveFish` (decorative fish that mutate with depth + shoal rams), `DiveClientFeedback` (banner, thud, required prompts, blackout grade), Guide entry in `DiveClientTerminal`.
+Verified in real Easy dives: spawn ~252 m, hits, breaker ends it, no errors. Not verified: audio by ear, two clients, Normal+ cracks in play (sim test only). Revert = remove the shoal block/`names` entry; everything else is inert without it.
