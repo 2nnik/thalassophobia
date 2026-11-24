@@ -9,6 +9,30 @@
   ],
   "scripts": [
     {
+      "group": "StarterPlayerScripts",
+      "class": "ModuleScript",
+      "name": "DiveClientFeedback",
+      "path": "src/StarterPlayerScripts/DiveClientFeedback.luau"
+    },
+    {
+      "group": "StarterPlayerScripts",
+      "class": "ModuleScript",
+      "name": "DiveRepairArms",
+      "path": "src/StarterPlayerScripts/DiveRepairArms.luau"
+    },
+    {
+      "group": "StarterPlayerScripts",
+      "class": "ModuleScript",
+      "name": "DivePrisonScene",
+      "path": "src/StarterPlayerScripts/DivePrisonScene.luau"
+    },
+    {
+      "group": "StarterPlayerScripts",
+      "class": "ModuleScript",
+      "name": "DiveCinematics",
+      "path": "src/StarterPlayerScripts/DiveCinematics.luau"
+    },
+    {
       "group": "ServerScriptService",
       "class": "ModuleScript",
       "name": "DiveShipRefit",

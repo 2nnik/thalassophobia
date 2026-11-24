@@ -20,7 +20,9 @@ local members, receipts, throttles, held = {}, {}, {}, {}
 local sceneIdle = Dive.new("Normal", 1, {})
 sceneIdle.phase, sceneIdle.engine = "Lobby", false
 local settle, down
-local WAKE_DURATION = 2.7
+local OPENING_SECONDS = 20 + 2.7 -- prison intake, then waking aboard the Kestrel
+local CREW_GRACE_SECONDS = 45
+local runNumber = 0
 local cueDuration = {WormRescue=.95,WormDeath=2.8,Angler=8,Squid=13,Flood=15}
 
 local function cue(p,kind,duration,section,position)
@@ -43,6 +45,22 @@ local function relocate(p, name, offset)
 	root.AssemblyLinearVelocity = Vector3.zero
 	root.AssemblyAngularVelocity = Vector3.zero
 	return true
+end
+
+local function releaseBerth(m)
+	if m.berth then m.berth:Destroy() m.berth=nil end
+end
+
+local function takeBerth(p,m)
+	if not relocate(p,"CageSpawn",m.berthOffset) then return end
+	local root=p.Character.HumanoidRootPart
+	if m.berth and m.berth.Parent==root then return end
+	releaseBerth(m)
+	local weld=Instance.new("WeldConstraint")
+	weld.Name="DiveWakeHold"
+	weld.Part0,weld.Part1=site.ShipEnvelope,root
+	weld.Parent=root
+	m.berth=weld
 end
 
 local function releaseTether(p,m)
@@ -110,6 +128,7 @@ local function sendSnapshot(p, m, s)
 	for _,key in public do out[key] = s[key] end
 	out.battery, out.hull = math.max(0,s.battery), math.max(0,s.hull)
 	out.alive, out.outside, out.maxOxygen = m.alive, m.outside, m.maxOxygen
+	out.intakeId = m.intakeId
 	out.oxygen = m.outside and m.oxygen or nil
 	out.carryingArtifact = s.artifactCarrier == p
 	out.charges, out.capacity = m.charges,m.capacity
@@ -162,17 +181,16 @@ local function start(party, difficulty)
 	members = crew
 	active = Dive.new(difficulty, #party, {})
 	active.repairOwners={}
+	runNumber+=1
+	active.boarding=true
 	recalculate(active)
 	for index,p in party do
-		if members[p] then
+		local m=members[p]
+		if m then
 			receipts[p] = nil
-			if relocate(p,"CageSpawn",Vector3.new((index-1)%2 * 2.5,0,math.floor((index-1)/2) * 2.5)) then
-				local weld = Instance.new("WeldConstraint")
-				weld.Name = "DiveWakeHold"
-				weld.Part0, weld.Part1 = site.ShipEnvelope, p.Character.HumanoidRootPart
-				weld.Parent = weld.Part1
-				task.delay(WAKE_DURATION, function() weld:Destroy() end)
-			end
+			m.intakeId=runNumber
+			m.berthOffset=Vector3.new((index-1)%2 * 2.5,0,math.floor((index-1)/2) * 2.5)
+			takeBerth(p,m)
 		end
 	end
 	sync(active)
@@ -183,6 +201,7 @@ local function finishResults(s)
 	if active ~= s then return end
 	local groups = {{},{}}
 	for p,m in members do
+		releaseBerth(m)
 		stopPatch(s,p,m)
 		releaseGrab(p,m,s)
 		clearExtinguisher(m)
@@ -237,6 +256,8 @@ down = function(p, reason)
 	local s,m = active,members[p]
 	if not s or settling or not m or not m.alive then return end
 	m.alive, m.death = false, reason
+	m.intakeId=nil
+	releaseBerth(m)
 	dropArtifact(s,p)
 	stopPatch(s,p,m)
 	releaseGrab(p,m,s)
@@ -254,7 +275,7 @@ end
 
 local function validPrompt(p, prompt)
 	local m = members[p]
-	if not active or active.elapsed<WAKE_DURATION or settling or not m or not m.alive or m.grab or m.breachRepair or not prompt.Enabled or not prompt:IsDescendantOf(site) then return end
+	if not active or settling or not m or m.intakeId or not m.alive or m.grab or m.breachRepair or not prompt.Enabled or not prompt:IsDescendantOf(site) then return end
 	local base = prompt:FindFirstAncestorWhichIsA("BasePart")
 	local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
 	if not base or not root then return end
@@ -300,7 +321,7 @@ end
 
 local function discharge(p,direction)
 	local s,m=active,members[p]
-	if not s or settling or s.elapsed<WAKE_DURATION or not m or not m.alive or m.outside
+	if not s or settling or not m or m.intakeId or not m.alive or m.outside
 		or m.grab or m.breachRepair or m.cameraOrigin or typeof(direction)~="Vector3" then return end
 	local size=direction.Magnitude
 	if not (size>.95 and size<1.05) then return end
@@ -448,7 +469,7 @@ local function updateCrawler(s)
 		local c=p.Character
 		local r=c and c:FindFirstChild("HumanoidRootPart")
 		local h=c and c:FindFirstChildOfClass("Humanoid")
-		if m.alive and not m.outside and r and h and h.Health>0 then
+		if m.alive and not m.intakeId and not m.outside and r and h and h.Health>0 then
 			local d=(r.Position-outlet.Position).Magnitude
 			if d<distance then victim,distance,root,humanoid=p,d,r,h end
 		end
@@ -492,7 +513,7 @@ Prompts.PromptButtonHoldEnded:Connect(function(_,p) held[p] = nil end)
 local function handleCrew(s,dt)
 	s.squidTarget=nil
 	for p,m in members do
-		if not m.alive then continue end
+		if not m.alive or m.intakeId then continue end
 		local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
 		local repair=m.breachRepair
 		if repair and (not atBreach(p,repair.section) or Breach.hasExpired(repair,workspace:GetServerTimeNow())) then
@@ -530,7 +551,11 @@ local function configureCharacter(p, character)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping,false)
 	p.CameraMode = Enum.CameraMode.LockFirstPerson
 	local m = members[p]
-	relocate(p,m and m.alive and (m.outside and "OutsideSpawn" or "CageSpawn") or "LobbySpawn")
+	if m and m.intakeId then
+		takeBerth(p,m)
+	else
+		relocate(p,m and m.alive and (m.outside and "OutsideSpawn" or "CageSpawn") or "LobbySpawn")
+	end
 	humanoid.Died:Connect(function() down(p,"A crew member was lost under pressure.") end)
 end
 pcall(function() PhysicsService:RegisterCollisionGroup("DiveCrew") end)
@@ -545,6 +570,7 @@ for _,p in Players:GetPlayers() do joined(p) end
 Players.PlayerRemoving:Connect(function(p)
 	local m,s = members[p],active
 	if m then
+		releaseBerth(m)
 		if s then dropArtifact(s,p) end
 		if s then stopPatch(s,p,m) end
 		if s then releaseGrab(p,m,s) end
@@ -568,6 +594,19 @@ net.Input.OnServerEvent:Connect(function(p, action, arg)
 	if not rate or now - rate.at > 1 then rate = {at=now,count=0} throttles[p]=rate end
 	rate.count += 1
 	if rate.count > 16 then return end
+	local m=members[p]
+	if m and m.intakeId then
+		if action=="Sync" then
+			sendSnapshot(p,m,active)
+		elseif not settling and arg==m.intakeId and m.berth and m.berth.Parent then
+			if action=="IntakeStarted" and not m.intakeStarted then
+				m.intakeStarted=now
+			elseif action=="IntakeFinished" and m.intakeStarted then
+				m.intakeFinished=true
+			end
+		end
+		return
+	end
 	if action=="SprayCrawler" then discharge(p,arg) return end
 	if action=="BreachHit" or action=="BreachCancel" then
 		local s,m=active,members[p]
@@ -606,6 +645,34 @@ net.Input.OnServerEvent:Connect(function(p, action, arg)
 end)
 
 local accumulator = 0
+local function updateBoarding(s)
+	local now=os.clock()
+	local waiting=false
+	local ready=false
+	for _,m in members do
+		if m.intakeId then
+			if m.intakeFinished and now-m.intakeStarted>=OPENING_SECONDS then
+				ready=true
+			else
+				waiting=true
+			end
+		end
+	end
+	s.firstAwake=if ready then s.firstAwake or now else nil
+	-- If one device hangs during the transfer, let its crewmates depart.
+	-- The late player keeps their own berth and receives the entire scene.
+	if s.boarding and waiting and (not s.firstAwake or now-s.firstAwake<CREW_GRACE_SECONDS) then return end
+	s.boarding=false
+	s.pendingIntakes=waiting
+	for p,m in members do
+		if m.intakeId and m.intakeFinished and now-m.intakeStarted>=OPENING_SECONDS then
+			m.intakeId=nil
+			releaseBerth(m)
+			sendSnapshot(p,m,s)
+		end
+	end
+end
+
 local function carryCrew(delta)
 	if delta.Y == 0 then return end
 	if active.crawlerGrip then active.crawlerGrip += delta end
@@ -622,6 +689,10 @@ end
 RunService.Heartbeat:Connect(function(dt)
 	local s = active
 	if not s or settling then accumulator=0 return end
+	if s.boarding or s.pendingIntakes then
+		updateBoarding(s)
+		if s.boarding then accumulator=0 return end
+	end
 	carryCrew(World.travel(math.min(0.5,dt)))
 	accumulator += math.min(0.5,dt)
 	if accumulator < 0.25 then return end

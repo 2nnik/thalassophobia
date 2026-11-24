@@ -13,6 +13,28 @@ screen.ResetOnSpawn=false
 screen.DisplayOrder=9
 screen.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 screen.Parent=player:WaitForChild("PlayerGui")
+local arrival=Instance.new("ScreenGui")
+arrival.Name="DiveArrival"
+arrival.IgnoreGuiInset=true
+arrival.ResetOnSpawn=false
+arrival.DisplayOrder=screen.DisplayOrder+1
+arrival.Parent=screen.Parent
+local transfer=Instance.new("Frame")
+transfer.Name="Transfer"
+transfer.Size=UDim2.fromScale(1,1)
+transfer.BorderSizePixel=0
+transfer.BackgroundColor3=Color3.fromRGB(5,8,10)
+transfer.Parent=arrival
+local transferText=Instance.new("TextLabel")
+transferText.AnchorPoint=Vector2.new(.5,1)
+transferText.Position=UDim2.fromScale(.5,.91)
+transferText.Size=UDim2.new(1,0,0,35)
+transferText.BackgroundTransparency=1
+transferText.Font=Enum.Font.Code
+transferText.TextColor3=Color3.fromRGB(205,213,211)
+transferText.TextSize=15
+transferText.Text=""
+transferText.Parent=transfer
 local instruments=require(script.Parent:WaitForChild("DiveClientInstruments"))(screen)
 local optics=require(script.Parent:WaitForChild("DiveClientOptics"))(net,screen)
 local exterior=require(script.Parent:WaitForChild("DiveExteriorClient"))
@@ -27,8 +49,9 @@ local cinematics
 local breach
 local promptEligible=false
 local showDiveNotices=false
+local intakeId=nil
 local function dockControls()
-    local sequence=cinematics and cinematics:isPlaying()
+    local sequence=intakeId~=nil or (cinematics and cinematics:isPlaying())
     local patching=breach and breach:isActive()
     player.CameraMode=if mode=="Dive" then Enum.CameraMode.LockFirstPerson else Enum.CameraMode.Classic
     screen.IgnoreGuiInset=mode~="Dive"
@@ -51,11 +74,46 @@ local function send(action,arg)
 end
 breach=require(script.Parent:WaitForChild("DiveBreachClient")).new(screen,send,dockControls)
 terminal=require(script.Parent:WaitForChild("DiveClientTerminal"))(screen,send)
+terminal.show(false)
+local function beginIntake(id)
+    intakeId=id
+    terminal.show(false)
+    screen.Enabled=false
+    transfer.BackgroundTransparency=0
+    transferText.Text=""
+    arrival.Enabled=true
+    dockControls()
+    task.spawn(function()
+        while intakeId==id do
+            local character=player.Character
+            local root=character and character:FindFirstChild("HumanoidRootPart")
+            if game:IsLoaded() and workspace.CurrentCamera and root and root:FindFirstChild("DiveWakeHold")
+                and character:FindFirstChildOfClass("Humanoid") and character:FindFirstChild("Head") then break end
+            RunService.Heartbeat:Wait()
+        end
+        if intakeId~=id then return end
+        input:FireServer("IntakeStarted",id)
+        cinematics:play({kind="Intake",onComplete=function()
+            if intakeId~=id then return end
+            transfer.BackgroundTransparency=1
+            transferText.Text="Waiting for crew"
+            arrival.Enabled=true
+            input:FireServer("IntakeFinished",id)
+        end})
+        if intakeId==id then arrival.Enabled=false end
+    end)
+end
+local feedback=require(script.Parent:WaitForChild("DiveClientFeedback"))(screen,function()
+    return intakeId~=nil or cinematics:isPlaying() or viewing or breach:isActive()
+end)
 local world=workspace:WaitForChild("Thalassa",12)
 local outlines=Instance.new("Folder")
 outlines.Name="LocalInteractionOutlines"
 outlines.Parent=workspace
 local interactions={}
+-- One Highlight per adorned part: a disabled second Highlight on the same part hides the enabled one
+-- (Repair and Patch both outline the section's Pressure plate).
+local outlineFor={}
 local outside=nil
 local equipped
 local aimingGui=Instance.new("ScreenGui")
@@ -95,15 +153,21 @@ local function registerPrompt(prompt)
     end
     local color=if action=="Artifact" or action=="Return" then Color3.fromRGB(246,196,98)
         elseif outsideOnly then Color3.fromRGB(123,237,225) else Color3.fromRGB(155,221,220)
-    local outline=Instance.new("Highlight")
-    outline.Name="InteractionOutline"
-    outline.Adornee=target
-    outline.DepthMode=Enum.HighlightDepthMode.Occluded
-    outline.Enabled=false
-    outline.FillColor,outline.OutlineColor=color,color
-    outline.FillTransparency,outline.OutlineTransparency=.93,.19
-    outline.Parent=outlines
-    local point={base=base,target=target,distance=prompt.MaxActivationDistance,outside=outsideOnly,outline=outline}
+    local shared=outlineFor[target]
+    if not shared then
+        local outline=Instance.new("Highlight")
+        outline.Name="InteractionOutline"
+        outline.Adornee=target
+        outline.DepthMode=Enum.HighlightDepthMode.Occluded
+        outline.Enabled=false
+        outline.FillColor,outline.OutlineColor=color,color
+        outline.FillTransparency,outline.OutlineTransparency=.93,.19
+        outline.Parent=outlines
+        shared={outline=outline,color=color,users=0}
+        outlineFor[target]=shared
+    end
+    shared.users+=1
+    local point={base=base,target=target,distance=prompt.MaxActivationDistance,outside=outsideOnly,shared=shared,action=action}
     interactions[prompt]=point
     filterPrompt(prompt,point)
 end
@@ -117,8 +181,12 @@ if world then
     world.DescendantRemoving:Connect(function(object)
         local point=interactions[object]
         if not point then return end
-        point.outline:Destroy()
         interactions[object]=nil
+        point.shared.users-=1
+        if point.shared.users<=0 then
+            point.shared.outline:Destroy()
+            outlineFor[point.target]=nil
+        end
     end)
 end
 local function applyOutside(value)
@@ -140,9 +208,16 @@ RunService.Heartbeat:Connect(function()
     local canHighlight=PromptService.Enabled and root~=nil and camera~=nil
     aimingGui.Enabled=canHighlight and outside==false and equipped~=nil
     if canHighlight then ray.FilterDescendantsInstances={character} end
+    local pulse=.5+.5*math.sin(now*6)
+    local wanted={}
     for prompt,point in pairs(interactions) do
         local visible=false
-        if canHighlight and prompt.Enabled and point.outside==outside then
+        local live=canHighlight and prompt.Enabled and point.outside==outside
+        -- Required prompts (feedback.required) show through walls in amber until the job is done.
+        local must=live and feedback.required[point.action]==true
+        if must then
+            visible=true
+        elseif live then
             local parent=prompt.Parent
             local position=if parent:IsA("Attachment") then parent.WorldPosition else point.base.Position
             local maxDistance=if outside then math.min(23,point.distance*2.6) else point.distance+2.5
@@ -153,7 +228,22 @@ RunService.Heartbeat:Connect(function()
                     or (hit.Position-position).Magnitude<.65
             end
         end
-        if point.outline.Enabled~=visible then point.outline.Enabled=visible end
+        local w=wanted[point.shared] or {}
+        wanted[point.shared]=w
+        w.must=w.must or must
+        w.visible=w.visible or visible
+    end
+    for shared,w in wanted do
+        local outline,must=shared.outline,w.must==true
+        if shared.required~=must then
+            shared.required=must
+            local color=if must then Color3.fromRGB(255,176,74) else shared.color
+            outline.DepthMode=if must then Enum.HighlightDepthMode.AlwaysOnTop else Enum.HighlightDepthMode.Occluded
+            outline.FillColor,outline.OutlineColor=color,color
+            outline.FillTransparency,outline.OutlineTransparency=.93,if must then 0 else .19
+        end
+        if must then outline.FillTransparency=.62+.3*pulse end
+        if outline.Enabled~=w.visible then outline.Enabled=w.visible end
     end
 end)
 local toolConnection
@@ -197,19 +287,38 @@ feed.OnClientEvent:Connect(function(kind,payload)
             instruments.reset()
             optics.reset()
             exterior.reset()
-            terminal.lobby(payload)
+            if payload.receiving then
+                terminal.show(false)
+                transfer.BackgroundTransparency=0
+                transferText.Text="Waiting for crew"
+                arrival.Enabled=true
+            else
+                arrival.Enabled=false
+                terminal.lobby(payload)
+            end
+            feedback.reset()
             PromptService.Enabled=false
         end
     elseif kind=="Dive" and type(payload)=="table" then
-        if payload.phase=="Results" or payload.phase=="Lobby" or mode=="Results" then return end
+        if payload.phase=="Results" or payload.phase=="Lobby" or (mode=="Results" and not payload.intakeId) then return end
         received=true
         showDiveNotices=payload.difficulty=="Easy"
         if mode~="Dive" then
             mode="Dive"
             instruments.clearNotice()
             terminal.show(false)
-            cinematics:play({kind="Wake",duration=2.7})
         end
+        if payload.intakeId then
+            if intakeId~=payload.intakeId then beginIntake(payload.intakeId) end
+            return
+        end
+        if intakeId then
+            intakeId=nil
+            cinematics:reset()
+        end
+        arrival.Enabled=false
+        screen.Enabled=true
+        feedback.update(payload)
         applyOutside(payload.outside==true)
         local camera=payload.cameraView==true and payload.alive~=false and not payload.outside and not payload.systemsOffline
         viewing=camera
@@ -222,6 +331,7 @@ feed.OnClientEvent:Connect(function(kind,payload)
     elseif kind=="Cinematic" and mode=="Dive" and type(payload)=="table" then
         viewing=false
         breach:reset()
+        feedback.stopArms()
         optics.reset()
         if payload.kind=="Angler" or payload.kind=="Squid" or payload.kind=="Flood" then
             exterior.reset()
@@ -232,6 +342,10 @@ feed.OnClientEvent:Connect(function(kind,payload)
     elseif kind=="Results" and type(payload)=="table" then
         received=true
         mode="Results"
+        intakeId=nil
+        arrival.Enabled=false
+        screen.Enabled=true
+        feedback.reset()
         breach:reset()
         cinematics:reset()
         viewing=false

@@ -56,7 +56,7 @@ local function view(plr,rooms)
 		lobbyId=group.id,lobbies=rooms or lobbyDirectory(),capacity=group.capacity,locked=group.password~=nil,
 		money=money,equipped=equipped,traits=traits,spinCost=Profiles.spinCost,spinResult=spinResult,
 		deploying=group.deploying==true,studio=studio,reserved=game.PrivateServerId~="",
-		busy=busy(plr),loading=not Profiles.ready(plr),
+		busy=busy(plr),loading=not Profiles.ready(plr),receiving=receiving,
 	})
 end
 function L.refresh()

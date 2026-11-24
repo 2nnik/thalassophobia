@@ -5,6 +5,7 @@ local Lighting = game:GetService("Lighting")
 local SoundService = game:GetService("SoundService")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
+local PrisonScene = require(script.Parent:WaitForChild("DivePrisonScene"))
 
 local player = Players.LocalPlayer
 local Cinematics = {}
@@ -15,7 +16,7 @@ local smooth = function(a)
 	return a * a * (3 - 2 * a)
 end
 
-local durations = {Wake=2.7,WormGrab=8,WormRescue=.85,WormDeath=2.8,Flood=15,Angler=8,Squid=13}
+local durations = {Intake=20,Wake=2.7,WormGrab=8,WormRescue=.85,WormDeath=2.8,Flood=15,Angler=8,Squid=13}
 local terminal = {Flood=true,Angler=true,Squid=true,WormDeath=true}
 local hullNames = {"Bell • KESTREL 04","Pressure hull • Survey refit","Stations","BarnacleSites","Dive stage"}
 
@@ -470,6 +471,11 @@ function Cinematics.new(gui,onOwnershipChanged)
 	local shade=make("Frame",ui,{Name="Light exposure",Size=UDim2.fromScale(1,1),BorderSizePixel=0,
 		BackgroundColor3=Color3.new(),BackgroundTransparency=1})
 	local grade=make("ColorCorrectionEffect",Lighting,{Name="DiveIncidentGrade",Enabled=false})
+	local dialogue=make("TextLabel",ui,{Name="General dialogue",AnchorPoint=Vector2.new(.5,1),
+		Position=UDim2.fromScale(.5,.87),Size=UDim2.fromScale(.84,.08),Text="He will do",
+		Font=Enum.Font.GothamMedium,TextColor3=rgb(246,241,224),TextStrokeTransparency=.15,
+		BackgroundTransparency=1,TextScaled=true,Visible=false,ZIndex=3})
+	make("UITextSizeConstraint",dialogue,{MinTextSize=15,MaxTextSize=25})
 	local instructions=make("TextLabel",ui,{Name="Escape controls",AnchorPoint=Vector2.new(.5,1),
 		Position=UDim2.new(.5,0,.94,0),Size=UDim2.new(.95,0,0,26),Font=Enum.Font.GothamMedium,
 		TextSize=14,TextColor3=rgb(212,239,240),TextStrokeTransparency=.42,BackgroundTransparency=1,Visible=false})
@@ -481,6 +487,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 		if not old then return end
 		scene=nil
 		RunService:UnbindFromRenderStep(renderName)
+		if old.openingHeartbeat then old.openingHeartbeat:Disconnect() end
 		for p,value in old.hidden do
 			if p.Parent then p.LocalTransparencyModifier=value end
 		end
@@ -492,6 +499,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 		end
 		if old.mouseBehavior then Input.MouseBehavior=old.mouseBehavior end
 		instructions.Visible=false
+		dialogue.Visible=false
 		grade.Enabled=false
 		shade.BackgroundTransparency=1
 		local camera=workspace.CurrentCamera
@@ -511,6 +519,52 @@ function Cinematics.new(gui,onOwnershipChanged)
 		return cue
 	end
 
+	local function startIntake(current)
+		current.stage=PrisonScene.new(current.folder,armColor())
+		local function at(seconds,callback)
+			task.delay(seconds,function()
+				if scene==current then callback() end
+			end)
+		end
+		local room=sound(current.folder,"action_falling.ogg",.34,.11)
+		room.Looped=true
+		local function foley(seconds,asset,speed,volume)
+			at(seconds,function() sound(current.folder,asset,speed,volume) end)
+		end
+		foley(.8,"action_jump_land.mp3",1.42,.34)
+		foley(1.1,"action_get_up.mp3",.54,.3)
+		foley(2.6,"action_jump_land.mp3",.82,.37)
+		foley(3.35,"action_jump_land.mp3",1.02,.26)
+		foley(4.05,"action_jump_land.mp3",.9,.29)
+		foley(5.55,"action_jump_land.mp3",.61,.58)
+		foley(12.45,"action_get_up.mp3",.91,.27)
+		foley(14.4,"action_jump_land.mp3",1.31,.23)
+		foley(16.05,"action_swim.mp3",1.8,.17)
+		foley(16.65,"action_get_up.mp3",1.1,.29)
+		foley(17.25,"action_get_up.mp3",.76,.18)
+		local voice=make("AudioTextToSpeech",current.folder,{Name="General",Text=dialogue.Text,
+			AutoLocalize=false,VoiceId="1",Pitch=-2,Speed=.9,Volume=.92})
+		local output=make("AudioDeviceOutput",current.folder,{Name="Prison dialogue"})
+		make("Wire",current.folder,{SourceInstance=voice,TargetInstance=output})
+		-- Load off the camera thread. The subtitle has its own timing even if speech is unavailable.
+		task.spawn(function() pcall(function() voice:LoadAsync() end) end)
+		at(9,function()
+			dialogue.Visible=true
+			if voice.IsLoaded then voice:Play() end
+		end)
+		at(11.8,function() dialogue.Visible=false end)
+	end
+
+	local function finishOpening(current)
+		if scene~=current then return end
+		if current.kind=="Intake" then
+			self:play({kind="Wake",onComplete=current.onComplete})
+		else
+			release()
+			if current.onComplete then current.onComplete() end
+		end
+	end
+
 	local function render(current,dt)
 		local camera=workspace.CurrentCamera
 		if not camera or current~=scene then return end
@@ -518,6 +572,10 @@ function Cinematics.new(gui,onOwnershipChanged)
 		local p=math.clamp(seconds/current.duration,0,1)
 		local kind=current.kind
 		if p>=1 then
+			if kind=="Intake" or kind=="Wake" then
+				finishOpening(current)
+				return
+			end
 			if terminal[kind] and kind~="WormDeath" then
 				-- Wait on black until the authoritative result arrives.
 				shade.BackgroundTransparency=0
@@ -545,7 +603,13 @@ function Cinematics.new(gui,onOwnershipChanged)
 			for _,lamp in current.emergency do lamp.Brightness=(.2+2.5*pulse)*(1-smooth((p-.20)/.16)) end
 		end
 
-		if kind=="Wake" then
+		if kind=="Intake" then
+			view,current.sceneFov=current.stage:sample(seconds)
+			local blackout=smooth((seconds-18)/1.65)
+			opacity=math.max(1-smooth(seconds/.55),blackout)
+			grade.Saturation=-.22-.52*blackout
+			grade.Contrast=.08
+		elseif kind=="Wake" then
 			hideAvatar(current)
 			local rise=smooth((p-.14)/.74)
 			local floorHeight=if root then root.Position.Y-1.95 else start.Position.Y-2.9
@@ -718,7 +782,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 		shade.BackgroundTransparency=1-opacity
 		camera.CFrame=view
 		camera.Focus=view*CFrame.new(0,0,-13)
-		camera.FieldOfView=current.fov+(if kind=="Wake" then 7*(1-smooth(p)) elseif kind=="Squid" then 11*p else 0)
+		camera.FieldOfView=current.sceneFov or current.fov+(if kind=="Wake" then 7*(1-smooth(p)) elseif kind=="Squid" then 11*p else 0)
 	end
 
 	function self:play(payload)
@@ -736,7 +800,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 		local heading=Vector3.new(look.X,0,look.Z)
 		local current={
 			kind=kind,duration=math.max(.25,tonumber(payload.duration) or durations[kind]),started=os.clock(),
-			cameraType=previousType,fov=previousFov,cameraFrame=frame,heading=if heading.Magnitude>.001 then heading.Unit else -Vector3.zAxis,
+			cameraType=previousType,fov=previousFov,onComplete=payload.onComplete,cameraFrame=frame,heading=if heading.Magnitude>.001 then heading.Unit else -Vector3.zAxis,
 			folder=make("Folder",workspace,{Name="LocalDiveIncident"}),hidden={},
 			target=if typeof(payload.position)=="Vector3" then payload.position else nil,
 		}
@@ -744,6 +808,11 @@ function Cinematics.new(gui,onOwnershipChanged)
 			current.started-=math.clamp(workspace:GetServerTimeNow()-payload.startedAt,0,.5)
 		end
 		scene=current
+		if kind=="Intake" then
+			shade.BackgroundTransparency=0
+			startIntake(current)
+			current.started=os.clock()
+		end
 		local world=workspace:FindFirstChild("Thalassa")
 		if kind=="Squid" or kind=="Flood" then
 			cloneHull(current,world)
@@ -816,13 +885,23 @@ function Cinematics.new(gui,onOwnershipChanged)
 		elseif kind=="WormRescue" then current.audio=sound(SoundService,"action_swim.mp3",1.1,.22) end
 		camera.CameraType=Enum.CameraType.Scriptable
 		if onOwnershipChanged then onOwnershipChanged(true) end
-		if kind=="Wake" then
+		if kind=="Wake" or kind=="Intake" then
 			shade.BackgroundTransparency=0
-			task.delay(current.duration,function()
-				if scene==current then release() end
+			render(current,0)
+			current.lastFrame=os.clock()
+			current.openingHeartbeat=RunService.Heartbeat:Connect(function(dt)
+				-- Studio and backgrounded clients can suspend render callbacks during a transfer.
+				if os.clock()-current.lastFrame>.1 then
+					current.lastFrame=os.clock()
+					render(current,dt)
+				end
 			end)
+			task.delay(current.duration,function() finishOpening(current) end)
 		end
-		RunService:BindToRenderStep(renderName,Enum.RenderPriority.Camera.Value+7,function(dt) render(current,dt) end)
+		RunService:BindToRenderStep(renderName,Enum.RenderPriority.Camera.Value+7,function(dt)
+			current.lastFrame=os.clock()
+			render(current,dt)
+		end)
 	end
 
 	function self:reset() release() end
