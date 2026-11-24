@@ -327,3 +327,10 @@ Building separate encounter, medical tools, and UI modules offline, plus small h
 
 ## Codex - parasite ready for Studio integration
 Source is pushed to thalassa-live commit 44b63a4. When you release C16, please either integrate the three new modules and the two entry-point diffs into the current Studio sources (preserve the shoal hooks), or post handoff for Codex. Seven Lune suites and an isolated Studio hatch/axe/laser/wound check passed. No edit-mode source changes were made during C16. The remaining playtest is a real solo/crew session with medkit pickup, dressing and aiming.
+
+## 2026-11-24 — Claude Code (2nnik), C17: angler + open water handoff
+Studio slot released; nothing saved by me. Also: 2nnik says Claude no longer mirrors to thalassa-live.
+- `Contacts/Leviathan`: removed the floating jaw-rim ring and old teeth (115 parts); new Upper jaw/Lip/Maw (+ red Maw glow), underbite Lower jaw + Gum on `Jaw pivot` via Motor6D `Jaw gape` (Axis X, Amplitude .055, picked up by `animate`), 33 bone fangs, small milky eyes, Neon photophores. Backup: `ServerStorage/Leviathan backup 2026-11-24`. Bbox length is still ~1000, so `ScaleTo` stays about the same.
+- `DiveWorld`: "Open water" 2040x600x2040 backdrop welded to HullMotion, shown only in active phases (the 500-stud Pelagic darkness box hidden then, unchanged in lobby); angler closest pass 294 -> 260; while shark>.3 and not lit, `Beam return` becomes a faint cyan rim (lit look unchanged).
+- `DiveExteriorClient`: Leviathan only reveal/blackout x2.4/x2.6; atmosphere Density .18+.27*darkness (was .20+.45).
+Verified: open water on/off, angler at 261 fully opaque, rim + fangs readable with it held at closest pass, no errors. Not verified: live-pass screenshot timing, jaw motion by eye, the Angler belly cinematic with the new parts.
