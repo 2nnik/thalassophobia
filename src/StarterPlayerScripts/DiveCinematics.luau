@@ -2,11 +2,11 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
-local ContentProvider = game:GetService("ContentProvider")
 local SoundService = game:GetService("SoundService")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local PrisonScene = require(script.Parent:WaitForChild("DivePrisonScene"))
+local IntakeAudio = require(script.Parent:WaitForChild("DiveIntakeAudio"))
 
 local player = Players.LocalPlayer
 local Cinematics = {}
@@ -467,6 +467,7 @@ local function spreadApproachArms(scene,actor,view,seconds,alpha,grab)
 end
 
 function Cinematics.new(gui,onOwnershipChanged)
+	IntakeAudio.preload()
 	local self={}
 	local ui=make("ScreenGui",gui.Parent,{Name="DiveCinematics",IgnoreGuiInset=true,ResetOnSpawn=false,DisplayOrder=gui.DisplayOrder+40})
 	local shade=make("Frame",ui,{Name="Light exposure",Size=UDim2.fromScale(1,1),BorderSizePixel=0,
@@ -525,38 +526,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 		current.intakeExposure=Lighting.ExposureCompensation
 		Lighting.ExposureCompensation=-1.25
 		current.stage=PrisonScene.new(current.folder,armColor())
-		local function at(seconds,callback)
-			task.delay(seconds,function()
-				if scene==current then callback() end
-			end)
-		end
-		local room=sound(current.folder,"action_falling.ogg",.34,.11)
-		room.Looped=true
-		local function foley(seconds,asset,speed,volume)
-			at(seconds,function() sound(current.folder,asset,speed,volume) end)
-		end
-		foley(.8,"action_jump_land.mp3",1.42,.34)
-		foley(1.1,"action_get_up.mp3",.54,.3)
-		foley(2.6,"action_jump_land.mp3",.82,.37)
-		foley(3.35,"action_jump_land.mp3",1.02,.26)
-		foley(4.05,"action_jump_land.mp3",.9,.29)
-		foley(5.55,"action_jump_land.mp3",.61,.58)
-		foley(12.45,"action_get_up.mp3",.91,.27)
-		foley(14.4,"action_jump_land.mp3",1.31,.23)
-		foley(16.05,"action_swim.mp3",1.8,.17)
-		foley(16.65,"action_get_up.mp3",1.1,.29)
-		foley(17.25,"action_get_up.mp3",.76,.18)
-		local asset=PrisonScene.dialogueAsset
-		if asset then
-			local voice=make("Sound",current.folder,{Name="General recording",SoundId="rbxassetid://"..asset,Volume=.95})
-			current.voice=voice
-			task.spawn(function() pcall(function() ContentProvider:PreloadAsync({voice}) end) end)
-		end
-		at(9,function()
-			dialogue.Visible=true
-			if current.voice then current.voice:Play() end
-		end)
-		at(13.5,function() dialogue.Visible=false end)
+		current.intakeAudio=IntakeAudio.new(current.folder,current.stage)
 	end
 
 	local function finishOpening(current)
@@ -608,13 +578,16 @@ function Cinematics.new(gui,onOwnershipChanged)
 		end
 
 		if kind=="Intake" then
-			view,current.sceneFov=current.stage:sample(seconds,current.voice and current.voice.PlaybackLoudness)
-			local blackout=smooth((seconds-18)/1.65)
+			local speech,voiceTime,showSubtitle=current.intakeAudio(seconds)
+			dialogue.Visible=showSubtitle
+			view,current.sceneFov=current.stage:sample(seconds,speech,voiceTime)
+			local blackout=smooth((seconds-PrisonScene.beats.slump)/1.65)
 			opacity=math.max(1-smooth(seconds/.55),blackout)
 			grade.Saturation=-.22-.52*blackout
 			grade.Contrast=.08
 		elseif kind=="Wake" then
 			hideAvatar(current)
+			current.wakeAudio(seconds)
 			local rise=smooth((p-.14)/.74)
 			local floorHeight=if root then root.Position.Y-1.95 else start.Position.Y-2.9
 			local eye=Vector3.new(livePosition.X,floorHeight+.45+rise*2.81,livePosition.Z)-heading*(.36*(1-rise))
@@ -880,6 +853,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 			current.water.Transparency=1
 		elseif kind=="Wake" then
 			hideAvatar(current)
+			current.wakeAudio=IntakeAudio.wake(current.folder)
 			current.hands={}
 			for i=1,2 do current.hands[i]=ellipse(part(current.folder,"Bracing forearm",armColor())) end
 		end

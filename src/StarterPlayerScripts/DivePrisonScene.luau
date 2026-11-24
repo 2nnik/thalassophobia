@@ -1,6 +1,11 @@
 -- Local first-person staging. The caller owns the parent and destroys it after blackout.
 local PrisonScene = {}
 PrisonScene.dialogueAsset = script:GetAttribute("DialogueAudioAssetId") or 79801240323942
+local beats = {
+	latch=.43, gateStop=2.18, shove=2.62, knees=5.78, hand=5.96,
+	voice=8.62, order=12.40, grip=13.28, injector=14.46, contact=16.32, slump=18.08,
+}
+PrisonScene.beats = beats
 local V, CF, rgb = Vector3.new, CFrame.new, Color3.fromRGB
 local M = Enum.Material
 local origin = V(6100, 160, 5400)
@@ -342,12 +347,12 @@ local shots = {
 	{2.95, V(-.14,4.11,4.42), V(-.34,1.65,1.2), -6, 77},
 	{4.0, V(.28,4.26,1.17), V(2.33,3.86,-15), 4, 82},
 	{5.3, V(.02,4.02,-2.55), V(.05,2.15,-7.45), -2, 72},
-	{5.83, V(-.18,2.08,-3.55), V(-.17,.08,-5.35), -5, 74},
-	{6.25, V(-.12,2.43,-3.71), V(-.05,.18,-5.98), 2, 70},
-	{7.04, V(-.10,2.34,-3.72), V(-.03,.24,-6.1), 0, 69},
-	{8.8, V(-.06,2.40,-3.77), V(.02,4.21,-8.6), 0, 68},
-	{11.7, V(-.03,2.42,-3.8), V(.02,4.24,-8.47), 0, 68},
-	{13.15, V(-.16,2.22,-3.67), V(-1.25,2.13,-5.22), -6, 68},
+	{beats.knees, V(-.18,2.08,-3.55), V(-.17,.08,-5.35), -7, 74},
+	{6.14, V(-.12,2.37,-3.71), V(-.05,.18,-5.98), 2, 70},
+	{6.85, V(-.10,2.34,-3.72), V(-.03,.24,-6.1), 0, 69},
+	{8.55, V(-.06,2.40,-3.77), V(.02,4.21,-8.6), 0, 66},
+	{12.53, V(-.03,2.42,-3.8), V(.02,4.24,-8.47), 0, 66},
+	{13.89, V(-.16,2.22,-3.67), V(-1.25,2.13,-5.22), -6, 68},
 	{14.72, V(.02,2.22,-3.65), V(.78,1.7,-4.75), 3, 66},
 	{16.5, V(.02,2.22,-3.65), V(.71,1.56,-4.78), 2, 64},
 	{18.1, V(.01,2.27,-3.61), V(.85,2.38,-5.52), 4, 70},
@@ -363,8 +368,9 @@ local function cameraPose(t)
 	local position, target = a[2]:Lerp(b[2],u),a[3]:Lerp(b[3],u)
 	local struggle = ease(t,16.1,16.52)*(1-ease(t,17.4,18.15))
 	local breath = .021*math.sin(t*2.2)
+	local impact=math.max(0,1-math.abs(t-beats.knees)/.11)
 	position += V(.065*struggle*math.sin(t*15),breath+.05*struggle*math.sin(t*18),0)
-	target += V(.22*struggle*math.sin(t*13),breath,0)
+	target += V(.22*struggle*math.sin(t*13),breath-.22*impact,0)
 	local roll = a[4]+(b[4]-a[4])*u+struggle*2.0*math.sin(t*15)
 	return CFrame.lookAt(origin+position,origin+target)*CFrame.Angles(0,0,math.rad(roll)),a[5]+(b[5]-a[5])*u,position
 end
@@ -396,19 +402,31 @@ function PrisonScene.new(parent, skinColor)
 	instrument("Thumb stop",.35,.24,.08,dark,M.Metal)
 
 	local mouth = general.head:FindFirstChildOfClass("FaceControls")
-	local function sample(_, t, speech)
+	local function sample(_, t, speech, voiceTime)
 		local camera, fov, position = cameraPose(t)
 		local base = origin+V(position.X,0,position.Z)
 		local shoved = ease(t,2.38,2.84)*(1-ease(t,3.53,4.14))
 		local kneel = ease(t,5.27,5.85)
-		local held = ease(t,11.66,14.0)
+		local held = ease(t,beats.order+.32,14.32)
 		local fight = ease(t,15.95,16.46)*(1-ease(t,17.53,18.18))
 		local slump = ease(t,18,20)
-		gate:PivotTo(CF(origin+V(5.82*ease(t,.46,2.18),0,2)))
+		gate:PivotTo(CF(origin+V(5.82*ease(t,beats.latch+.07,beats.gateStop),0,2)))
 		local officerAt = origin+V(.08,0,-8.82+.37*ease(t,7.5,8.83))
-		local generalFrame = CFrame.lookAt(officerAt,officerAt+Vector3.zAxis)
-		animateOfficer(general,generalFrame,0,0,-.06-.095*ease(t,8.28,9.22)+.055*ease(t,10,10.65))
-		if mouth then mouth.JawDrop=math.clamp((speech or 0)/420,0,.75) end
+		local spokenAt=voiceTime or math.max(0,t-beats.voice)
+		local appraisal=ease(spokenAt,.84,1.2)*(1-ease(spokenAt,1.54,2.06))
+		local phrase=ease(spokenAt,2.67,3.18)*(1-ease(spokenAt,3.53,3.8))
+		local order=ease(t,beats.order,beats.order+.40)*(1-ease(t,13.32,14.13))
+		local generalFrame = CFrame.lookAt(officerAt,officerAt+V(.46*order,0,1))
+		animateOfficer(general,generalFrame,0,0,-.075-.12*appraisal-.09*phrase+.12*order,
+			function(side,rest)
+				if side~=1 then return rest end
+				return rest:Lerp(generalFrame:PointToWorldSpace(V(1.15,3.12,-.48)),order)
+			end)
+		if mouth then
+			mouth.JawDrop=(speech or 0)*.78
+			mouth.LeftLowerLipDepressor=(speech or 0)*.22
+			mouth.RightLowerLipDepressor=(speech or 0)*.22
+		end
 		for index,entry in staff do
 			local position=origin+entry[2]
 			local glance=ease(t,3.1+index*.17,4.35+index*.19)*(1-ease(t,7.1+index*.22,8.7+index*.18))
@@ -433,13 +451,13 @@ function PrisonScene.new(parent, skinColor)
 			playerHands[s] = hand
 		end
 		local rightHand = playerHands[1]
-		local injection = ease(t,14.1,16.32)*(1-ease(t,17.12,18.12))
+		local injection = ease(t,14.1,beats.contact)*(1-ease(t,17.12,18.12))
 		local needleAt = rightHand+V(.64-.55*injection,.40-.33*injection,.15)
 		local axis = V(-.81,-.57,-.09).Unit
 		local instrumentCenter = needleAt-axis*.60
 		for _,s in {-1,1} do
 			local settle = ease(t,4.62,6.95)
-			local stepAside=ease(t,4.2,6.2)*(1-ease(t,11.3,13.1))
+			local stepAside=ease(t,4.2,6.2)*(1-ease(t,beats.order,beats.grip+.26))
 			local guardAt = base+V(s*(1.79+.89*stepAside-.21*held),0,-1.45+1.8*ease(t,1.82,3.03)-1.3*settle)
 			local gaze = V(-s*.90,0,-.55+.96*settle)
 			local frame = CFrame.lookAt(guardAt,guardAt+gaze)
@@ -464,7 +482,7 @@ function PrisonScene.new(parent, skinColor)
 		end
 		return camera,fov
 	end
-	local self = {sample=sample}
+	local self = {sample=sample, gate=origin+V(0,3,2), leftGuard=guards[-1].torso, rightGuard=guards[1].torso}
 	self:sample(0)
 	return self
 end
