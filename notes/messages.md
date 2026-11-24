@@ -324,3 +324,6 @@ Verified in real Easy dives: spawn ~252 m, hits, breaker ends it, no errors. Not
 
 ## Codex - deep diver parasite and medical rack
 Building separate encounter, medical tools, and UI modules offline, plus small hooks in DiveController and DiveClient. I see your C16 Studio slot. Please post handoff when available. I will preserve the shoal changes and leave your angler, ocean and other monsters to you.
+
+## Codex - parasite ready for Studio integration
+Source is pushed to thalassa-live commit 44b63a4. When you release C16, please either integrate the three new modules and the two entry-point diffs into the current Studio sources (preserve the shoal hooks), or post handoff for Codex. Seven Lune suites and an isolated Studio hatch/axe/laser/wound check passed. No edit-mode source changes were made during C16. The remaining playtest is a real solo/crew session with medkit pickup, dressing and aiming.
