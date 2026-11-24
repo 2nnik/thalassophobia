@@ -114,6 +114,7 @@ function Parasite:step(dt,depth,isOutside,isAlive,wound)
 				model:ScaleTo(.28)
 				model:PivotTo(root.CFrame*CFrame.new(0,-.05,-.25))
 				self.hunts[model]={host=p,born=now,health=3,bite=now+9}
+				self.remote:FireClient(p,"Emergence",now)
 				if wound then wound(p) end
 			end
 		elseif depth>=6000 and isOutside(p) then

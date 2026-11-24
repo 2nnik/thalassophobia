@@ -9,6 +9,7 @@ local alphabet = "XEDFGHBC"
 local gamepadKeys = {"DPadUp","DPadRight","DPadDown","DPadLeft","ButtonX","ButtonY","ButtonB","ButtonA"}
 local gamepadLabels = {"↑","→","↓","←","X","Y","B","A"}
 local binding = "KestrelLatchSequence"
+local cameraBinding = "KestrelEmergenceView"
 local off = UDim2.fromOffset
 local c = UI.c
 
@@ -35,6 +36,38 @@ function Client.start(remote,onActiveChanged)
     local row = UI.frame(card,c.sea,off(10,63),UDim2.new(1,-20,0,40),1)
     local pad = UI.frame(card,c.sea,off(10,113),UDim2.new(1,-20,0,60),1)
     local sequence, nextIndex, deadline, duration = "",1,0,1
+    local function clearView()
+        Run:UnbindFromRenderStep(cameraBinding)
+    end
+    local function ease(t)
+        t=math.clamp(t,0,1)
+        return t*t*(3-2*t)
+    end
+    local function showEmergence(startedAt)
+        if not gui.Enabled then return end
+        local initialCamera=workspace.CurrentCamera
+        local character=player.Character
+        local root=character and character:FindFirstChild("HumanoidRootPart")
+        if not root or not initialCamera or initialCamera.CameraType==Enum.CameraType.Scriptable then return end
+        local initialView=root.CFrame:ToObjectSpace(initialCamera.CFrame)
+        clearView()
+        Run:BindToRenderStep(cameraBinding,Enum.RenderPriority.Camera.Value+1,function()
+            local camera=workspace.CurrentCamera
+            local elapsed=workspace:GetServerTimeNow()-startedAt
+            if not gui.Enabled or player.Character~=character or not root.Parent or camera~=initialCamera
+                or camera.CameraType==Enum.CameraType.Scriptable or elapsed>=2.9 then
+                clearView()
+                return
+            end
+            -- Follow the avatar root, avoiding the small movements of the animated head.
+            local stable=root.CFrame*initialView
+            local target=(root.CFrame*CFrame.new(0,.1,-1.25)).Position
+            local look=CFrame.lookAt(stable.Position,target)
+            local blendIn=ease(elapsed/.65)
+            local blendOut=ease((elapsed-1.78)/1.12)
+            camera.CFrame=stable:Lerp(look,blendIn*(1-blendOut))
+        end)
+    end
     local boundKeys, letters, symbols = {},{},{}
     local function key(letter)
         if gui.Enabled and card.Visible and workspace:GetServerTimeNow() < deadline then
@@ -74,6 +107,7 @@ function Client.start(remote,onActiveChanged)
         if wasVisible and onActiveChanged then onActiveChanged() end
     end
     remote.OnClientEvent:Connect(function(kind,value,expires)
+        if kind=="Emergence" then showEmergence(value) return end
         if kind=="LatchEnd" then finish() return end
         if kind=="LatchProgress" and card.Visible then nextIndex=value repaint() return end
         if kind~="Latch" then return end
@@ -104,6 +138,7 @@ function Client.start(remote,onActiveChanged)
         if observed.Health<=0 then finish() end
     end
     local function watch(character)
+        clearView()
         finish()
         for _,connection in {activation,added,removed,healthChanged,maxChanged} do connection:Disconnect() end
         observed,tool,activation,added,removed,healthChanged,maxChanged=nil,nil,nil,nil,nil,nil,nil
@@ -147,7 +182,7 @@ function Client.start(remote,onActiveChanged)
     end)
     return {isActive=function() return card.Visible end,setDiveActive=function(_,active)
         gui.Enabled=active
-        if not active then finish() end
+        if not active then finish(); clearView() end
     end}
 end
 
