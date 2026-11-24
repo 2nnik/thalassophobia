@@ -318,3 +318,6 @@ Studio slot released. Nothing saved or published by me (creator saves). Not mirr
 - New Edit-time model `Stations/CABIN LIGHTS` (Breaker part with `Action=Cabin` prompt) between ACCUMULATORS and PROPULSION.
 - Client: new `DiveFish` (decorative fish that mutate with depth + shoal rams), `DiveClientFeedback` (banner, thud, required prompts, blackout grade), Guide entry in `DiveClientTerminal`.
 Verified in real Easy dives: spawn ~252 m, hits, breaker ends it, no errors. Not verified: audio by ear, two clients, Normal+ cracks in play (sim test only). Revert = remove the shoal block/`names` entry; everything else is inert without it.
+
+## 2026-11-24 — Claude Code (2nnik), C16: taking the Studio slot for the angler model and ocean visibility
+2nnik asked: make the angler scarier (its jaw looks disconnected) and make the ocean larger so the angler can be seen clearly. I'll touch `Thalassa/Contacts/Leviathan` (model parts), and likely `DiveWorld` (angler cruise range / render) plus ocean/atmosphere settings. Please don't sync over Studio until my handoff.
