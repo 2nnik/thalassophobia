@@ -2,6 +2,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
+local ContentProvider = game:GetService("ContentProvider")
 local SoundService = game:GetService("SoundService")
 local Input = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
@@ -542,17 +543,17 @@ function Cinematics.new(gui,onOwnershipChanged)
 		foley(16.05,"action_swim.mp3",1.8,.17)
 		foley(16.65,"action_get_up.mp3",1.1,.29)
 		foley(17.25,"action_get_up.mp3",.76,.18)
-		local voice=make("AudioTextToSpeech",current.folder,{Name="General",Text=dialogue.Text,
-			AutoLocalize=false,VoiceId="1",Pitch=-2,Speed=.9,Volume=.92})
-		local output=make("AudioDeviceOutput",current.folder,{Name="Prison dialogue"})
-		make("Wire",current.folder,{SourceInstance=voice,TargetInstance=output})
-		-- Load off the camera thread. The subtitle has its own timing even if speech is unavailable.
-		task.spawn(function() pcall(function() voice:LoadAsync() end) end)
+		local asset=PrisonScene.dialogueAsset
+		if asset then
+			local voice=make("Sound",current.folder,{Name="General recording",SoundId="rbxassetid://"..asset,Volume=.95})
+			current.voice=voice
+			task.spawn(function() pcall(function() ContentProvider:PreloadAsync({voice}) end) end)
+		end
 		at(9,function()
 			dialogue.Visible=true
-			if voice.IsLoaded then voice:Play() end
+			if current.voice then current.voice:Play() end
 		end)
-		at(11.8,function() dialogue.Visible=false end)
+		at(13.5,function() dialogue.Visible=false end)
 	end
 
 	local function finishOpening(current)
@@ -604,7 +605,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 		end
 
 		if kind=="Intake" then
-			view,current.sceneFov=current.stage:sample(seconds)
+			view,current.sceneFov=current.stage:sample(seconds,current.voice and current.voice.PlaybackLoudness)
 			local blackout=smooth((seconds-18)/1.65)
 			opacity=math.max(1-smooth(seconds/.55),blackout)
 			grade.Saturation=-.22-.52*blackout

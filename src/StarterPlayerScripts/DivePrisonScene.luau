@@ -1,5 +1,6 @@
 -- Local first-person staging. The caller owns the parent and destroys it after blackout.
 local PrisonScene = {}
+PrisonScene.dialogueAsset = script:GetAttribute("DialogueAudioAssetId")
 local V, CF, rgb = Vector3.new, CFrame.new, Color3.fromRGB
 local M = Enum.Material
 local origin = V(6100, 160, 5400)
@@ -52,42 +53,83 @@ local function holdingBlock(parent)
 	local function build(name, x,y,z, w,h,d, color, material)
 		return piece(parent, name, V(w,h,d), base*CF(x,y,z), color, material)
 	end
-	build("Poured deck", 0,-.26,0, 17,.5,28, concrete,M.Concrete)
-	build("Ceiling", 0,8.65,0, 17,.5,28, concrete,M.Concrete)
+	build("Cell deck",0,-.26,7.9,17,.5,12,concrete,M.Concrete)
+	build("Cell ceiling",0,8.65,7.9,17,.5,12,concrete,M.Concrete)
+	build("Command deck",0,-.27,-17,44,.5,38,concrete,M.Concrete)
+	build("Command ceiling",0,16.4,-17,44,.5,38,dark,M.Metal)
 	for _,side in {-1,1} do
-		build("Retaining wall", side*8.2,4.25,0, .5,8.5,28, concrete,M.Concrete)
-		build("Painted lower wall", side*7.92,1.5,0, .13,3,28, tile,M.Metal)
-		build("Chair rail", side*7.8,3.08,0, .18,.09,28, trim,M.Metal)
+		build("Retaining wall",side*8.2,4.25,7.9,.5,8.5,12,concrete,M.Concrete)
+		build("Painted lower wall",side*7.92,1.5,7.9,.13,3,12,tile,M.Metal)
+		build("Chair rail",side*7.8,3.08,7.9,.18,.09,12,trim,M.Metal)
 		build("Cell front", side*5.5,3.95,2, 5.05,7.9,.48, concrete,M.Concrete)
 		build("Door jamb", side*2.89,3.9,2, .26,7.8,.68, steel,M.Metal)
-		build("Transfer lane", side*2.32,.006,-4.25, .085,.018,12, brass,M.SmoothPlastic)
-		build("Cable trunk", side*7.6,7.7,0, .24,.24,26, trim,M.Metal)
-		for _,z in {-9,-4,2,7,12} do
+		build("Transfer lane",side*2.32,.006,-5.5,.085,.018,14,brass,M.SmoothPlastic)
+		build("Command wall",side*21.7,8.1,-17,.55,16.2,38,dark,M.Metal)
+		build("Command wall rail",side*21.34,3.2,-17,.18,.17,38,trim,M.Metal)
+		build("Rear bulkhead",side*15,8.1,1.9,13.5,16.2,.6,steel,M.Metal)
+		for _,z in {7,12} do
 			build("Wall pier", side*7.73,4,z, .5,8,.32, steel,M.Metal)
+		end
+		for _,z in {-6,-14,-22,-30} do
+			build("Command rib",side*20.8,7.9,z,1.4,15.8,.7,steel,M.Metal)
+			local strip=build("Aisle strip",side*14,.014,z,.11,.018,5,rgb(86,150,147),M.Neon)
+			light(strip,rgb(102,211,204),.45,9)
 		end
 	end
 	build("Cell rear", 0,4.2,13.8, 16.5,8.4,.5, concrete,M.Concrete)
-	build("Intake wall", 0,4.2,-13.7, 16.5,8.4,.5, concrete,M.Concrete)
+	build("Command rear bulkhead",0,8.1,-35.7,44,16.2,.6,dark,M.Metal)
+	build("Door overhead wall",0,12.3,1.9,17,8,.6,steel,M.Metal)
 	build("Lintel", 0,7.85,2, 6.3,.55,.74, steel,M.Metal)
 	build("Bunk frame", -5.39,1.45,7.9, 2.7,.26,5.7, steel,M.Metal)
 	build("Thin mattress", -5.39,1.72,7.9, 2.64,.27,5.6, rgb(94,112,104),M.Fabric)
 	build("Pillow", -5.39,1.99,9.9, 2.38,.28,1.15, bone,M.Fabric)
-	build("Intake window frame", 0,4.2,-13.38, 8.4,2.8,.24, steel,M.Metal)
-	build("Smoked glass", 0,4.2,-13.22, 8.02,2.45,.1, rgb(35,57,58),M.Glass)
-	for i=-2,2 do build("Window mullion", i*1.48,4.2,-13.12, .075,2.4,.09, trim,M.Metal) end
-	local sign = build("Intake sign", 0,6.61,-13.33, 7.45,.85,.18, tile,M.Metal)
-	stencil(sign, "INTAKE   /   TRANSFER", bone)
+	build("Command riser",0,.31,-24.4,30,.6,18,steel,M.DiamondPlate)
+	build("Forward operations display",0,7.8,-34.9,29,9,.4,rgb(22,54,60),M.SmoothPlastic)
+	local sign=build("Command designation",0,12.75,-34.59,28,1.35,.13,tile,M.Metal)
+	stencil(sign,"KESTREL OPERATIONS",bone)
+	for i=-5,5 do
+		build("Plot grid",i*2.22,7.8,-34.55,.027,7.85,.06,rgb(44,89,94),M.Neon)
+	end
+	for i=-3,3 do
+		build("Plot grid",0,7.8+i*1.12,-34.55,25,.022,.06,rgb(44,89,94),M.Neon)
+	end
+	local plot=build("Dive profile",0,8.25,-34.43,20,4,.04,rgb(34,66,71),M.SmoothPlastic)
+	plot.Transparency=1
+	stencil(plot,"KESTREL 04   /   TRENCH DESCENT",rgb(154,218,207))
+	for _,z in {-5,-16,-28} do
+		build("Ceiling crossbeam",0,15.3,z,44,.55,.85,steel,M.Metal)
+		for _,x in {-11,0,11} do
+			local bulb=build("Command light",x,14.86,z,6.6,.12,.29,bone,M.Neon)
+			light(bulb,rgb(182,224,215),2.2,24)
+		end
+	end
+	for _,side in {-1,1} do
+		for row,z in {-10.8,-18.2,-26.4} do
+			local x=side*(if row==1 then 7.7 else 10.1)
+			local y=if row==3 then .6 else 0
+			build("Station pedestal",x,y+1.22,z,4.3,2.44,1.9,steel,M.Metal)
+			build("Desk edge",x,y+2.47,z,5.1,.16,2.65,trim,M.Metal)
+			local display=build("Station display",x,y+3.36,z-.67,4.25,1.45,.23,tile,M.Metal)
+			stencil(display,({"COMMS","SONAR","NAVIGATION"})[row],rgb(150,221,204))
+			light(display,rgb(58,167,156),.62,10)
+			for lamp=1,6 do
+				build("Station indicators",x-1.8+lamp*.49,y+2.57,z+.55,.2,.07,.12,
+					if lamp%3==0 then amber else rgb(96,202,182),M.Neon)
+			end
+			build("Operator stool",x,y+.71,z+2.44,1.05,1.4,1.05,dark,M.Metal)
+		end
+	end
 	local number = build("Cell number", -4.05,4.65,2.33, 1.4,.81,.12, tile,M.Metal)
 	stencil(number, "C–04", bone)
 	for i=-4,4 do
 		build("Drain slot", i*.19,.013,-4.55, .09,.025,1.3, dark,M.Metal)
 	end
-	for _,z in {-8.7,-1.3,6.6} do
+	for _,z in {-8.7,6.6} do
 		build("Lamp housing", 0,8.26,z, 3.8,.22,.76, dark,M.Metal)
 		local bulb = build("Porcelain fixture", 0,8.06,z, 3.5,.1,.42, bone,M.Neon)
 		light(bulb, rgb(211,230,216), 1.65, 16)
 	end
-	local sidelight = build("Transfer lamp", 6.6,4.6,-8.6, .3,1.2,.45, amber,M.Neon)
+	local sidelight = build("Transfer lamp", 2.9,6.6,1.58, .3,1.2,.34, amber,M.Neon)
 	light(sidelight, amber, 1.4, 13)
 	local gate = model(parent, "Sliding cell gate", base*CF(0,0,2))
 	for i=-4,4 do
@@ -126,104 +168,100 @@ local function bend(arm, shoulder, elbow, wrist, handForward)
 	arm.hand.CFrame = CFrame.lookAt(wrist,wrist+handForward)
 end
 
-local function makeOfficer(parent, name, general)
-	local figure = model(parent,name,CF(origin))
-	local torso = model(figure,"Uniform",CF(origin))
-	local jacket = if general then rgb(50,71,64) else rgb(60,77,79)
-	local cloth = rgb(47,58,59)
-	local skin = rgb(159,125,100)
-	local function fixed(group,name,x,y,z,w,h,d,color,material,round,angle)
-		return piece(group,name,V(w,h,d),CF(origin+V(x,y,z))*(angle or CFrame.identity),color,material,round)
+local uniforms = {
+	General = {body=rgb(52,70,53), legs=rgb(43,52,43), skin=rgb(190,144,109), cap=rgb(55,71,53)},
+	Guard = {body=rgb(46,60,65), legs=rgb(38,44,50), skin=rgb(168,124,91), cap=rgb(36,46,52)},
+	Operator = {body=rgb(58,93,91), legs=rgb(36,58,62), skin=rgb(128,89,69)},
+	Technician = {body=rgb(185,185,159), legs=rgb(56,75,81), skin=rgb(217,179,134)},
+}
+
+local function makeOfficer(parent, name, role)
+	local figure = script:WaitForChild("CommandR15"):Clone()
+	local uniform = uniforms[role]
+	figure.Name = name
+	local torso, waist, head = figure.UpperTorso, figure.LowerTorso, figure.Head
+	local badge
+	for _,joint in figure:GetDescendants() do
+		if joint:IsA("JointInstance") or joint:IsA("Constraint") then joint.Enabled = false end
 	end
-	fixed(torso,"Tunic",0,3.05,0,1.36,1.58,.76,jacket,M.Fabric)
-	fixed(torso,"Duty belt",0,2.53,0,1.4,.2,.81,dark,M.Leather)
-	fixed(torso,"Buckle",0,2.53,-.43,.29,.16,.075,brass,M.Metal)
-	if general then
-		fixed(torso,"Double-breasted panel",.09,3.24,-.39,.78,.97,.07,jacket,M.Fabric)
-		for _,s in {-1,1} do
-			fixed(torso,"Collar",s*.2,3.74,-.4,.36,.19,.08,dark,M.Fabric,false,CFrame.Angles(0,0,s*.4))
-			fixed(torso,"Epaulette",s*.51,3.86,0,.34,.12,.67,brass,M.Metal)
-			for i=0,2 do fixed(torso,"Brass stud",s*.23,3.42-i*.27,-.445,.065,.065,.045,brass,M.Metal,true) end
-		end
-		for i,color in {brass,rgb(143,74,64),bone} do fixed(torso,"Service ribbon",.25+i*.09,3.47,-.44,.09,.12,.065,color,M.Fabric) end
-	else
-		fixed(torso,"Armoured vest",0,3.16,-.37,1.12,1.02,.25,dark,M.Metal)
-		for i=1,3 do fixed(torso,"Plate ridge",0,2.94+i*.18,-.51,.86,.055,.06,steel,M.Metal) end
-		for _,s in {-1,1} do fixed(torso,"Harness",s*.55,3.39,-.39,.13,.86,.13,cloth,M.Fabric) end
+	for _,bodyPart in figure:GetChildren() do
+		if not bodyPart:IsA("BasePart") then continue end
+		bodyPart.Anchored, bodyPart.CanCollide, bodyPart.CanQuery, bodyPart.CanTouch = true, false, false, false
+		bodyPart.Size *= .82
+		local name = bodyPart.Name
+		bodyPart.Color = if name=="Head" or name:find("Hand") then uniform.skin
+			elseif name:find("Leg") then uniform.legs elseif name:find("Foot") then dark else uniform.body
 	end
-	local head = model(figure,"Head",CF(origin))
-	fixed(head,"Head",0,.07,0,.91,1.03,.84,if general then skin else dark,nil,true)
-	if general then
-		fixed(head,"Nose",0,.11,-.40,.18,.24,.21,skin,nil,true)
-		for _,s in {-1,1} do
-			fixed(head,"Ear",s*.435,.07,0,.15,.29,.2,skin,nil,true)
-			fixed(head,"Eyebrow",s*.20,.22,-.38,.25,.06,.05,cloth,M.Fabric,false,CFrame.Angles(0,0,s*.12))
-			fixed(head,"Eye",s*.19,.13,-.411,.09,.06,.035,dark,nil,true)
-		end
-		fixed(head,"Cap crown",0,.52,.02,1.09,.34,.99,jacket,M.Fabric,true)
-		fixed(head,"Cap band",0,.40,0,.94,.16,.86,dark,M.Leather,true)
-		fixed(head,"Peak",0,.38,-.42,.86,.11,.45,dark,M.Leather,true)
-		fixed(head,"Cap badge",0,.49,-.44,.125,.17,.07,brass,M.Metal)
-	else
-		fixed(head,"Helmet shell",0,.36,.04,1.05,.71,1.00,steel,M.Metal,true)
-		fixed(head,"Masked visor",0,.19,-.37,.85,.23,.22,rgb(26,55,58),M.Glass,true)
-		fixed(head,"Visor ridge",0,.29,-.44,.78,.055,.065,trim,M.Metal)
-		fixed(head,"Respirator",0,-.15,-.34,.51,.3,.29,cloth,nil,true)
-		for _,s in {-1,1} do fixed(head,"Filter",s*.29,-.13,-.30,.18,.26,.28,steel,M.Metal,true) end
+	figure.Parent = parent
+	if role=="General" then
+		badge=piece(figure,"Command insignia",V(.3,.14,.045),CF(origin),brass,M.Metal)
 	end
-	local mouth = if general then fixed(figure,"Mouth",0,0,0,.23,.045,.042,rgb(85,54,48),nil,true) else nil
+	local cap, peak
+	if uniform.cap then
+		cap=piece(figure,"Service cap",V(1.03,.24,.98),CF(origin),uniform.cap,M.Fabric)
+		peak=piece(figure,"Cap visor",V(.91,.07,.45),CF(origin),dark,M.Metal)
+	end
 	local arms,legs = {},{}
-	for _,s in {-1,1} do
-		arms[s] = limb(figure,jacket,if general then skin else dark,false,.43,.34)
-		legs[s] = {
-			thigh=segment(figure,"Trouser",cloth,M.Fabric),
-			shin=segment(figure,"Shin",cloth,M.Fabric),
-			boot=fixed(figure,"Boot",0,0,0,.49,.46,.8,dark,M.Leather),
-		}
-	end
-	return {torso=torso,head=head,mouth=mouth,arms=arms,legs=legs}
-end
-
-local function animateOfficer(officer, frame, t, stride, crouch, nod, reach)
-	local at = function(x,y,z) return frame:PointToWorldSpace(V(x,y,z)) end
-	officer.torso:PivotTo(frame*CF(0,-crouch,0))
-	local face = frame*CF(0,4.34-crouch,0)*CFrame.Angles(nod,0,0)
-	officer.head:PivotTo(face)
-	if officer.mouth then
-		local speaking = ease(t,9,9.2)*(1-ease(t,10.75,11.05))
-		local open = speaking*math.abs(math.sin((t-9)*8))
-		officer.mouth.Size = V(.23,.042+.09*open,.048)
-		officer.mouth.CFrame = face*CF(0,-.13-open*.015,-.403)
-	end
 	for _,side in {-1,1} do
-		local footCycle = stride*side
-		local leg = officer.legs[side]
-		local hip,knee = at(side*.37,2.37-crouch,0),at(side*.4,1.23-crouch*.5,-.12-footCycle*.21-crouch*.42)
-		local heel = at(side*.40,.26,footCycle*.45)
-		span(leg.thigh,hip,knee,.5,.52)
-		span(leg.shin,knee,heel,.44,.44)
-		leg.boot.CFrame = frame*CF(side*.4,.24,footCycle*.45-.12)
-		local shoulder = at(side*.73,3.62-crouch,0)
-		local relaxed = at(side*.88,2.22-crouch,-.22-footCycle*.21)
-		local wrist = if reach then reach(side,relaxed,shoulder) else relaxed
-		local elbow = shoulder:Lerp(wrist,.51)+frame:VectorToWorldSpace(V(side*.19,-.17,.29))
-		bend(officer.arms[side],shoulder,elbow,wrist,(wrist-elbow).Unit)
+		local prefix=if side<0 then "Left" else "Right"
+		arms[side]={upper=figure[prefix.."UpperArm"],lower=figure[prefix.."LowerArm"],hand=figure[prefix.."Hand"]}
+		legs[side]={thigh=figure[prefix.."UpperLeg"],shin=figure[prefix.."LowerLeg"],boot=figure[prefix.."Foot"]}
 	end
+	return {torso=torso,waist=waist,head=head,cap=cap,peak=peak,badge=badge,arms=arms,legs=legs}
 end
 
+local function poseSegment(part, a, b)
+	local delta=b-a
+	if delta.Magnitude<.02 then return end
+	local up=if math.abs(delta.Unit.Y)>.98 then Vector3.zAxis else Vector3.yAxis
+	part.CFrame=CFrame.lookAt((a+b)*.5,b,up)*CFrame.Angles(math.pi/2,0,0)
+	local size=part.Size
+	part.Size=V(size.X,delta.Magnitude+.16,size.Z)
+end
+
+local function animateOfficer(officer, frame, stride, crouch, nod, reach)
+	local function at(x,y,z) return frame:PointToWorldSpace(V(x,y,z)) end
+	officer.torso.CFrame=frame*CF(0,3.01-crouch,0)
+	officer.waist.CFrame=frame*CF(0,2.16-crouch,0)
+	local face=frame*CF(0,4.18-crouch,0)*CFrame.Angles(nod,0,0)
+	officer.head.CFrame=face
+	if officer.cap then
+		officer.cap.CFrame=face*CF(0,.47,.03)
+		officer.peak.CFrame=face*CF(0,.35,-.45)
+	end
+	if officer.badge then officer.badge.CFrame=officer.torso.CFrame*CF(.31,.27,-.422) end
+	for _,side in {-1,1} do
+		local step=stride*side
+		local leg=officer.legs[side]
+		local hip=at(side*.42,2.04-crouch,0)
+		local knee=at(side*.42,1.03-crouch*.35,-.20-step*.24-crouch*.59)
+		local heel=at(side*.42,.22,step*.53)
+		poseSegment(leg.thigh,hip,knee)
+		poseSegment(leg.shin,knee,heel)
+		leg.boot.CFrame=frame*CF(side*.42,.14,step*.53-.13)
+		local arm=officer.arms[side]
+		local shoulder=at(side*.99,3.58-crouch,0)
+		local relaxed=at(side*1.14,2.28-crouch,-.24-step*.22)
+		local wrist=if reach then reach(side,relaxed) else relaxed
+		local elbow=shoulder:Lerp(wrist,.5)+frame:VectorToWorldSpace(V(side*.14,-.09,.13))
+		poseSegment(arm.upper,shoulder,elbow)
+		poseSegment(arm.lower,elbow,wrist)
+		arm.hand.CFrame=CFrame.lookAt(wrist,wrist+(wrist-elbow).Unit)*CFrame.Angles(math.pi/2,0,0)
+	end
+end
 -- Position, look target, roll, field of view. Coordinates are relative to the floor.
 local shots = {
 	{0, V(-.12,4.46,6.4), V(-1.3,3.85,3.0), -2, 72},
 	{1.3, V(.04,4.5,6.3), V(1.45,4.15,3.1), 2, 72},
 	{2.4, V(.05,4.5,6.08), V(.15,3.7,.05), 0, 72},
 	{2.95, V(-.14,4.11,4.42), V(-.34,1.65,1.2), -6, 77},
-	{4.0, V(.28,4.26,1.17), V(.43,2.1,-3.8), 4, 75},
+	{4.0, V(.28,4.26,1.17), V(2.33,3.86,-15), 4, 82},
 	{5.3, V(.02,4.02,-2.55), V(.05,2.15,-7.45), -2, 72},
 	{5.83, V(-.18,2.08,-3.55), V(-.17,.08,-5.35), -5, 74},
 	{6.25, V(-.12,2.43,-3.71), V(-.05,.18,-5.98), 2, 70},
 	{7.04, V(-.10,2.34,-3.72), V(-.03,.24,-6.1), 0, 69},
-	{8.8, V(-.06,2.40,-3.77), V(.02,4.31,-8.6), 0, 63},
-	{11.7, V(-.03,2.42,-3.8), V(.02,4.34,-8.47), 0, 63},
+	{8.8, V(-.06,2.40,-3.77), V(.02,4.21,-8.6), 0, 68},
+	{11.7, V(-.03,2.42,-3.8), V(.02,4.24,-8.47), 0, 68},
 	{13.15, V(-.16,2.22,-3.67), V(-1.25,2.13,-5.22), -6, 68},
 	{14.72, V(.02,2.22,-3.65), V(.78,1.7,-4.75), 3, 66},
 	{16.5, V(.02,2.22,-3.65), V(.71,1.56,-4.78), 2, 64},
@@ -248,10 +286,17 @@ end
 
 function PrisonScene.new(parent, skinColor)
 	local gate = holdingBlock(parent)
-	local general = makeOfficer(parent,"Transfer general",true)
+	local general = makeOfficer(parent,"Transfer general","General")
+	local staff = {
+		{makeOfficer(parent,"Comms operator","Operator"), V(-7.7,0,-8.36), -1},
+		{makeOfficer(parent,"Watch officer","Guard"), V(7.7,0,-8.36), 1},
+		{makeOfficer(parent,"Sonar operator","Operator"), V(10.1,0,-15.76), -1},
+		{makeOfficer(parent,"Duty technician","Technician"), V(-10.1,0,-15.76), 1},
+		{makeOfficer(parent,"Plot officer","Operator"), V(5.6,.6,-26.3), -1},
+	}
 	local guards,prisoner = {},{}
 	for _,s in {-1,1} do
-		guards[s] = makeOfficer(parent,if s<0 then "Left escort" else "Right escort",false)
+		guards[s] = makeOfficer(parent,if s<0 then "Left escort" else "Right escort","Guard")
 		prisoner[s] = limb(parent,rgb(133,91,62),skinColor or rgb(177,138,107),true,.35,.26)
 	end
 	local injector = model(parent,"Medical injector",CF(origin))
@@ -265,7 +310,8 @@ function PrisonScene.new(parent, skinColor)
 	instrument("Plunger",.245,.09,.14,steel,M.Metal)
 	instrument("Thumb stop",.35,.24,.08,dark,M.Metal)
 
-	local function sample(_, t)
+	local mouth = general.head:FindFirstChildOfClass("FaceControls")
+	local function sample(_, t, speech)
 		local camera, fov, position = cameraPose(t)
 		local base = origin+V(position.X,0,position.Z)
 		local shoved = ease(t,2.38,2.84)*(1-ease(t,3.53,4.14))
@@ -276,7 +322,19 @@ function PrisonScene.new(parent, skinColor)
 		gate:PivotTo(CF(origin+V(5.82*ease(t,.46,2.18),0,2)))
 		local officerAt = origin+V(.08,0,-8.82+.37*ease(t,7.5,8.83))
 		local generalFrame = CFrame.lookAt(officerAt,officerAt+Vector3.zAxis)
-		animateOfficer(general,generalFrame,t,0,0,-.06-.095*ease(t,8.28,9.22)+.055*ease(t,10,10.65),nil)
+		animateOfficer(general,generalFrame,0,0,-.06-.095*ease(t,8.28,9.22)+.055*ease(t,10,10.65))
+		if mouth then mouth.JawDrop=math.clamp((speech or 0)/420,0,.75) end
+		for index,entry in staff do
+			local position=origin+entry[2]
+			local glance=ease(t,3.1+index*.17,4.35+index*.19)*(1-ease(t,7.1+index*.22,8.7+index*.18))
+			local frame=CF(position)*CFrame.Angles(0,entry[3]*glance*1.18,0)
+			animateOfficer(entry[1],frame,0,if index==2 then 0 else .49,.12+.057*math.sin(t*1.6+index),
+				function(side,rest)
+					if index==2 or index==5 then return rest end
+					local key=frame:PointToWorldSpace(V(side*.7,2.55+.027*math.sin(t*10+side+index),-1.31))
+					return key:Lerp(rest,glance)
+				end)
+		end
 		local playerHands = {}
 		for _,s in {-1,1} do
 			local shoulder = base+V(s*.49,position.Y-.37,.13)
@@ -300,7 +358,7 @@ function PrisonScene.new(parent, skinColor)
 			local gaze = V(-s*.90,0,-.55+.96*settle)
 			local frame = CFrame.lookAt(guardAt,guardAt+gaze)
 			local walking = ease(t,2.14,2.72)*(1-ease(t,5.16,5.85))
-			animateOfficer(guards[s],frame,t,math.sin(t*8.4+s)*walking,.93*held,
+			animateOfficer(guards[s],frame,math.sin(t*8.4+s)*walking,.93*held,
 				-.16-.20*held,function(side,relaxed)
 					local shoveTarget = base+V(s*.5,position.Y-.38,-.32)
 					local target = relaxed:Lerp(shoveTarget,shoved)
