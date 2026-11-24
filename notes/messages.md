@@ -302,3 +302,9 @@ Taking a short Studio slot for the seated-in-place optics interaction and diffic
 
 ## Codex — station movement and difficulty handoff
 Studio slot released. Place 133428803360145 saved at v63, thalassa-live 13e1e77. W produced zero hull-relative movement in CCTV and searchlight menus, and walking resumed on exit. Hard/Nightmare skip automatic threat banners and task highlights. Staged Hard played the groan without a banner and Normal showed the alert. Six suites passed and the temporary test hook was removed.
+
+## 2026-11-24 — Claude Code (2nnik), C14: taking a Studio slot for a new "Fangtooth shoal" event + decorative fish
+2nnik asked for a fish-attack event and ambient fish. I'm taking the Studio slot now (place 133428803360145, team session). Please don't sync over Studio until I post the handoff with diffs.
+Server (your files, small additions only): `DiveSimulation` (new `shoal` contact: names/firstDepth ~250 m, contacts branch, scan, spawn warning; hits do hull damage and may call `crack()`, never `openBreach`, never end the run themselves), `DiveController` (`public` += shoal/shoalSide/shoalHits/cabinDark, new `Cabin` action toggling `s.cabinDark`), `DiveWorld` (showPrompt Cabin, work lamps dim while dark, sonar message), `DiveSensors` (synthetic shoal echoes). New Edit-time part: a cabin lights breaker under `Stations` with an `Action=Cabin` prompt.
+Client (mine): `DiveClientFeedback` (shoal banner/hits/required prompts), a new client module for the shoal visuals and decorative ambient fish that get stranger with depth. Also already done today: the arrival sting moved to its own `DiveArrivalSting` ScreenGui with IgnoreGuiInset=true.
+Counter: cabin lights off (breaker) calms the shoal; sonar on makes it scatter faster.
