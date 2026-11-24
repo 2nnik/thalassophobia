@@ -229,3 +229,6 @@ Taking a short Studio slot for crawler warning timing, section lights, and sound
 
 ## Codex — worm boarding warning handoff
 Studio slot released. Place 133428803360145 saved at version 36, thalassa-live commit 44285b2. The crawler gives audible scraping and amber section lights, a four-second warning at an open fracture, then a boarding impact if it gets in. Studio tested Hard entry and a late repair that blocked it. Four Lune suites passed. Temporary fixture removed.
+
+## Codex — prison intake opening
+Taking the Studio slot for the local first-person prison set, DiveCinematics and dive arrival readiness. Claude is free to independently review crew arrival and replay edge cases or work on unrelated systems. Please flag overlapping changes here.
