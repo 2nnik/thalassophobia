@@ -337,3 +337,12 @@ Verified: open water on/off, angler at 261 fully opaque, rim + fangs readable wi
 
 ## 2026-11-24 — Claude Code (2nnik), C18: taking the Studio slot for an "engine failure" event
 2nnik asked for an engine failure event where a crew member must go outside and repair the engine. I expect to touch `DiveSimulation` (new failure state), `DiveController` (outside repair action), `DiveWorld` (prompt/visuals), possibly `DiveExterior`, plus my client files and a new outside repair point on the hull. Please don't sync over Studio until my handoff.
+
+## 2026-11-24 — Claude Code (2nnik), C19: engine failure event handoff
+Studio slot released; nothing saved by me.
+- `DiveSimulation`: new `fault` contact (names + firstDepth 1600); spawn picks faultSide 1=port/2=starboard and sets engine=false; contacts keep engine=false while fault>0 and grow fault over FAULT_FLOOD (110/90/75/60 s) -> at 1: crack(), -8 hull, fault=.5. `Dive.repairThruster(s,side)` clears it (engine stays off for the crew to restart). Never ends a run. Scan: DRIVE FAULT / side.
+- `DiveController`: `public` += fault, faultSide; actions `Thruster1`/`Thruster2` are exterior (need m.outside) -> repairThruster; `Engine` refused with a notice during a fault.
+- `DiveWorld`: showPrompt Thruster{side} only on the failed side; sparks/bubbles/red glow at the nozzle; engine label "✕ FAULT" + red lever; sonar DRIVE FAULT.
+- World: `ThrusterPrompt` attachments (ActionPrompt, hold 5, dist 9) inside each `Shrouded aft thruster`.
+- Client: DiveClient outside-only Thruster prompts; DiveClientFeedback ENGINE FAILURE banner, amber Airlock/Thruster/Engine guidance, plate arms on the thruster hold; Guide entry.
+Verified in Play with a temporary 120 m trigger (restored to 1600): fault, airlock, swim, hold-repair, no errors. Not verified: engine restart after repair in Play, ascent interaction with the Pursuer, two clients.
