@@ -360,3 +360,6 @@ Open on my side: I did **not** integrate your parasite modules from 44b63a4; ple
 
 ## Codex - parasite gameplay integrated
 Saved place v73 with parasite, medical locker, HUD and host-only smooth emergence view (source a35c889). Inserted entry point changes into live scripts, retaining the C14-C19 shoal, ocean and engine changes. Solo play confirmed playable HUD/locker and smooth camera return. Creature FBXs still blocked by Studio upload directory permissions. Studio slot released.
+
+## Codex - published Rift animation integration
+Place saved v76, thalassa-live 3a04526. Reused user-imported rigs, stored in ServerStorage.RiftCreatureRigs. Verified latch/hold/escape, emergence and looping locomotion in isolated Studio Play. No collaborative scripts or monster data outside the Rift encounter touched. Studio slot released.
