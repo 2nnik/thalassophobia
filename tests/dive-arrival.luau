@@ -14,7 +14,8 @@ local feed={FireClient=function(_,p,kind,payload)
 end}
 local input={OnServerEvent=signal()}
 local net={Input=input, WaitForChild=function() return feed end}
-local site={ShipEnvelope={},CageSpawn={Position=roblox.Vector3.zero},FindFirstChild=function() return {CFrame=roblox.CFrame.identity} end}
+local site={ShipEnvelope={},HullMotion={},CageSpawn={Position=roblox.Vector3.zero},FindFirstChild=function() return {CFrame=roblox.CFrame.identity} end}
+local latestWeld
 local function player()
 	local root={Position=roblox.Vector3.zero}
 	local character={HumanoidRootPart=root, PivotTo=function() end,
@@ -43,7 +44,10 @@ local boot=luau.load(fs.readFile("src/ServerScriptService/DiveController.server.
 		workspace={WaitForChild=function() return site end},
 		script={Parent={WaitForChild=function(_,name) return name end}},
 		require=function(name) return modules[name] or {} end,
-		Instance={new=function() return {Destroy=function(self) self.Parent=nil end} end},
+		Instance={new=function()
+			latestWeld={Destroy=function(self) self.Parent=nil end}
+			return latestWeld
+		end},
 		task={delay=function() end}, Vector3=roblox.Vector3,CFrame=roblox.CFrame,typeof=type,os={clock=function() return now end},
 	}, injectGlobals=true,
 })
@@ -123,6 +127,9 @@ send(host,"AimSearchlight",3)
 assert(snapshots[host].aim==nil,"a player away from the console cannot aim the beam")
 trigger(lamp,host)
 assert(snapshots[host].searchlightView==true and not snapshots[host].light,"opening the console must not turn on the beam")
+local lampHold=latestWeld
+assert(lampHold.Name=="DiveOpticsHold" and lampHold.Part0==site.HullMotion and lampHold.Part1==host.Character.HumanoidRootPart,
+	"the searchlight operator must be held to the moving hull")
 for _,bad in {0,5,2.5,"3",0/0} do send(host,"AimSearchlight",bad) end
 assert(snapshots[host].aim==nil,"invalid bearings must be rejected")
 send(host,"AimSearchlight",3)
@@ -132,9 +139,11 @@ assert(snapshots[host].aim==4,"each valid click sets an absolute bearing")
 send(host,"AimSearchlight",false)
 assert(snapshots[host].aim==4 and not snapshots[host].light,"lamp off preserves the last bearing")
 send(host,"CloseOptics")
-assert(not snapshots[host].searchlightView)
+assert(not snapshots[host].searchlightView and not lampHold.Parent,"exiting must release the operator")
 trigger(camera,host)
 assert(snapshots[host].cameraView and not snapshots[host].searchlightView)
+local cameraHold=latestWeld
+assert(cameraHold.Name=="DiveOpticsHold" and cameraHold.Part0==site.HullMotion)
 send(host,"AimSearchlight",1)
 assert(snapshots[host].aim==4 and not snapshots[host].light,"a camera session cannot move the searchlight")
 send(host,"CloseOptics")
@@ -143,15 +152,16 @@ heartbeat(.25)
 heartbeat(.25)
 trigger(camera,host)
 assert(snapshots[host].cameraView)
+cameraHold=latestWeld
 offline=true
 heartbeat(1)
-assert(not snapshots[host].cameraView,"power loss must close the camera console")
+assert(not snapshots[host].cameraView and not cameraHold.Parent,"power loss must close the camera console and release the operator")
 heartbeat(.25)
 trigger(lamp,host)
 heartbeat(1)
 assert(snapshots[host].searchlightView,"a breach must leave the lamp console available")
-host.Character.HumanoidRootPart.Position=roblox.Vector3.new(0,0,20)
+latestWeld:Destroy()
 send(host,"AimSearchlight",1)
 heartbeat(1)
-assert(snapshots[host].aim==4 and not snapshots[host].searchlightView,"leaving the console revokes beam control")
+assert(snapshots[host].aim==4 and not snapshots[host].searchlightView,"losing the console hold revokes beam control")
 print("PASS: direct optics selection and server-owned searchlight")

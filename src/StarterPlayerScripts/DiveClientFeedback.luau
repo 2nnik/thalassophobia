@@ -310,7 +310,7 @@ return function(screen, blocked)
 	-- Prompts that solve whatever is wrong right now. DiveClient draws these on top, in amber.
 	local function requiredFor(p)
 		local need = {}
-		if p.alive == false then return need end
+		if p.alive == false or (p.difficulty~="Easy" and p.difficulty~="Normal") then return need end
 		if p.outside then
 			if p.carryingArtifact then need.Return = true end
 			return need
@@ -391,10 +391,11 @@ return function(screen, blocked)
 		if p.alive == false or p.outside then arms.stop(false, true) end
 		if prev and ship and (was.hull or 0) - (p.hull or 0) >= 4 then kick(math.clamp(((was.hull or 0) - (p.hull or 0)) / 30, .25, .9)) end
 		if prev and p.boarded and not was.boarded then kick(.7) end
-		if prev and (was.shark or 0) == 0 and (p.shark or 0) > 0 then
-			sting("Angler", nil, p.difficulty == "Easy")
+		local easy=p.difficulty=="Easy"
+		if prev and (easy or p.difficulty=="Normal") then
+			if (was.shark or 0) == 0 and (p.shark or 0) > 0 then sting("Angler",nil,easy) end
+			if (was.squid or 0) == 0 and (p.squid or 0) > 0 then sting("Squid",SIDES[p.squidSide],easy) end
 		end
-		if prev and (was.squid or 0) == 0 and (p.squid or 0) > 0 then sting("Squid", SIDES[p.squidSide], p.difficulty == "Easy") end
 		local need = requiredFor(p)
 		for action in need do
 			if prev and not api.required[action] then play("newTask") break end

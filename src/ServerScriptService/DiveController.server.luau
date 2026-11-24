@@ -26,7 +26,12 @@ local runNumber = 0
 local cueDuration = {WormRescue=.95,WormDeath=2.8,Angler=8,Squid=13,Flood=15}
 
 local function closeOptics(m)
-	m.opticsMode,m.opticsOrigin=nil,nil
+	if m.opticsHold then m.opticsHold:Destroy() end
+	m.opticsMode,m.opticsHold=nil,nil
+end
+
+local function atOptics(m,root)
+	return root and m.opticsHold and m.opticsHold.Parent==root
 end
 
 local function cue(p,kind,duration,section,position)
@@ -208,6 +213,7 @@ local function finishResults(s)
 	if active ~= s then return end
 	local groups = {{},{}}
 	for p,m in members do
+		closeOptics(m)
 		releaseBerth(m)
 		stopPatch(s,p,m)
 		releaseGrab(p,m,s)
@@ -249,6 +255,7 @@ settle = function(s)
 	if kind then
 		local model=site.Contacts[if kind=="Squid" then "GiantSquid" else "Leviathan"]
 		for p,m in members do
+			closeOptics(m)
 			stopPatch(s,p,m)
 			releaseGrab(p,m,s)
 			if m.alive then cue(p,kind,cueDuration[kind],s.crawlerSection,model:GetPivot().Position) end
@@ -398,7 +405,10 @@ local function interact(p, action)
 		if action=="Camera" and s.systemsOffline then return end
 		local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
 		if not root then return end
-		m.opticsMode,m.opticsOrigin=action,root.Position
+		local hold=Instance.new("WeldConstraint")
+		hold.Name,hold.Part0,hold.Part1="DiveOpticsHold",site.HullMotion,root
+		hold.Parent=root
+		m.opticsMode,m.opticsHold=action,hold
 	elseif string.match(action, "^Repair[1-3]$") then
 		local section = tonumber(action:sub(-1))
 		if not s.cracks[section] or s.breaches[section]>0 then return end
@@ -482,6 +492,7 @@ local function updateCrawler(s)
 	if not victim then return end
 	local m=members[victim]
 	stopPatch(s,victim,m)
+	closeOptics(m)
 	local toward=Vector3.new(outlet.Position.X-root.Position.X,0,outlet.Position.Z-root.Position.Z)
 	local direction=if toward.Magnitude>.2 then toward.Unit else Vector3.zAxis
 	local spot=Vector3.new(root.Position.X,outlet.Position.Y+1.7,root.Position.Z)+direction*2.35
@@ -494,7 +505,6 @@ local function updateCrawler(s)
 	m.grab={weld=weld,root=root,humanoid=humanoid,speed=humanoid.WalkSpeed,autoRotate=humanoid.AutoRotate,
 		deadline=s.elapsed+duration}
 	humanoid.WalkSpeed,humanoid.AutoRotate=0,false
-	closeOptics(m)
 	s.victim,s.crawlerGrip=victim,CFrame.lookAt(spot,face)
 	Dive.warn(s,"Crew member restrained. Use the extinguisher in section 0"..s.crawlerSection..".",duration)
 	cue(victim,"WormGrab",duration+1,s.crawlerSection,spot)
@@ -527,7 +537,7 @@ local function handleCrew(s,dt)
 			stopPatch(s,p,m)
 			notice(p,"Patch was interrupted. Try again with the same plank.")
 		end
-		if m.opticsOrigin and (not root or (root.Position-m.opticsOrigin).Magnitude>9) then closeOptics(m) end
+		if m.opticsMode and not atOptics(m,root) then closeOptics(m) end
 		if m.outside then
 			Exterior.tick(p,m,s,dt)
 			m.oxygen -= dt
@@ -558,6 +568,7 @@ local function configureCharacter(p, character)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping,false)
 	p.CameraMode = Enum.CameraMode.LockFirstPerson
 	local m = members[p]
+	if m then closeOptics(m) end
 	if m and m.intakeId then
 		takeBerth(p,m)
 	else
@@ -577,6 +588,7 @@ for _,p in Players:GetPlayers() do joined(p) end
 Players.PlayerRemoving:Connect(function(p)
 	local m,s = members[p],active
 	if m then
+		closeOptics(m)
 		releaseBerth(m)
 		if s then dropArtifact(s,p) end
 		if s then stopPatch(s,p,m) end
@@ -640,7 +652,7 @@ net.Input.OnServerEvent:Connect(function(p, action, arg)
 	elseif action=="AimSearchlight" then
 		local root=p.Character and p.Character:FindFirstChild("HumanoidRootPart")
 		if not m or not active or settling or not m.alive or m.outside or m.grab or m.breachRepair
-			or m.opticsMode~="Light" or not root or (root.Position-m.opticsOrigin).Magnitude>9 then return end
+			or m.opticsMode~="Light" or not atOptics(m,root) then return end
 		if arg==false then
 			active.light=false
 		elseif typeof(arg)=="number" and arg>=1 and arg<=4 and arg%1==0 and active.battery>0 then
@@ -701,7 +713,6 @@ local function carryCrew(delta)
 		if m.outside then
 			Exterior.followShip(m,delta)
 		else
-			if m.opticsOrigin then m.opticsOrigin += delta end
 		end
 	end
 end
