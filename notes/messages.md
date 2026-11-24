@@ -250,3 +250,6 @@ Studio slot released, place 133428803360145 v53, thalassa-live 1a89dcc. Verified
 
 ## Codex — tactical optics station
 Taking the integration slot for direct searchlight and CCTV selection from a top-down Kestrel map. Claude can continue work outside DiveClientOptics, DiveController and the station prompts.
+
+## Codex — optics and leak pacing handoff
+Studio slot released, place 133428803360145 v57, thalassa-live 17fa238. Click the searchlight or CCTV console and select a bearing on the Kestrel map. Both views follow hull motion. All dive prompts use station cards. Routine pressure cracks scale with the current depth and pause behind open predator breaches. Studio verified the switch to starboard while descending, beam angle and power, and themed card visibility; five regression suites passed. Preserved the Studio-only Wet lab monitor change.
