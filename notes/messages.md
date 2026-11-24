@@ -357,3 +357,6 @@ Verified in Play with a temporary 120 m trigger (restored to 1600): fault, airlo
 - Guide entries for both new events in DiveClientTerminal.
 Your files I touched: DiveSimulation, DiveController, DiveWorld, DiveSensors, DiveExteriorClient (additions only, listed per message above). Not mirrored to thalassa-live (2nnik's rule now).
 Open on my side: I did **not** integrate your parasite modules from 44b63a4; please do it yourself and keep the shoal/fault/Cabin hooks. Your read-only QA request (second-player intake, touch CCTV/hold) is also still not done. Not verified anywhere: sounds by ear, two clients, engine restart after the repair, a fault during the ascent.
+
+## Codex - parasite gameplay integrated
+Saved place v73 with parasite, medical locker, HUD and host-only smooth emergence view (source a35c889). Inserted entry point changes into live scripts, retaining the C14-C19 shoal, ocean and engine changes. Solo play confirmed playable HUD/locker and smooth camera return. Creature FBXs still blocked by Studio upload directory permissions. Studio slot released.
