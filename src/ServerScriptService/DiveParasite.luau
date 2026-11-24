@@ -6,6 +6,23 @@ local letters = "XEDFGHBC"
 local shell = Color3.fromRGB(48,84,83)
 local underside = Color3.fromRGB(165,148,103)
 local glow = Color3.fromRGB(102,218,190)
+local clips = {Latch="115590488647349", Emergence="135649605245917", Move="135813245187045"}
+local modelScale = {Limpet=.008, Skater=.010}
+local latchOffset = CFrame.new(0,-1.63,-.31)
+
+local function play(model, name, looped)
+	local controller=model:FindFirstChildWhichIsA("AnimationController",true)
+	local animator=controller and controller:FindFirstChildOfClass("Animator")
+	if not animator then return end
+	local clip=Instance.new("Animation")
+	clip.Name,clip.AnimationId,clip.Parent=name,"rbxassetid://"..clips[name],model
+	local ok,track=pcall(animator.LoadAnimation,animator,clip)
+	if not ok then warn("Rift creature animation "..name.." failed: "..tostring(track)); return end
+	track.Looped=looped
+	track.Priority=Enum.AnimationPriority.Action
+	track:Play(.12)
+	return track
+end
 
 local function bead(model,name,cf,size,color,lit)
 	local part = Instance.new("Part")
@@ -22,6 +39,15 @@ local function limb(model,a,b,width,color)
 end
 
 local function creature(parent,adult)
+	local kind=if adult then "Skater" else "Limpet"
+	local templates=game:GetService("ServerStorage"):FindFirstChild("RiftCreatureRigs")
+	local template=templates and templates:FindFirstChild("Rift "..kind)
+	if template then
+		local rig=template:Clone()
+		rig:ScaleTo(modelScale[kind])
+		rig.Parent=parent
+		return rig
+	end
 	local model = Instance.new("Model")
 	model.Name = if adult then "Rift Skater" else "Rift Limpet"
 	local scale = if adult then 1.9 else 0.76
@@ -54,13 +80,24 @@ end
 
 function Parasite.start(players,difficulty,site,remote)
 	local self=setmetatable({rules=rules[difficulty] or rules.Normal, site=site,remote=remote,
-		crew={}, hunts={},rng=Random.new()},Parasite)
+		crew={}, hunts={},released={},rng=Random.new()},Parasite)
 	for _,p in players do self.crew[p]={roll=6} end
 	return self
 end
 
-function Parasite:clearLatch(p,m)
-	if m.model then m.model:Destroy(); m.model=nil end
+function Parasite:clearLatch(p,m,escaped)
+	if m.model then
+		if escaped and m.track and m.track.Length>1.85 then
+			m.track.TimePosition=1.85
+			m.track:AdjustSpeed(1.65)
+			local released=m.model
+			self.released[released]=true
+			task.delay(.8,function() self.released[released]=nil; released:Destroy() end)
+		else
+			m.model:Destroy()
+		end
+		m.model,m.track=nil,nil
+	end
 	if m.sequence and p.Parent then self.remote:FireClient(p,"LatchEnd") end
 	m.sequence=nil
 	m.index=nil
@@ -77,7 +114,7 @@ function Parasite:input(p,action,key)
 		return
 	end
 	if now-m.started>3 then m.hatch=now+self.rng:NextNumber(60,120) end
-	self:clearLatch(p,m)
+	self:clearLatch(p,m,true)
 	m.roll=35
 end
 
@@ -89,7 +126,9 @@ function Parasite:latch(p,m,root,now)
 	end
 	m.index,m.started,m.deadline=1,now,now+self.rules[2]
 	m.model=creature(self.site.Contacts,false)
-	m.model:PivotTo(root.CFrame*CFrame.new(0,1.35,-.65))
+	m.track=play(m.model,"Latch",false)
+	local head=p.Character:FindFirstChild("Head") or root
+	m.model:PivotTo(if m.track then head.CFrame*latchOffset else root.CFrame*CFrame.new(0,1.35,-.65))
 	self.remote:FireClient(p,"Latch",m.sequence,m.deadline)
 end
 
@@ -104,16 +143,26 @@ function Parasite:step(dt,depth,isOutside,isAlive,wound)
 		end
 		if m.sequence then
 			local head=p.Character:FindFirstChild("Head") or root
-			m.model:PivotTo(head.CFrame*CFrame.new(0,0,-.65)*CFrame.Angles(math.rad(85),0,.06*math.sin(now*16)))
+			if m.track then
+				m.model:PivotTo(head.CFrame*latchOffset)
+				if m.track.Speed>0 and m.track.TimePosition>=1.72 then
+					m.track.TimePosition=1.72
+					m.track:AdjustSpeed(0)
+				end
+			else
+				m.model:PivotTo(head.CFrame*CFrame.new(0,0,-.65)*CFrame.Angles(math.rad(85),0,.06*math.sin(now*16)))
+			end
 			if now>=m.deadline then self:clearLatch(p,m); hum.Health=0 end
 		elseif m.hatch then
 			if now>=m.hatch then
 				m.hatch=nil
 				m.roll=55
 				local model=creature(self.site.Contacts,true)
-				model:ScaleTo(.28)
 				model:PivotTo(root.CFrame*CFrame.new(0,-.05,-.25))
-				self.hunts[model]={host=p,born=now,health=3,bite=now+9}
+				local track=play(model,"Emergence",false)
+				if track then track:AdjustSpeed(1.25) end
+				model:ScaleTo(if track then .002 else .28)
+				self.hunts[model]={host=p,born=now,health=3,bite=now+9,track=track}
 				self.remote:FireClient(p,"Emergence",now)
 				if wound then wound(p) end
 			end
@@ -130,10 +179,24 @@ function Parasite:step(dt,depth,isOutside,isAlive,wound)
 		local age=now-h.born
 		if age<4 and hostRoot then
 			local t=math.min(1,age/1.6)
-			model:ScaleTo(.28+.7*t)
-			model:PivotTo(hostRoot.CFrame*CFrame.new(0,-.1,-.25-t*.95)*CFrame.Angles(-.45*t,.17*math.sin(age*12),0))
+			if h.track then
+				model:ScaleTo(.002+.004*t)
+				model:PivotTo(hostRoot.CFrame*CFrame.new(0,-.12,-.3-t*.74))
+			else
+				model:ScaleTo(.28+.7*t)
+				model:PivotTo(hostRoot.CFrame*CFrame.new(0,-.1,-.25-t*.95)*CFrame.Angles(-.45*t,.17*math.sin(age*12),0))
+			end
 		else
-			if not h.loose then model:ScaleTo(1.9); h.loose=true end
+			if not h.loose then
+				if h.track then
+					h.track:Stop(.16)
+					model:ScaleTo(modelScale.Skater)
+					h.track=play(model,"Move",true)
+				else
+					model:ScaleTo(1.9)
+				end
+				h.loose=true
+			end
 			local pos=model:GetPivot().Position
 			local target,hum,dist=nil,nil,math.huge
 			for p in self.crew do
@@ -184,7 +247,9 @@ end
 function Parasite:destroy()
 	for p,m in self.crew do self:clearLatch(p,m) end
 	for model in self.hunts do model:Destroy() end
+	for model in self.released do model:Destroy() end
 	table.clear(self.hunts)
 	table.clear(self.crew)
+	table.clear(self.released)
 end
 return Parasite

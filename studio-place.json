@@ -3,6 +3,10 @@
   "universeId": 10777975725,
   "placeName": "Untitled Experience",
   "workspaceModel": "Workspace.Thalassa",
+  "creatureTemplates": [
+    "ServerStorage.RiftCreatureRigs.Rift Limpet",
+    "ServerStorage.RiftCreatureRigs.Rift Skater"
+  ],
   "remotes": [
     "ReplicatedStorage.DiveNet.Input",
     "ReplicatedStorage.DiveNet.Feed",

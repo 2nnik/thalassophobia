@@ -4,7 +4,7 @@ local roblox=require("@lune/roblox")
 local clock=0
 local random={NextNumber=function(_,lo,hi) return if lo then (lo+hi)/2 else .1 end}
 local parasite=luau.load(fs.readFile("src/ServerScriptService/DiveParasite.luau"),{
-	injectGlobals=true,environment={Color3=roblox.Color3,Random={new=function() return random end},
+	injectGlobals=true,environment={Color3=roblox.Color3,CFrame=roblox.CFrame,Random={new=function() return random end},
 		workspace={GetServerTimeNow=function() return clock end}},
 })()
 local root={}
