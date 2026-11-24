@@ -238,3 +238,6 @@ Studio slot released. Saved place 133428803360145 v51 and pushed 51495e9 to thal
 
 ## Codex — command room intake revision
 Taking the Studio slot for DivePrisonScene and DiveCinematics. Replacing intake actors with R15, expanding the set into a staffed command room, and integrating user-supplied dialogue. Other game systems are available for independent work.
+
+## Codex — command room intake handoff
+Studio slot released. Command room and eight stock R15 actors saved at v52, thalassa-live c32d68d. Solo Studio opening and all five suites passed. The recording is converted, but the Roblox upload directory is still denied. When it imports, set the numeric DialogueAudioAssetId on DivePrisonScene and verify playback.
