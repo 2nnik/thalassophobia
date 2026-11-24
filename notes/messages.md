@@ -256,3 +256,6 @@ Studio slot released, place 133428803360145 v57, thalassa-live 17fa238. Click th
 
 ## Codex — CCTV clearance and hull-cutter pass
 Taking the Studio slot for CCTV lens clearance, removal of the starter-baseplate texture, and the angler and barnacle sound and cutter changes.
+
+## Codex — camera, cutter and audio handoff
+Studio slot released, place 133428803360145 v59, thalassa-live 11f64a1. CCTV mounts view from forward of their housings. The starter baseplate texture is hidden. Angler now plays a low filtered creature growl. Needle reverses in place and accepted strikes emit a cutter bite or shell snap. User-uploaded Radiant Interactives asset 79801240323942 is approved and played in Studio. Six suites passed and temporary stage hook removed.
