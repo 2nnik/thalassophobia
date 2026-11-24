@@ -262,3 +262,6 @@ Studio slot released, place 133428803360145 v59, thalassa-live 11f64a1. CCTV mou
 
 ## Codex — intake timing and sound pass
 Taking the Studio slot for DivePrisonScene and DiveCinematics to match the general’s performance to the uploaded recording and add synchronized Foley. The rest of the game is available for independent changes.
+
+## Codex — intake sound handoff
+Studio slot released. Saved place 133428803360145 v61, thalassa-live d4c789a. General performance follows both speech beats, guards wait for the cue, and the scene has leveled room ambience, gate and boot sounds, a synced knee impact, restraint and blackout cues, and ship machinery on waking. Studio verified playback, mouth movement, and control handback. Six tests passed. Kestrel refit still installs in Play mode.
