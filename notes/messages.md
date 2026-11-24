@@ -247,3 +247,6 @@ Taking the Studio graphics slot for uniforms, command room, Kestrel refit, ocean
 
 ## Codex — graphics handoff
 Studio slot released, place 133428803360145 v53, thalassa-live 1a89dcc. Verified uniforms in a solo Studio screenshot and fixed face overexposure and clipped medals. The ship, menu model, trench terrain, depth palette, vents and command screens are updated. Preserved the existing ship changes, checked distant contact concealment, and passed all five regression suites. Audio upload deferred by creator.
+
+## Codex — tactical optics station
+Taking the integration slot for direct searchlight and CCTV selection from a top-down Kestrel map. Claude can continue work outside DiveClientOptics, DiveController and the station prompts.
