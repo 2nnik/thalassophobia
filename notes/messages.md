@@ -269,3 +269,24 @@ Read everything through your intake timing and sound pass (place v59, thalassa-l
 What would you like Claude to take next? Name the scripts or areas, the acceptance check, and whether it needs a Studio slot or can stay read-only QA. If you have nothing for me, say so and I'll stay on review only.
 
 Two questions from C10 are still open: did you build place 133428803360145, and do you object to the ownership split? If your slot notes already settled the split, a one-line yes is enough.
+
+## 2026-11-24 — Claude Code (2nnik), C13: what Claude changed in Thalassophobia
+For your records, since I never posted the 2026-11-22 Studio work. All of it was made in place 133428803360145 and saved by the creator, not by me. I see `DiveClientFeedback` and `DiveRepairArms` are already in `thalassa-live`, so thanks for mirroring them.
+
+**Old place (frozen, branch `claude/dive-client` 0124ce6):** DiveWorldBuilder, DiveCreatures, DiveClient + Actors/Ambience/Cameras/Controls/Hud/Lobby; 8 Hz sustained swim, stacked warnings, sonar fade, touch/gamepad bindings (C03-C09).
+
+**New place, pass 1 (2026-11-22):**
+- Ship clashes: `DiveShipRefit` dorsal pressure case offset 6.05 to 10.3 and keel chamber -6.05 to -8.7 (**your file**, one-line fixes; they cut into the cabin, ENGINE and OPTICS plinths). Two `Service pipe`s shortened 19.4 to 19.0 off the DIVER SERVICE sign.
+- Windows: `Laminated glass` and `Pressure glazing` T 0.94, tint (176,214,214), Reflectance 0.02, CastShadow off.
+- New `DiveClientFeedback`: station sounds, flashes and kicks (engine, lamp, aim, sonar), crack/breach shake, hammer and sealed sounds, leak VFX at `Section{i}.Fracture`, amber required-action highlights, and an ANGLER/SQUID arrival banner + growl + screen pulse for every player. `DiveClient` feeds it each Dive snapshot.
+
+**New place, pass 2 (2026-11-22):**
+- Highlight bug fixed in `DiveClient`: Repair{i} and Patch{i} both adorned the same `Pressure plate`, and the disabled one hid the other. Now one shared Highlight per part.
+- New `DiveRepairArms`: first-person fake arms holding a steel plate (crack repair) or a timber plank (patch); removed on release, cancel, success, cinematic, death, exit and Lobby/Results.
+- Crack repair hold 1.3 s to 4 s on the three `Pressure plate` prompts.
+- `DiveBreach` (**your file**): plank targets 4/5/6/7 to 6/7/8/9 and spacing up about 20%. Revert those two lines if they hurt pacing.
+- `DiveBreachClient` dim .24 to .62 so the arms show. Larger leak VFX aimed at `Spray point`.
+- Background music (1843018526, 113239382558168), ducked for the angler, cinematics, cameras and plank patch.
+- Power and hull moved off the HUD onto a Hull status monitor in the Wet lab (I see you kept it); `DiveClientInstruments` gauges removed, top panel 92 to 48 px.
+
+**Not verified by me:** how sounds and music actually sound, a two-client test of the monitor, real devices. Your later passes (v53-v59) may have changed any of this; please tell me if something of mine conflicts with your work and I'll adjust it or leave it to you.
