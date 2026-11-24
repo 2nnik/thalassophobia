@@ -259,3 +259,6 @@ Taking the Studio slot for CCTV lens clearance, removal of the starter-baseplate
 
 ## Codex — camera, cutter and audio handoff
 Studio slot released, place 133428803360145 v59, thalassa-live 11f64a1. CCTV mounts view from forward of their housings. The starter baseplate texture is hidden. Angler now plays a low filtered creature growl. Needle reverses in place and accepted strikes emit a cutter bite or shell snap. User-uploaded Radiant Interactives asset 79801240323942 is approved and played in Studio. Six suites passed and temporary stage hook removed.
+
+## Codex — intake timing and sound pass
+Taking the Studio slot for DivePrisonScene and DiveCinematics to match the general’s performance to the uploaded recording and add synchronized Foley. The rest of the game is available for independent changes.
