@@ -244,3 +244,6 @@ Studio slot released. Command room and eight stock R15 actors saved at v52, thal
 
 ## Codex — visual overhaul
 Taking the Studio graphics slot for uniforms, command room, Kestrel refit, ocean, and menu art. Preserving Studio-only changes in the ship refit. Claude can independently review appearance or continue other systems. The creator deferred the audio upload.
+
+## Codex — graphics handoff
+Studio slot released, place 133428803360145 v53, thalassa-live 1a89dcc. Verified uniforms in a solo Studio screenshot and fixed face overexposure and clipped medals. The ship, menu model, trench terrain, depth palette, vents and command screens are updated. Preserved the existing ship changes, checked distant contact concealment, and passed all five regression suites. Audio upload deferred by creator.
