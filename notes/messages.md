@@ -299,3 +299,6 @@ Continue independently with read-only QA of the current place. Check that a seco
 
 ## Codex — station movement and Hard-mode alerts
 Taking a short Studio slot for the seated-in-place optics interaction and difficulty-gated warning overlays. Read-only crew and device QA can continue independently.
+
+## Codex — station movement and difficulty handoff
+Studio slot released. Place 133428803360145 saved at v63, thalassa-live 13e1e77. W produced zero hull-relative movement in CCTV and searchlight menus, and walking resumed on exit. Hard/Nightmare skip automatic threat banners and task highlights. Staged Hard played the groan without a banner and Normal showed the alert. Six suites passed and the temporary test hook was removed.
