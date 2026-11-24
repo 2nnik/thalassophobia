@@ -16,6 +16,11 @@ local net = ReplicatedStorage:WaitForChild("DiveNet")
 local feed = net:WaitForChild("Feed")
 Exterior.init(site,feed)
 local active, settling
+local Parasite=require(script.Parent:WaitForChild("DiveParasite"))
+local Medical=require(script.Parent:WaitForChild("DiveMedical"))
+local parasiteNet=Instance.new("RemoteEvent")
+parasiteNet.Name,parasiteNet.Parent="Parasite",net
+local parasite,medical
 local members, receipts, throttles, held = {}, {}, {}, {}
 local sceneIdle = Dive.new("Normal", 1, {})
 sceneIdle.phase, sceneIdle.engine = "Lobby", false
@@ -178,6 +183,17 @@ local function sync(s)
 	end
 end
 
+local function living(p)
+	local m=members[p]
+	return m and m.alive and not m.intakeId and not settling
+end
+local function exposed(p)
+	return living(p) and members[p].outside
+end
+parasiteNet.OnServerEvent:Connect(function(p,action,key)
+	if parasite and living(p) then parasite:input(p,action,key) end
+end)
+
 local function start(party, difficulty)
 	if active or settling or #party == 0 or #party > 4 then return false end
 	local crew = {}
@@ -195,6 +211,12 @@ local function start(party, difficulty)
 	active.repairOwners={}
 	runNumber+=1
 	active.boarding=true
+	local roster={}
+	for p in crew do table.insert(roster,p) end
+	parasite=Parasite.start(roster,difficulty,site,parasiteNet)
+	medical=Medical.start(roster,difficulty,site,function(p,kind,target)
+		return parasite and living(p) and parasite:strike(p,kind,target)
+	end)
 	recalculate(active)
 	for index,p in party do
 		local m=members[p]
@@ -251,6 +273,8 @@ end
 settle = function(s)
 	if active ~= s or settling then return end
 	settling=true
+	if parasite then parasite:destroy(); parasite=nil end
+	if medical then medical:destroy(); medical=nil end
 	local kind=s.sequence
 	if kind then
 		local model=site.Contacts[if kind=="Squid" then "GiantSquid" else "Leviathan"]
@@ -270,6 +294,7 @@ down = function(p, reason)
 	local s,m = active,members[p]
 	if not s or settling or not m or not m.alive then return end
 	m.alive, m.death = false, reason
+	if medical then medical:remove(p) end
 	closeOptics(m)
 	m.intakeId=nil
 	releaseBerth(m)
@@ -586,6 +611,7 @@ Players.PlayerAdded:Connect(joined)
 for _,p in Players:GetPlayers() do joined(p) end
 
 Players.PlayerRemoving:Connect(function(p)
+	if medical then medical:remove(p) end
 	local m,s = members[p],active
 	if m then
 		closeOptics(m)
@@ -736,5 +762,8 @@ RunService.Heartbeat:Connect(function(dt)
 	World.setDepth(s.depth)
 	updateCrawler(s)
 	handleCrew(s,step)
+	if active==s and parasite and medical then
+		parasite:step(step,s.depth,exposed,living,function(p) medical:wound(p) end)
+	end
 	if active == s then sync(s) end
 end)

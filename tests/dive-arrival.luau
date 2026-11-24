@@ -24,6 +24,8 @@ local function player()
 end
 local host,guest=player(),player()
 local modules={
+	DiveMedical={start=function() return {remove=function() end,destroy=function() end} end},
+	DiveParasite={start=function() return {step=function() end,destroy=function() end} end},
 	DiveSimulation={
 		new=function() return {difficulty="Easy",phase="Descent",depth=0,elapsed=0,battery=100,hull=100,swarm=0} end,
 		step=function(s,dt) ticks+=1 s.elapsed+=dt s.systemsOffline=offline end,
@@ -44,7 +46,8 @@ local boot=luau.load(fs.readFile("src/ServerScriptService/DiveController.server.
 		workspace={WaitForChild=function() return site end},
 		script={Parent={WaitForChild=function(_,name) return name end}},
 		require=function(name) return modules[name] or {} end,
-		Instance={new=function()
+		Instance={new=function(class)
+			if class=="RemoteEvent" then return {OnServerEvent=signal()} end
 			latestWeld={Destroy=function(self) self.Parent=nil end}
 			return latestWeld
 		end},

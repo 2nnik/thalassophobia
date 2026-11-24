@@ -5,9 +5,13 @@
   "workspaceModel": "Workspace.Thalassa",
   "remotes": [
     "ReplicatedStorage.DiveNet.Input",
-    "ReplicatedStorage.DiveNet.Feed"
+    "ReplicatedStorage.DiveNet.Feed",
+    "ReplicatedStorage.DiveNet.Parasite"
   ],
   "scripts": [
+    {"group":"ServerScriptService","class":"ModuleScript","name":"DiveMedical","path":"src/ServerScriptService/DiveMedical.luau"},
+    {"group":"ServerScriptService","class":"ModuleScript","name":"DiveParasite","path":"src/ServerScriptService/DiveParasite.luau"},
+    {"group":"StarterPlayerScripts","class":"ModuleScript","name":"DiveParasiteClient","path":"src/StarterPlayerScripts/DiveParasiteClient.luau"},
     {
       "group": "StarterPlayerScripts",
       "class": "ModuleScript",

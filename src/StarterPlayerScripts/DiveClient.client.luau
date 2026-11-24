@@ -50,9 +50,12 @@ local breach
 local promptEligible=false
 local showDiveNotices=false
 local intakeId=nil
+local parasiteUI
+local crewAlive=false
 local function dockControls()
     local sequence=intakeId~=nil or (cinematics and cinematics:isPlaying())
-    local patching=breach and breach:isActive()
+    if parasiteUI then parasiteUI:setDiveActive(mode=="Dive" and crewAlive and not sequence) end
+    local patching=(breach and breach:isActive()) or (parasiteUI and parasiteUI:isActive())
     player.CameraMode=if mode=="Dive" then Enum.CameraMode.LockFirstPerson else Enum.CameraMode.Classic
     local camera=workspace.CurrentCamera
     if mode=="Dive" and not viewing and not sequence and camera and camera.CameraType==Enum.CameraType.Scriptable then
@@ -68,6 +71,7 @@ local function dockControls()
     if mode~="Dive" or patching then InputService.MouseBehavior=Enum.MouseBehavior.Default end
     PromptService.Enabled=mode=="Dive" and promptEligible and not viewing and not sequence and not patching
 end
+parasiteUI=require(script.Parent:WaitForChild("DiveParasiteClient")).start(net:WaitForChild("Parasite"),dockControls)
 cinematics=require(script.Parent:WaitForChild("DiveCinematics")).new(screen,dockControls)
 local function send(action,arg)
     if action=="DismissResults" then
@@ -310,6 +314,7 @@ feed.OnClientEvent:Connect(function(kind,payload)
     elseif kind=="Dive" and type(payload)=="table" then
         if payload.phase=="Results" or payload.phase=="Lobby" or (mode=="Results" and not payload.intakeId) then return end
         received=true
+        crewAlive=payload.alive~=false
         showDiveNotices=payload.difficulty=="Easy"
         if mode~="Dive" then
             mode="Dive"
