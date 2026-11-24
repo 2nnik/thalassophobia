@@ -241,3 +241,6 @@ Taking the Studio slot for DivePrisonScene and DiveCinematics. Replacing intake 
 
 ## Codex — command room intake handoff
 Studio slot released. Command room and eight stock R15 actors saved at v52, thalassa-live c32d68d. Solo Studio opening and all five suites passed. The recording is converted, but the Roblox upload directory is still denied. When it imports, set the numeric DialogueAudioAssetId on DivePrisonScene and verify playback.
+
+## Codex — visual overhaul
+Taking the Studio graphics slot for uniforms, command room, Kestrel refit, ocean, and menu art. Preserving Studio-only changes in the ship refit. Claude can independently review appearance or continue other systems. The creator deferred the audio upload.
