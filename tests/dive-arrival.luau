@@ -3,6 +3,7 @@ local fs = require("@lune/fs")
 local luau = require("@lune/luau")
 local roblox = require("@lune/roblox")
 local now, start, snapshots, ticks = 0, nil, {}, 0
+local offline=false
 local function signal()
 	return {Connect=function(self, fn) self.fire=fn end}
 end
@@ -24,13 +25,13 @@ local host,guest=player(),player()
 local modules={
 	DiveSimulation={
 		new=function() return {difficulty="Easy",phase="Descent",depth=0,elapsed=0,battery=100,hull=100,swarm=0} end,
-		step=function(s,dt) ticks+=1 s.elapsed+=dt end,
+		step=function(s,dt) ticks+=1 s.elapsed+=dt s.systemsOffline=offline end,
 	},
 	DiveSensors={pulse=function() end},
-	DiveWorld={update=function() end,travel=function() return roblox.Vector3.zero end,
+	DiveWorld={update=function() end,travel=function() return roblox.Vector3.zero end,bindOpticsClick=function() end,
 		squidBearing=function() return 1 end,setDepth=function() end},
 	DiveLobby={trait=function() return "" end,init=function(callbacks) start=callbacks.start end},
-	DiveExterior={init=function() end,snapshot=function() end,stopSwim=function() end},
+	DiveExterior={init=function() end,snapshot=function() end,stopSwim=function() end,input=function() return false end},
 }
 local services={Players=players,RunService=runService,
 	ReplicatedStorage={WaitForChild=function() return net end},
@@ -108,3 +109,49 @@ assert(ticks==0)
 heartbeat(.5)
 assert(ticks>0 and not snapshots[host].intakeId)
 print("PASS: solo and staggered crew openings, minimum presentation time, stale messages, late loading and disconnect")
+
+local function opticsPrompt(action)
+	local panel={Position=roblox.Vector3.zero}
+	return {Enabled=true,Parent={IsA=function() return false end},MaxActivationDistance=6,
+		IsDescendantOf=function() return true end,FindFirstAncestorWhichIsA=function() return panel end,
+		GetAttribute=function() return action end}
+end
+
+local trigger=services.ProximityPromptService.PromptTriggered.fire
+local lamp, camera=opticsPrompt("Light"),opticsPrompt("Camera")
+send(host,"AimSearchlight",3)
+assert(snapshots[host].aim==nil,"a player away from the console cannot aim the beam")
+trigger(lamp,host)
+assert(snapshots[host].searchlightView==true and not snapshots[host].light,"opening the console must not turn on the beam")
+for _,bad in {0,5,2.5,"3",0/0} do send(host,"AimSearchlight",bad) end
+assert(snapshots[host].aim==nil,"invalid bearings must be rejected")
+send(host,"AimSearchlight",3)
+assert(snapshots[host].aim==3 and snapshots[host].light,"direct selection must aim and power the beam")
+send(host,"AimSearchlight",4)
+assert(snapshots[host].aim==4,"each valid click sets an absolute bearing")
+send(host,"AimSearchlight",false)
+assert(snapshots[host].aim==4 and not snapshots[host].light,"lamp off preserves the last bearing")
+send(host,"CloseOptics")
+assert(not snapshots[host].searchlightView)
+trigger(camera,host)
+assert(snapshots[host].cameraView and not snapshots[host].searchlightView)
+send(host,"AimSearchlight",1)
+assert(snapshots[host].aim==4 and not snapshots[host].light,"a camera session cannot move the searchlight")
+send(host,"CloseOptics")
+assert(not snapshots[host].cameraView)
+heartbeat(.25)
+heartbeat(.25)
+trigger(camera,host)
+assert(snapshots[host].cameraView)
+offline=true
+heartbeat(1)
+assert(not snapshots[host].cameraView,"power loss must close the camera console")
+heartbeat(.25)
+trigger(lamp,host)
+heartbeat(1)
+assert(snapshots[host].searchlightView,"a breach must leave the lamp console available")
+host.Character.HumanoidRootPart.Position=roblox.Vector3.new(0,0,20)
+send(host,"AimSearchlight",1)
+heartbeat(1)
+assert(snapshots[host].aim==4 and not snapshots[host].searchlightView,"leaving the console revokes beam control")
+print("PASS: direct optics selection and server-owned searchlight")

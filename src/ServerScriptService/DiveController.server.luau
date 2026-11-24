@@ -25,6 +25,10 @@ local CREW_GRACE_SECONDS = 45
 local runNumber = 0
 local cueDuration = {WormRescue=.95,WormDeath=2.8,Angler=8,Squid=13,Flood=15}
 
+local function closeOptics(m)
+	m.opticsMode,m.opticsOrigin=nil,nil
+end
+
 local function cue(p,kind,duration,section,position)
 	if p.Parent == Players then
 		feed:FireClient(p,"Cinematic",{kind=kind,duration=duration,section=section,position=position,
@@ -136,7 +140,8 @@ local function sendSnapshot(p, m, s)
 	out.extinguisherEquipped = out.hasExtinguisher and m.extinguisher.Parent==p.Character
 	out.planks,out.breachRepair=m.planks,m.breachRepair
 	out.sonarOn, out.sonarRange = s.sonarOn, Sensors.range
-	out.cameraView = m.cameraOrigin ~= nil
+	out.cameraView = m.opticsMode=="Camera"
+	out.searchlightView = m.opticsMode=="Light"
 	if s.sonarOn and not m.outside then out.echoes, out.pingAt = s.echoes,s.pingAt end
 	Exterior.snapshot(p,m,s,out)
 	feed:FireClient(p,"Dive",out)
@@ -157,7 +162,9 @@ end
 local function sync(s)
 	if s.systemsOffline then
 		s.sonarOn,s.echoes=false,nil
-		for _,m in members do m.cameraOrigin=nil end
+		for _,m in members do
+			if m.opticsMode=="Camera" then closeOptics(m) end
+		end
 	end
 	World.update(s)
 	Sensors.pulse(s,members)
@@ -256,6 +263,7 @@ down = function(p, reason)
 	local s,m = active,members[p]
 	if not s or settling or not m or not m.alive then return end
 	m.alive, m.death = false, reason
+	closeOptics(m)
 	m.intakeId=nil
 	releaseBerth(m)
 	dropArtifact(s,p)
@@ -322,7 +330,7 @@ end
 local function discharge(p,direction)
 	local s,m=active,members[p]
 	if not s or settling or not m or m.intakeId or not m.alive or m.outside
-		or m.grab or m.breachRepair or m.cameraOrigin or typeof(direction)~="Vector3" then return end
+		or m.grab or m.breachRepair or m.opticsMode or typeof(direction)~="Vector3" then return end
 	local size=direction.Magnitude
 	if not (size>.95 and size<1.05) then return end
 	local character,tool=p.Character,m.extinguisher
@@ -366,7 +374,7 @@ end
 local function interact(p, action)
 	local m,s = members[p],active
 	if not m or not s or settling or not m.alive or m.grab or m.breachRepair then return end
-	if m.cleaning or m.cameraOrigin then return end
+	if m.cleaning or m.opticsMode then return end
 	local cleanIndex = tonumber(action:match("^Clean([1-4])$"))
 	local exterior = cleanIndex ~= nil or action == "Return" or action == "Artifact"
 	if exterior ~= m.outside then return end
@@ -386,10 +394,11 @@ local function interact(p, action)
 	elseif action == "Engine" then
 		s.engine = not s.engine
 		Dive.warn(s,s.engine and "Propulsion restored." or "Propulsion offline.",2)
-	elseif action == "Light" then
-		s.light = not s.light
-	elseif action == "AimLeft" or action == "AimRight" then
-		s.aim = ((s.aim-1 + (action == "AimLeft" and -1 or 1)) % 4) + 1
+	elseif action == "Light" or action == "Camera" then
+		if action=="Camera" and s.systemsOffline then return end
+		local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+		if not root then return end
+		m.opticsMode,m.opticsOrigin=action,root.Position
 	elseif string.match(action, "^Repair[1-3]$") then
 		local section = tonumber(action:sub(-1))
 		if not s.cracks[section] or s.breaches[section]>0 then return end
@@ -431,10 +440,6 @@ local function interact(p, action)
 		s.sonarOn = not s.sonarOn
 		s.echoes = nil
 		s.nextPing = 0
-	elseif action == "Camera" then
-		if s.systemsOffline then return end
-		local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-		m.cameraOrigin = root and root.Position
 	else
 		return
 	end
@@ -489,16 +494,18 @@ local function updateCrawler(s)
 	m.grab={weld=weld,root=root,humanoid=humanoid,speed=humanoid.WalkSpeed,autoRotate=humanoid.AutoRotate,
 		deadline=s.elapsed+duration}
 	humanoid.WalkSpeed,humanoid.AutoRotate=0,false
-	m.cameraOrigin=nil
+	closeOptics(m)
 	s.victim,s.crawlerGrip=victim,CFrame.lookAt(spot,face)
 	Dive.warn(s,"Crew member restrained. Use the extinguisher in section 0"..s.crawlerSection..".",duration)
 	cue(victim,"WormGrab",duration+1,s.crawlerSection,spot)
 end
 
-Prompts.PromptTriggered:Connect(function(prompt,p)
+local function usePrompt(prompt,p)
 	local action = validPrompt(p,prompt)
 	if action then interact(p,action) end
-end)
+end
+Prompts.PromptTriggered:Connect(usePrompt)
+World.bindOpticsClick(usePrompt)
 Prompts.PromptButtonHoldBegan:Connect(function(prompt,p)
 	local action = validPrompt(p,prompt)
 	if not action or not action:match("^Repair") or members[p].trait ~= "Welder" then return end
@@ -520,7 +527,7 @@ local function handleCrew(s,dt)
 			stopPatch(s,p,m)
 			notice(p,"Patch was interrupted. Try again with the same plank.")
 		end
-		if m.cameraOrigin and root and (root.Position-m.cameraOrigin).Magnitude>9 then m.cameraOrigin=nil end
+		if m.opticsOrigin and (not root or (root.Position-m.opticsOrigin).Magnitude>9) then closeOptics(m) end
 		if m.outside then
 			Exterior.tick(p,m,s,dt)
 			m.oxygen -= dt
@@ -627,9 +634,21 @@ net.Input.OnServerEvent:Connect(function(p, action, arg)
 		sync(s)
 		return
 	end
-	if members[p] and active and not settling and action=="CloseCamera" then
-		members[p].cameraOrigin=nil
-		sendSnapshot(p,members[p],active)
+	if m and active and not settling and action=="CloseOptics" then
+		closeOptics(m)
+		sendSnapshot(p,m,active)
+	elseif action=="AimSearchlight" then
+		local root=p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+		if not m or not active or settling or not m.alive or m.outside or m.grab or m.breachRepair
+			or m.opticsMode~="Light" or not root or (root.Position-m.opticsOrigin).Magnitude>9 then return end
+		if arg==false then
+			active.light=false
+		elseif typeof(arg)=="number" and arg>=1 and arg<=4 and arg%1==0 and active.battery>0 then
+			active.aim,active.light=arg,true
+		else
+			return
+		end
+		sync(active)
 	elseif members[p] and active and not settling and Exterior.input(p,members[p],active,action,arg) then
 		if action~="SwimMove" then sync(active) end
 	elseif action == "Sync" and members[p] and active then
@@ -682,7 +701,7 @@ local function carryCrew(delta)
 		if m.outside then
 			Exterior.followShip(m,delta)
 		else
-			if m.cameraOrigin then m.cameraOrigin += delta end
+			if m.opticsOrigin then m.opticsOrigin += delta end
 		end
 	end
 end

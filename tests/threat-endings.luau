@@ -131,3 +131,33 @@ for difficulty, approach in {Easy=13, Normal=11, Hard=9.5, Nightmare=8} do
 	end
 end
 print("PASS: difficulty strike limits, squid damage, repairs, fouling, crawler warnings and blocked entry")
+
+local function pressureRun(depth)
+	local run=Dive.new("Normal",1,{},rng)
+	run.phase,run.depth,run.deepest,run.engine="Bottom",depth,10000,false
+	run.nextThreat,run.nextInfestation=math.huge,math.huge
+	return run
+end
+local function leakCount(run)
+	local total=0
+	for _,open in run.cracks do if open then total+=1 end end
+	return total
+end
+local shallow,mid,deep=pressureRun(300),pressureRun(4500),pressureRun(9500)
+for _=1,65 do
+	for _,run in {shallow,mid,deep} do Dive.step(run,1) end
+end
+assert(leakCount(shallow)==0 and leakCount(mid)==0 and leakCount(deep)==1,"pressure leaks should start sooner in deeper water")
+for _=1,57 do
+	for _,run in {shallow,mid,deep} do Dive.step(run,1) end
+end
+assert(leakCount(shallow)==0 and leakCount(mid)==1 and leakCount(deep)==2,"caps and spacing must scale with current depth")
+deep.phase,deep.engine,deep.artifact,deep.depth="Ascent",true,true,300
+deep.cracks={false,false,false}
+for _=1,10 do Dive.step(deep,1) end
+assert(leakCount(deep)==0,"passing through shallow water on ascent cannot create another pressure leak")
+local damaged=pressureRun(9500)
+damaged.breaches[2],damaged.systemsOffline=1,true
+for _=1,80 do Dive.step(damaged,1) end
+assert(leakCount(damaged)==0,"an open predator breach should pause ambient pressure buildup")
+print("PASS: pressure leak pacing scales with current depth and pauses during major breaches")

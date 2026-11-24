@@ -4,9 +4,11 @@ local Context = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
+local UI = require(script.Parent.DiveClientStyle)
 
 return function(net, screen)
 	local site=workspace:WaitForChild("Thalassa")
+	local hull=site:WaitForChild("ShipEnvelope")
 	local function make(class,parent,props)
 		local o=Instance.new(class)
 		for key,value in props do o[key]=value end
@@ -91,6 +93,7 @@ return function(net, screen)
 	end
 
 	local display=frame(screen,"ExteriorVideo",dark,UDim2.fromScale(1,1))
+	display.ZIndex=20
 	display.BackgroundTransparency=1
 	display.Visible=false
 	local signalLayer=frame(display,"VideoArtifacts",dark,UDim2.fromScale(1,1))
@@ -116,99 +119,148 @@ return function(net, screen)
 	top.BackgroundTransparency=.06
 	stroke(top,soft,.6)
 	local title=label(top,"Feed","",UDim2.new(.53,0,1,0),size(12,0),17,green)
-	local subject=label(top,"Target","",UDim2.new(.47,-20,1,0),UDim2.fromScale(.53,0),14,pale)
+	local subject=label(top,"Signal","",UDim2.new(.47,-20,1,0),UDim2.fromScale(.53,0),14,pale)
 	subject.TextXAlignment=Enum.TextXAlignment.Right
 	local cross=label(display,"Reticle","+",size(26,28),UDim2.fromScale(.5,.5),21,soft)
 	cross.AnchorPoint=Vector2.new(.5,.5)
 	cross.TextXAlignment=Enum.TextXAlignment.Center
-	local bar=frame(display,"CameraControls",dark,size(380,44),UDim2.new(.5,0,1,-9))
-	bar.AnchorPoint=Vector2.new(.5,1)
-	local barScale=make("UIScale",bar,{Scale=1})
-	local function btn(text,x,width)
-		local b=make("TextButton",bar,{Name=text,Text=text,TextColor3=pale,TextSize=14,Font=Enum.Font.Code,
-			Size=size(width,34),Position=size(x,5),BackgroundColor3=Color3.fromRGB(22,54,57),BorderSizePixel=0,Modal=true})
+	local panel=frame(display,"KestrelMap",dark,size(358,286))
+	panel.BackgroundTransparency=.06
+	stroke(panel,soft,.34)
+	local panelScale=make("UIScale",panel,{Scale=1})
+	local panelTitle=label(panel,"ConsoleName","",size(242,28),size(13,5),14,green)
+	local function button(name,text,x,y,width,height)
+		local b=make("TextButton",panel,{Name=name,Text=text,TextColor3=pale,TextSize=14,Font=Enum.Font.Code,
+			Size=size(width,height),Position=size(x,y),BackgroundColor3=Color3.fromRGB(20,51,54),
+			BorderSizePixel=0,Modal=true})
+		stroke(b,soft,.44)
 		return b
 	end
-	local back=btn("‹ PREV",5,69)
-	local nextCam=btn("NEXT ›",78,69)
-	local track=btn("TRACK CONTACT",151,131)
-	local leave=btn("EXIT  Q",286,89)
+	local leave=button("Exit","EXIT  Q",266,7,80,29)
+	local power=button("BeamOff","BEAM OFF",233,244,113,30)
+	local status=label(panel,"BearingStatus","",size(206,31),size(13,244),13,soft)
+	local map=frame(panel,"HullSchematic",Color3.fromRGB(9,31,35),size(332,196),size(13,42))
+	map.ClipsDescendants=true
+	stroke(map,soft,.65)
+	for x=9,329,16 do frame(map,"Vertical grid",soft,size(1,196),size(x,0)).BackgroundTransparency=.9 end
+	for y=10,196,16 do frame(map,"Horizontal grid",soft,size(332,1),size(0,y)).BackgroundTransparency=.9 end
+	local function polyline(points,color,width)
+		for i=2,#points do
+			local a,b=points[i-1],points[i]
+			UI.line(map,a[1],a[2],b[1],b[2],color,width)
+		end
+	end
+	-- Bow faces the top. Breaks in the sides show the airlock and port machinery annex.
+	local outline={{166,37},{147,43},{124,60},{116,80},{116,99},{107,99},{107,126},
+		{120,126},{120,148},{133,158},{199,158},{212,148},{212,122},{224,122},
+		{224,98},{213,98},{213,80},{206,60},{185,43},{166,37}}
+	polyline(outline,green,1.65)
+	polyline({{124,60},{206,60}},soft,1)
+	polyline({{117,94},{151,94},{151,109},{211,109}},soft,1)
+	polyline({{120,135},{212,135}},soft,1)
+	label(map,"Bridge","BRIDGE",size(74,14),size(141,71),11,pale)
+	label(map,"Airlock","LOCK",size(42,14),size(181,116),10,soft)
+	label(map,"Engine","ENGINE",size(70,14),size(140,137),11,pale)
+	local routes={
+		{{166,37},{166,28}},
+		{{224,105},{263,105}},
+		{{166,158},{166,172}},
+		{{107,105},{68,105}},
+	}
+	for _,route in routes do polyline(route,soft,1.5) end
+	local names={"BOW","STBD","STERN","PORT"}
+	local positions={{145,45},{274,130},{145,205},{14,130}}
+	local nodes={}
+	for i,xy in positions do
+		nodes[i]=button("Bearing"..i,"",xy[1],xy[2],68,32)
+	end
 	local grade=make("ColorCorrectionEffect",Lighting,{Name="HullCameraGain",Enabled=false,Brightness=.055,
 		Contrast=.15,Saturation=-.8,TintColor=Color3.fromRGB(201,232,223)})
 	-- The camera softens the rendered scene while its overlay and controls stay sharp.
 	local lens=make("BlurEffect",Lighting,{Name="HullCameraSoftFocus",Enabled=false,Size=3})
-	local viewing=false
+	local mode
 	local slot=1
-	local target
 	local previousFOV=70
+	local previousMouse
+	local deskMount
 	local displayedSlot
 	local syncUntil=0
 	local nextNoise=0
-	local nextFrame=0
-	local bindings={"CameraPrev","CameraNext","CameraTrack","CameraLeave"}
-	local ids={"Leviathan","GiantSquid","CrackCrawler","Pursuer"}
 	local function marker(i) return site:FindFirstChild("DiveCamera"..i,true) end
-	local function detected(id)
-		local contacts=site:FindFirstChild("Contacts")
-		local model=contacts and id and contacts:FindFirstChild(id)
-		if model and model:GetAttribute("Detectable") then return model end
-	end
-	local function bestCamera(pos)
-		local bestScore,best=-2,1
-		for i=1,4 do
-			local m=marker(i)
-			if m then
-				local v=pos-m.Position
-				local score=v.Magnitude>.1 and m.CFrame.LookVector:Dot(v.Unit) or -2
-				if score>bestScore then bestScore,best=score,i end
-			end
+	local function tintMap(bearing,lit,powered)
+		local color=if mode=="Light" then amber else green
+		for i,b in nodes do
+			local selected=i==bearing
+			b.Text=string.format("%02d %s",i,names[i])
+			b.BackgroundColor3=if selected and lit then color elseif selected then Color3.fromRGB(51,60,56) else Color3.fromRGB(20,51,54)
+			b.TextColor3=if selected and lit then dark else pale
+			b.UIStroke.Color=if selected then color else soft
 		end
-		return best
+		status.Text=if mode=="Camera" then "FEED  "..names[bearing]
+			elseif not powered then "POWER UNAVAILABLE"
+			elseif lit then "BEAM  "..names[bearing] else "BEAM STANDBY"
+		power.Visible=mode=="Light"
 	end
-	local function nextTarget()
-		local start=table.find(ids,target) or 0
-		target=nil
-		for j=1,#ids do
-			local id=ids[(start+j-1)%#ids+1]
-			local model=detected(id)
-			if model then target=id slot=bestCamera(model:GetPivot().Position) return end
+	local function selectBearing(i)
+		if not i then return end
+		if mode=="Light" then
+			net.Input:FireServer("AimSearchlight",i)
+		elseif mode=="Camera" then
+			slot=i
+			tintMap(slot,true,true)
 		end
 	end
-	local function cycle(delta) target=nil slot=(slot-1+delta)%4+1 end
-	local function quit() net.Input:FireServer("CloseCamera") end
-	back.Activated:Connect(function() cycle(-1) end)
-	nextCam.Activated:Connect(function() cycle(1) end)
-	track.Activated:Connect(nextTarget)
+	for i,b in nodes do b.Activated:Connect(function() selectBearing(i) end) end
+	power.Activated:Connect(function()
+		if mode=="Light" then net.Input:FireServer("AimSearchlight",false) end
+	end)
+	local function quit() net.Input:FireServer("CloseOptics") end
 	leave.Activated:Connect(quit)
-	local commands={function() cycle(-1) end,function() cycle(1) end,nextTarget,quit}
-	local keys={{Enum.KeyCode.A,Enum.KeyCode.ButtonL1},{Enum.KeyCode.D,Enum.KeyCode.ButtonR1},
-		{Enum.KeyCode.T,Enum.KeyCode.ButtonX},{Enum.KeyCode.Q,Enum.KeyCode.ButtonB}}
-	local function view(on)
-		if on==viewing then return end
-		viewing=on
-		display.Visible=on
-		grade.Enabled=on
-		lens.Enabled=on
+	local keyOrder={Enum.KeyCode.One,Enum.KeyCode.Two,Enum.KeyCode.Three,Enum.KeyCode.Four}
+	local function view(nextMode)
+		if nextMode==mode then return end
+		local wasOpen=mode~=nil
+		mode=nextMode
+		local cameraFeed=mode=="Camera"
+		display.Visible=mode~=nil
+		grade.Enabled=cameraFeed
+		lens.Enabled=cameraFeed
+		signalLayer.Visible=cameraFeed
+		top.Visible=cameraFeed
+		cross.Visible=cameraFeed
+		display.BackgroundTransparency=if cameraFeed then 1 else .26
 		local cam=workspace.CurrentCamera
-		if on then
-			slot=1 target=nil nextTarget()
+		if mode then
+			panelTitle.Text=if cameraFeed then "KESTREL 04  /  CCTV" else "KESTREL 04  /  SEARCHLIGHT"
 			displayedSlot=nil
-			nextNoise,nextFrame=0,0
-			previousFOV=cam.FieldOfView
-			cam.CameraType=Enum.CameraType.Scriptable
-			cam.FieldOfView=78
-			for i,name in bindings do
-				Context:BindActionAtPriority(name,function(_,state)
-					if state==Enum.UserInputState.Begin then commands[i]() end
-					return Enum.ContextActionResult.Sink
-				end,false,3000,table.unpack(keys[i]))
+			nextNoise=0
+			if cam then
+				if not wasOpen then previousFOV=cam.FieldOfView end
+				deskMount=if cameraFeed then nil else hull.CFrame:ToObjectSpace(cam.CFrame)
+				cam.CameraType=Enum.CameraType.Scriptable
+				cam.FieldOfView=if cameraFeed then 78 else previousFOV
 			end
+			if not wasOpen then previousMouse=UserInput.MouseBehavior end
+			UserInput.MouseBehavior=Enum.MouseBehavior.Default
+			Context:BindActionAtPriority("OpticsSelect",function(_,state,input)
+				if state==Enum.UserInputState.Begin then selectBearing(table.find(keyOrder,input.KeyCode)) end
+				return Enum.ContextActionResult.Sink
+			end,false,3000,table.unpack(keyOrder))
+			Context:BindActionAtPriority("OpticsClose",function(_,state)
+				if state==Enum.UserInputState.Begin then quit() end
+				return Enum.ContextActionResult.Sink
+			end,false,3000,Enum.KeyCode.Q,Enum.KeyCode.ButtonB)
+			if UserInput:GetLastInputType().Name:find("Gamepad",1,true) then GuiService.SelectedObject=nodes[slot] end
 		else
-			for _,name in bindings do Context:UnbindAction(name) end
-			cam.CameraType=Enum.CameraType.Custom
-			cam.FieldOfView=previousFOV
-			local char=Players.LocalPlayer.Character
-			if char then cam.CameraSubject=char:FindFirstChildOfClass("Humanoid") end
+			Context:UnbindAction("OpticsSelect")
+			Context:UnbindAction("OpticsClose")
+			if previousMouse then UserInput.MouseBehavior=previousMouse end
+			if cam then
+				cam.CameraType=Enum.CameraType.Custom
+				cam.FieldOfView=previousFOV
+				local char=Players.LocalPlayer.Character
+				if char then cam.CameraSubject=char:FindFirstChildOfClass("Humanoid") end
+			end
 			if GuiService.SelectedObject and GuiService.SelectedObject:IsDescendantOf(display) then GuiService.SelectedObject=nil end
 		end
 	end
@@ -216,7 +268,7 @@ return function(net, screen)
 		if displayedSlot~=slot then
 			displayedSlot=slot
 			syncUntil=now+.27
-			nextNoise,nextFrame=0,0
+			nextNoise=0
 		end
 		local tuning=math.clamp((syncUntil-now)/.27,0,1)
 		transmission.BackgroundTransparency=1-.65*tuning
@@ -234,6 +286,7 @@ return function(net, screen)
 	end
 	RunService:BindToRenderStep("ThalassaExteriorOptics",Enum.RenderPriority.Camera.Value+2,function()
 		local cam=workspace.CurrentCamera
+		if not cam then return end
 		local compact=cam.ViewportSize.X<720
 		if scope.Visible then
 			scopeScale.Scale=compact and .72 or .95
@@ -242,36 +295,41 @@ return function(net, screen)
 			wave.Size=UDim2.fromScale(ratio,ratio)
 			waveStroke.Transparency=math.min(1,.1+ratio*.9)
 		end
-		if not viewing then return end
-		barScale.Scale=math.min(1,(cam.ViewportSize.X-14)/380)
-		if target and not detected(target) then nextTarget() end
-		local animal=detected(target)
+		if not mode then return end
+		panelScale.Scale=math.min(1.15,(cam.ViewportSize.X-26)/358,(cam.ViewportSize.Y-70)/286)
+		local cameraFeed=mode=="Camera"
+		panel.AnchorPoint=if cameraFeed then Vector2.new(1,1) else Vector2.new(.5,.5)
+		panel.Position=if cameraFeed then UDim2.new(1,-18,1,-18) else UDim2.fromScale(.5,.5)
+		UserInput.MouseBehavior=Enum.MouseBehavior.Default
+		if not cameraFeed then
+			if deskMount then
+				cam.CFrame=hull.CFrame*deskMount
+				cam.Focus=cam.CFrame*CFrame.new(0,0,-4)
+			end
+			return
+		end
 		local m=marker(slot)
 		if not m then title.Text="VIDEO  /  ACQUIRING" return end
-		local pos=animal and animal:GetPivot().Position
-		if pos and m.CFrame.LookVector:Dot((pos-m.Position).Unit)<.24 then
-			slot=bestCamera(pos)
-			m=marker(slot) or m
-		end
 		local now=os.clock()
 		local acquiring=updateSignal(now)
-		if now>=nextFrame then
-			-- Low-bandwidth feed cadence affects the image, never the UI.
-			nextFrame=now+1/18
-			cam.CameraType=Enum.CameraType.Scriptable
-			cam.CFrame=pos and CFrame.lookAt(m.Position,pos) or m.CFrame
-			cam.Focus=CFrame.new(pos or m.Position+m.CFrame.LookVector*70)
-		end
+		local mount=m:GetAttribute("HullMount")
+		local pose=if mount then hull.CFrame*mount else m.CFrame
+		-- Interference runs on its own clock. The camera pose follows the hull every frame.
+		cam.CameraType=Enum.CameraType.Scriptable
+		cam.CFrame=pose
+		cam.Focus=pose*CFrame.new(0,0,-70)
 		title.Text=string.format("CAM %02d  /  %s",slot,string.upper(m:GetAttribute("Label") or "HULL"))
-		subject.Text=if acquiring then "SYNCING" elseif animal then string.upper(animal:GetAttribute("ContactLabel") or animal.Name) else "LIVE  /  FIXED"
+		subject.Text=if acquiring then "SYNCING" else "LIVE"
 	end)
 	return {
 		update=function(s)
-			view(s.cameraView==true and s.alive~=false and not s.outside)
-			scope.Visible=s.sonarOn==true and s.alive~=false and not s.outside
+			local inside=s.alive~=false and not s.outside
+			view(if inside and s.cameraView then "Camera" elseif inside and s.searchlightView then "Light" else nil)
+			if mode then tintMap(if mode=="Camera" then slot else s.aim or 1,mode=="Camera" or s.light,(s.battery or 0)>0) end
+			scope.Visible=s.sonarOn==true and inside and not mode
 			if scope.Visible and s.pingAt and s.pingAt~=lastPulse then draw(s) end
 			if not scope.Visible then lastPulse=nil end
 		end,
-		reset=function() view(false) scope.Visible=false lastPulse=nil end,
+		reset=function() view(nil) scope.Visible=false lastPulse=nil end,
 	}
 end

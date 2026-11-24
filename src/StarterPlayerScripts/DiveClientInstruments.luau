@@ -13,25 +13,12 @@ return function(gui)
     local frame=UI.frame(gui,c.black,nil,nil,1)
     frame.Name="DiveInstruments"
     frame.Visible=false
-    local top=UI.frame(frame,c.sea,off(14,9),off(223,92),.13)
+    -- Power and hull live on the Wet lab "Hull status monitor" (DiveClientFeedback fills it), not on the HUD.
+    local top=UI.frame(frame,c.sea,off(14,9),off(223,48),.13)
     UI.edge(top)
     local depth=UI.label(top,"",30,c.white,UI.bold,off(12,5),off(116,41))
     depth.RichText=true
     local phase=UI.label(top,"DESCENT",13,c.green,UI.mono,off(129,14),off(84,25),Enum.TextXAlignment.Right)
-    local function gauge(parent,y,caption)
-        UI.label(parent,caption,12,c.soft,UI.mono,off(12,y),off(48,18))
-        local track=UI.frame(parent,c.grid,off(66,y+7),off(99,5))
-        local bar=UI.frame(track,c.green)
-        local value=UI.label(parent,"100%",13,c.white,UI.mono,off(165,y-1),off(46,20),Enum.TextXAlignment.Right)
-        return function(n)
-            n=math.clamp(n or 0,0,100)
-            bar.Size=UDim2.fromScale(n/100,1)
-            bar.BackgroundColor3=n<=20 and c.red or n<45 and c.orange or c.green
-            value.Text=math.floor(n+.5).."%"
-        end
-    end
-    local power=gauge(top,45,"POWER")
-    local hull=gauge(top,68,"HULL")
     local panel=UI.frame(frame,c.sea,nil,nil,.15)
     UI.edge(panel)
     local rail=UI.frame(panel,c.orange,nil,UDim2.new(0,3,1,0))
@@ -160,7 +147,7 @@ return function(gui)
         local compact=w<670
         if compact then
             top.Position=off(7,4)
-            panel.Position=off(7,105)
+            panel.Position=off(7,60)
             panel.Size=off(math.min(math.max(w-14,180),335),70)
             strip.AnchorPoint=Vector2.new(1,0)
             strip.Position=UDim2.new(1,-7,0,4)
@@ -183,7 +170,7 @@ return function(gui)
             flood.TextSize=13
         end
         status.AnchorPoint=Vector2.new(.5,0)
-        status.Position=UDim2.new(.5,0,0,compact and 181 or 12)
+        status.Position=UDim2.new(.5,0,0,compact and 136 or 12)
         status.Size=off(math.min(300,math.max(145,w-590)),48)
     end
     frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize)
@@ -202,12 +189,10 @@ return function(gui)
             recoveryAlarm,angler,anglerEcho,wormScrape,wormAlarm,wormIngress} do s:Stop() end
     end
     local function update(s)
-        frame.Visible=not s.cameraView
+        frame.Visible=not (s.cameraView or s.searchlightView)
         local at=math.max(0,math.floor((s.depth or 0)+.5))
         depth.Text=string.format('%03d <font size="14">M</font>',at)
         phase.Text=string.upper(s.phase=="Bottom" and "SEAFLOOR" or s.phase)
-        power(s.battery)
-        hull(s.hull)
         engine.Text=s.engine and "ENGINE   RUNNING" or (s.coast or 0)>.2 and "ENGINE   COASTING" or "ENGINE   SILENT"
         flood.Text="LIGHT    "..(s.light and (bearings[s.aim] or "FORE") or "OFF")
         local outside=s.outside

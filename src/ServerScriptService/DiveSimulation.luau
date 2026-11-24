@@ -9,6 +9,8 @@ local CRAWLER_APPROACH = {Easy = 13, Normal = 11, Hard = 9.5, Nightmare = 8}
 local CRAWLER_ENTRY = .47
 Dive.targetDepth = TARGET_DEPTH
 local MAX_BREACH = 3
+local PRESSURE_START_DEPTH = 500
+local SECOND_PRESSURE_LEAK_DEPTH = 6000
 local rules = {
 	Easy = {pace = 0.80, damage = 0.78, power = 0.85, anglerStrikes = 3, squidSqueezes = 4, squeezeInterval = 7},
 	Normal = {pace = 1, damage = 1, power = 1, anglerStrikes = 2, squidSqueezes = 3, squeezeInterval = 6},
@@ -32,7 +34,7 @@ function Dive.new(difficulty, crewCount, traits, rng)
 		squidSide = 1, crawlerSection = 1, boarded = false, artifact = false,
 		coast = 0, sharkPass = 0, repelled = 0, catchup = 0, elapsed = 0,
 		nextInfestation = math.huge,
-		nextThreat = math.huge, nextCrack = 23, warning = "Descent underway. Listen for contacts.",
+		nextThreat = math.huge, pressureExposure = 0, nextCrack = 110, warning = "Descent underway. Listen for contacts.",
 		warningUntil = 7, 
 	}
 end
@@ -296,10 +298,6 @@ function Dive.step(s, dt)
 	end
 	local pace = s.rules.pace * (0.72 + 0.095 * (s.crewCount - 1)) * (ascent and 1.27 or 1)
 	local depthRatio = s.depth / TARGET_DEPTH
-	if s.elapsed >= s.nextCrack then
-		crack(s)
-		s.nextCrack = s.elapsed + s.rng:NextNumber(23, 31) / (pace * (1 + depthRatio * 0.25))
-	end
 	if s.elapsed >= s.nextThreat then
 		drawContact(s)
 		s.nextThreat = nextContact(s, pace)
@@ -314,6 +312,18 @@ function Dive.step(s, dt)
 		if open then cracks += 1 end
 		breaches += s.breaches[i]
 		breachCause = s.breachCauses[i] or breachCause
+	end
+	local ambientLimit=if s.depth>=SECOND_PRESSURE_LEAK_DEPTH then 2 else 1
+	if s.depth>=PRESSURE_START_DEPTH and cracks<ambientLimit and breaches==0 then
+		-- Accumulate exposure at the current depth, so ascending immediately eases pressure.
+		local pressure=(s.depth-PRESSURE_START_DEPTH)/(TARGET_DEPTH-PRESSURE_START_DEPTH)
+		s.pressureExposure+=dt*s.rules.pace*(.82+1.23*pressure)
+		if s.pressureExposure>=s.nextCrack then
+			crack(s)
+			cracks+=1
+			s.pressureExposure=0
+			s.nextCrack=s.rng:NextNumber(100,124)
+		end
 	end
 	s.hull -= (cracks * .105 + breaches * .32) * dt * s.rules.damage
 	if s.hull <= 0 then

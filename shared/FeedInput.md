@@ -20,4 +20,6 @@ Predator breaches are tracked by section in `Dive.breaches`. Any open breach set
 
 `SpinTrait` spends `Lobby.spinCost` earned credits. The server samples using the catalog weights, then persists the balance and unlock together. `Lobby.spinResult` carries a unique `id`, `trait`, `duplicate` and `refund` for the reveal. `Trait` with an owned trait ID toggles equip.
 
-Dive actions include `CloseCamera`, `SwimMove` with direction and look vectors, `CleanStrike` with challenge id and strike time, and `CleanCancel`. Many station interactions originate from server-side ProximityPrompts. Review `DiveController`, `DiveExterior`, and `DiveLobby` for validation and exact fields before changing the interface.
+The optics stations open via a server-validated prompt or click. The private Dive snapshot indicates `cameraView` or `searchlightView`. Camera selection is local, while `AimSearchlight` changes the shared beam for players with an active searchlight session. It takes an integer 1–4 for bow, starboard, stern or port and powers the beam, or `false` to switch it off. `CloseOptics` leaves either station.
+
+Dive actions also include `SwimMove` with direction and look vectors, `CleanStrike` with challenge id and strike time, and `CleanCancel`. Many station interactions originate from server-side ProximityPrompts. Review `DiveController`, `DiveExterior`, and `DiveLobby` for validation and exact fields before changing the interface.

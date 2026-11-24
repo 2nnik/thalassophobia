@@ -563,7 +563,7 @@ function Client.update(s)
 	if not inDive then beginWater() end
 	inDive,searchlight=true,s.light==true and (s.battery or 100)>0
 	active=s.outside==true and s.alive~=false
-	local playSteps=s.alive~=false and not active and not s.cameraView
+	local playSteps=s.alive~=false and not active and not (s.cameraView or s.searchlightView)
 	if cabinSteps and not playSteps then stopSteelSteps() end
 	cabinSteps=playSteps
 	challenge=active and s.cleaning or nil

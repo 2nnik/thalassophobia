@@ -46,6 +46,27 @@ for _,item in world:GetDescendants() do
 end
 for i=1,3 do leaks[i] = stations["Section"..i].Fracture:GetChildren() end
 
+function World.bindOpticsClick(usePrompt)
+	for action,caption in {Light="Open searchlight map",Camera="Open camera map"} do
+		local prompt=prompts[action]
+		if not prompt then continue end
+		prompt.ActionText=caption
+		local panel=prompt:FindFirstAncestorWhichIsA("BasePart")
+		local target=if action=="Light" then stations.OPTICS else panel
+		panel.CanQuery=true
+		local click=Instance.new("ClickDetector")
+		click.Name="Open optics"
+		click.MaxActivationDistance=prompt.MaxActivationDistance
+		click.MouseClick:Connect(function(player) usePrompt(prompt,player) end)
+		click.Parent=target
+	end
+	for partName,caption in {AimLeft="BEARING",AimRight="MAP"} do
+		local panel=stations.OPTICS[partName]
+		panel.CanQuery=true
+		panel.Face.Legend.Text=caption
+	end
+end
+
 local function pose(model,cf)
  if positions[model] == cf then return end
  positions[model] = cf
@@ -292,6 +313,7 @@ local labels={Leviathan="ANGLER",GiantSquid="GIANT SQUID",CrackCrawler="HULL CRA
 local runService=game:GetService("RunService")
 for i=1,4 do
  cameraHeads[i]=world:WaitForChild("DiveCamera"..i)
+ cameraHeads[i]:SetAttribute("HullMount",envelope.CFrame:ToObjectSpace(cameraHeads[i].CFrame))
  local patch=barnacles:WaitForChild("Site"..i)
  sites[i]={}
  for _,part in patch:GetDescendants() do
@@ -427,7 +449,9 @@ function World.update(state)
  local crawler, swarm, pursuer = state.crawler or 0, state.swarm or 0, state.pursuer or 0
  local powered = (state.battery or 100)>0
  local lit = active and powered and state.light==true
- for _,id in {"Engine","Light","AimLeft","AimRight","Extinguisher","Airlock","Return","Planks"} do showPrompt(id,active) end
+ for _,id in {"Engine","Light","Extinguisher","Airlock","Return","Planks"} do showPrompt(id,active) end
+ showPrompt("AimLeft",false)
+ showPrompt("AimRight",false)
  showPrompt("Sonar",active and not state.systemsOffline)
  showPrompt("Camera",active and not state.systemsOffline)
  showPrompt("ClearSwarm",false)

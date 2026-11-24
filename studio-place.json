@@ -11,6 +11,12 @@
     {
       "group": "StarterPlayerScripts",
       "class": "ModuleScript",
+      "name": "DiveClientPrompts",
+      "path": "src/StarterPlayerScripts/DiveClientPrompts.luau"
+    },
+    {
+      "group": "StarterPlayerScripts",
+      "class": "ModuleScript",
       "name": "DiveClientFeedback",
       "path": "src/StarterPlayerScripts/DiveClientFeedback.luau"
     },

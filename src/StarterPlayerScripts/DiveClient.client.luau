@@ -54,13 +54,19 @@ local function dockControls()
     local sequence=intakeId~=nil or (cinematics and cinematics:isPlaying())
     local patching=breach and breach:isActive()
     player.CameraMode=if mode=="Dive" then Enum.CameraMode.LockFirstPerson else Enum.CameraMode.Classic
+    local camera=workspace.CurrentCamera
+    if mode=="Dive" and not viewing and not sequence and camera and camera.CameraType==Enum.CameraType.Scriptable then
+        local character=player.Character
+        if character then camera.CameraSubject=character:FindFirstChildOfClass("Humanoid") end
+        camera.CameraType=Enum.CameraType.Custom
+    end
     screen.IgnoreGuiInset=mode~="Dive"
     if controls then
         if mode=="Dive" and not viewing and not sequence and not patching then controls:Enable() else controls:Disable() end
     end
     InputService.MouseIconEnabled=mode~="Dive" or viewing or patching
     if mode~="Dive" or patching then InputService.MouseBehavior=Enum.MouseBehavior.Default end
-    PromptService.Enabled=mode=="Dive" and promptEligible and not sequence and not patching
+    PromptService.Enabled=mode=="Dive" and promptEligible and not viewing and not sequence and not patching
 end
 cinematics=require(script.Parent:WaitForChild("DiveCinematics")).new(screen,dockControls)
 local function send(action,arg)
@@ -107,6 +113,7 @@ local feedback=require(script.Parent:WaitForChild("DiveClientFeedback"))(screen,
     return intakeId~=nil or cinematics:isPlaying() or viewing or breach:isActive()
 end)
 local world=workspace:WaitForChild("Thalassa",12)
+if world then require(script.Parent:WaitForChild("DiveClientPrompts"))(screen.Parent,world) end
 local outlines=Instance.new("Folder")
 outlines.Name="LocalInteractionOutlines"
 outlines.Parent=workspace
@@ -143,6 +150,7 @@ local function registerPrompt(prompt)
     local action=prompt:GetAttribute("Action")
     local base=prompt:FindFirstAncestorWhichIsA("BasePart")
     if type(action)~="string" or not base then return end
+    prompt.Style=Enum.ProximityPromptStyle.Custom
     local clean=action:match("^Clean[1-4]$")~=nil
     local outsideOnly=clean or action=="Return" or action=="Artifact"
     local target=base
@@ -320,10 +328,9 @@ feed.OnClientEvent:Connect(function(kind,payload)
         screen.Enabled=true
         feedback.update(payload)
         applyOutside(payload.outside==true)
-        local camera=payload.cameraView==true and payload.alive~=false and not payload.outside and not payload.systemsOffline
-        viewing=camera
+        viewing=(payload.cameraView==true or payload.searchlightView==true) and payload.alive~=false and not payload.outside and not cinematics:isPlaying()
         if cinematics:isPlaying() then breach:reset() else breach:update(payload) end
-        promptEligible=payload.alive~=false and not camera and not payload.cleaning
+        promptEligible=payload.alive~=false and not payload.cleaning
         if not cinematics:isPlaying() then optics.update(payload) end
         exterior.update(payload)
         instruments.update(payload)

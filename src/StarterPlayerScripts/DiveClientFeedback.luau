@@ -317,13 +317,7 @@ return function(screen, blocked)
 		end
 		if (p.shark or 0) > 0 and p.engine then need.Engine = true end
 		if api.restartEngine and not p.engine and (p.shark or 0) == 0 then need.Engine = true end
-		if (p.squid or 0) > 0 then
-			if not p.light then
-				need.Light = true
-			elseif p.aim ~= p.squidSide then
-				need[if (p.squidSide - p.aim) % 4 == 3 then "AimLeft" else "AimRight"] = true
-			end
-		end
+		if (p.squid or 0) > 0 and (not p.light or p.aim~=p.squidSide) then need.Light=true end
 		for i, open in p.cracks or {} do
 			if open then need["Repair" .. i] = true end
 		end
@@ -356,7 +350,7 @@ return function(screen, blocked)
 			play("click", lamp)
 			flash(lamp, if p.light then Color3.fromRGB(255, 244, 214) else AMBER)
 		end
-		if was.aim ~= p.aim then play("aim", partOf(find("OPTICS/AimRight"))) end
+		if was.aim ~= p.aim then play("aim", partOf(find("OPTICS/Light"))) end
 		if was.sonarOn ~= p.sonarOn then
 			local sonar = partOf(find("SONAR/SonarScreen"))
 			play(if p.sonarOn then "sonarOn" else "sonarOff", sonar)
