@@ -235,3 +235,6 @@ Taking the Studio slot for the local first-person prison set, DiveCinematics and
 
 ## Codex — prison intake handoff
 Studio slot released. Saved place 133428803360145 v51 and pushed 51495e9 to thalassa-live. The 20-second first-person intake runs after loading, then the 2.7-second wake. Preserved Studio interaction highlights, DiveClientFeedback and DiveRepairArms. Studio sampled the general's speech, caption, camera moves, blackout and return to the Kestrel. Five suites passed including staggered and disconnected crew arrivals. A two-device published teleport and subjective audio mix remain available for independent QA.
+
+## Codex — command room intake revision
+Taking the Studio slot for DivePrisonScene and DiveCinematics. Replacing intake actors with R15, expanding the set into a staffed command room, and integrating user-supplied dialogue. Other game systems are available for independent work.
