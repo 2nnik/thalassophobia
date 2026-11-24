@@ -4,7 +4,8 @@ local UI=require(script.Parent.DiveClientStyle)
 local c=UI.c
 local off=UDim2.fromOffset
 local function sound(name,asset,speed,looped,bass,mid,treble)
-    local s=UI.make("Sound",SoundService,{Name="Hydrophone"..name,SoundId="rbxasset://sounds/"..asset,
+    local soundId=if type(asset)=="number" then "rbxassetid://"..asset else "rbxasset://sounds/"..asset
+    local s=UI.make("Sound",SoundService,{Name="Hydrophone"..name,SoundId=soundId,
         PlaybackSpeed=speed,Looped=looped,Volume=0})
     UI.make("EqualizerSoundEffect",s,{LowGain=bass,MidGain=mid,HighGain=treble})
     return s
@@ -84,12 +85,12 @@ return function(gui)
     UI.make("EchoSoundEffect",recoveryAlarm,{Delay=.28,Feedback=.58,DryLevel=0,WetLevel=-5})
     UI.make("ReverbSoundEffect",distant,{DecayTime=3,DryLevel=-8,WetLevel=-12})
     UI.make("EchoSoundEffect",scrape,{Delay=.23,Feedback=.29,DryLevel=-7,WetLevel=-15})
-    local angler=sound("AnglerGroan","impact_water.mp3",.58,false,2,-1,-15)
-    UI.make("FlangeSoundEffect",angler,{Depth=.62,Mix=.46,Rate=.32})
+    local angler=sound("AnglerGroan",9113980319,.77,false,3,-1,-17)
+    UI.make("FlangeSoundEffect",angler,{Depth=.23,Mix=.19,Rate=.28})
     UI.make("ReverbSoundEffect",angler,{DecayTime=3.6,DryLevel=-1,WetLevel=-8})
     local anglerSource=UI.make("Part",workspace,{Name="LocalAnglerHydrophone",Anchored=true,CanCollide=false,
         CanTouch=false,CanQuery=false,CastShadow=false,Transparency=1,Size=Vector3.one})
-    local anglerEcho=sound("AnglerBearing","impact_water.mp3",.47,false,3,1,-12)
+    local anglerEcho=sound("AnglerBearing",9113980319,.69,false,2,-2,-17)
     anglerEcho.RollOffMinDistance,anglerEcho.RollOffMaxDistance=8,28
     anglerEcho.Parent=anglerSource
     UI.make("EchoSoundEffect",anglerEcho,{Delay=.38,Feedback=.25,DryLevel=-5,WetLevel=-10})
@@ -242,9 +243,9 @@ return function(gui)
             local gettingClose=before<.43 and proximity>=.43
             if before==0 or gettingClose or now>=nextAnglerCue then
                 local gain=(.59+.23*proximity)*(outside and .88 or 1)
-                play(angler,gain,.61-.12*proximity)
-                play(anglerEcho,gain*.36,.49-.06*proximity)
-                nextAnglerCue=now+(proximity>=.43 and 4.4 or 6.5)
+                play(angler,gain,.8-.09*proximity)
+                play(anglerEcho,gain*.30,.72-.05*proximity)
+                nextAnglerCue=now+(proximity>=.43 and 5.7 or 7.2)
                 nextScare=now+8
             end
         else

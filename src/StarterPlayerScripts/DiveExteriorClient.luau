@@ -6,6 +6,7 @@ local CAS=game:GetService("ContextActionService")
 local GuiService=game:GetService("GuiService")
 local Lighting=game:GetService("Lighting")
 local SoundService=game:GetService("SoundService")
+local ContentProvider=game:GetService("ContentProvider")
 local Client={}
 local net, controls, screen
 local overlay,card,dial,pivot,headline,progress,feedback,travel,rise,down,cancel,help,scale
@@ -14,6 +15,7 @@ local ticks,travelPoints={},{}
 local heldRise,heldDown=false,false
 local riseTouch,downTouch
 local pending,lastSend=nil,0
+local needleOffset,needleCorrectUntil=0,0
 local color={
 	paper=Color3.fromRGB(226,241,234),steel=Color3.fromRGB(43,70,74),dark=Color3.fromRGB(12,29,33),
 	panel=Color3.fromRGB(17,40,44),foam=Color3.fromRGB(105,237,198),muted=Color3.fromRGB(147,178,177),
@@ -398,6 +400,10 @@ local function populate(c,s)
 	feedback.TextColor3=c.feedback=="MISSED" and color.amber or color.foam
 end
 
+local function needleAngle(c,time)
+	return (c.startAngle+c.sign*math.max(0,time-c.started)*360/c.period)%360
+end
+
 local function travelStatus(s)
 	local completed=0
 	if s.cleanSites and s.swarm>0 then
@@ -505,6 +511,15 @@ function Client.init(network,rootGui)
 		if input==riseTouch then riseTouch=nil end
 		if input==downTouch then downTouch=nil end
 	end)
+	local cut=make("Sound",SoundService,{Name="Barnacle cutter bite",SoundId="rbxassetid://9113133466",Volume=.26,PlaybackSpeed=1.37})
+	local cleared=make("Sound",SoundService,{Name="Barnacle shell snap",SoundId="rbxassetid://9120490790",Volume=.47,PlaybackSpeed=1.04})
+	make("EqualizerSoundEffect",cut,{LowGain=1,MidGain=-2,HighGain=-9})
+	make("EqualizerSoundEffect",cleared,{LowGain=2,MidGain=0,HighGain=-6})
+	task.spawn(function() pcall(function() ContentProvider:PreloadAsync({cut,cleared}) end) end)
+	network.Feed.OnClientEvent:Connect(function(kind,outcome)
+		if kind~="CleanFeedback" or not active then return end
+		if outcome=="Cut" then cut:Play() elseif outcome=="Cleared" then cleared:Play() end
+	end)
 	local world=workspace:FindFirstChild("Thalassa")
 	local function register(item)
 		if item:IsA("BasePart") and item.Name=="Target" and item.Parent and item.Parent.Parent and item.Parent.Parent.Name=="BarnacleSites" then
@@ -531,8 +546,9 @@ function Client.init(network,rootGui)
 		end
 		stepEffects(camera,dt)
 		if challenge then
-			local t=math.max(0,workspace:GetServerTimeNow()-challenge.started)
-			pivot.Rotation=(challenge.startAngle+challenge.sign*t*360/challenge.period)%360
+			local now=workspace:GetServerTimeNow()
+			local correction=needleOffset*math.clamp((needleCorrectUntil-now)/.12,0,1)
+			pivot.Rotation=needleAngle(challenge,now)+correction
 			return
 		end
 		local now=os.clock()
@@ -571,6 +587,12 @@ function Client.update(s)
 	elseif oldActive and not active then endEffects() end
 	if challenge and previousId~=challenge.id then
 		pending=nil
+		local now=workspace:GetServerTimeNow()
+		local currentAngle=needleAngle(challenge,now)
+		-- Blend the small correction from a delayed snapshot. Hit timing uses the server angle.
+		needleOffset=if previousId then (pivot.Rotation-currentAngle+180)%360-180 else 0
+		needleCorrectUntil=now+.12
+		if not previousId then pivot.Rotation=currentAngle end
 		populate(challenge,s)
 	end
 	refreshBindings(oldActive,oldChallenge)

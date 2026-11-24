@@ -1,6 +1,6 @@
 -- Local first-person staging. The caller owns the parent and destroys it after blackout.
 local PrisonScene = {}
-PrisonScene.dialogueAsset = script:GetAttribute("DialogueAudioAssetId")
+PrisonScene.dialogueAsset = script:GetAttribute("DialogueAudioAssetId") or 79801240323942
 local V, CF, rgb = Vector3.new, CFrame.new, Color3.fromRGB
 local M = Enum.Material
 local origin = V(6100, 160, 5400)

@@ -122,6 +122,9 @@ local baseplate = workspace:FindFirstChild("Baseplate")
 if baseplate and baseplate:IsA("BasePart") then
 	-- The starter plate crosses the water column. The authored dock and seabed are the playable surfaces.
 	baseplate.CanCollide,baseplate.CanTouch,baseplate.CanQuery,baseplate.Transparency=false,false,false,1
+	for _,surface in baseplate:GetDescendants() do
+		if surface:IsA("Decal") then surface.Transparency=1 end
+	end
 end
 local starterSpawn = workspace:FindFirstChild("SpawnLocation")
 if starterSpawn and starterSpawn:IsA("SpawnLocation") then
@@ -313,7 +316,8 @@ local labels={Leviathan="ANGLER",GiantSquid="GIANT SQUID",CrackCrawler="HULL CRA
 local runService=game:GetService("RunService")
 for i=1,4 do
  cameraHeads[i]=world:WaitForChild("DiveCamera"..i)
- cameraHeads[i]:SetAttribute("HullMount",envelope.CFrame:ToObjectSpace(cameraHeads[i].CFrame))
+ local lens=cameraHeads[i].CFrame*CFrame.new(0,0,-1.2)
+ cameraHeads[i]:SetAttribute("HullMount",envelope.CFrame:ToObjectSpace(lens))
  local patch=barnacles:WaitForChild("Site"..i)
  sites[i]={}
  for _,part in patch:GetDescendants() do

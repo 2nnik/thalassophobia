@@ -173,18 +173,23 @@ local function getPatch(index)
 	return model, model and (model.PrimaryPart or model:FindFirstChild("Target"))
 end
 
-local function issueChallenge(s,m,index,label,feedback)
+local function needleAngle(c,time)
+	return (c.startAngle+c.sign*(time-c.started)/c.period*360)%360
+end
+
+local function issueChallenge(s,m,index,label,feedback,previous,now)
 	nextId += 1
 	local difficulty = s.difficulty
 	local period = difficulty=="Nightmare" and 1.6 or difficulty=="Hard" and 1.77 or difficulty=="Easy" and 2.42 or 2.08
 	local arc = difficulty=="Nightmare" and 43 or difficulty=="Hard" and 51 or difficulty=="Easy" and 78 or 64
-	local reverse = random:NextInteger(0,1)==0 and 1 or -1
-	local startAngle = random:NextInteger(0,359)
+	local sign = if previous then -previous.sign elseif random:NextInteger(0,1)==0 then 1 else -1
+	local started = now or (workspace:GetServerTimeNow()+.14)
+	local startAngle = if previous then needleAngle(previous,started) else random:NextInteger(0,359)
 	m.cleaning = {
 		id=nextId,index=index,label=label,feedback=feedback or "",
-		started=workspace:GetServerTimeNow()+0.14,
-		center=(startAngle + reverse*random:NextInteger(96,265))%360,
-		startAngle=startAngle, sign=reverse, period=period, arc=arc
+		started=started,
+		center=(startAngle + sign*random:NextInteger(96,265))%360,
+		startAngle=startAngle, sign=sign, period=period, arc=arc
 	}
 end
 
@@ -218,15 +223,17 @@ local function strike(p,m,s,arg)
 	if typeof(time)~="number" or time~=time or time<c.started or time>now+0.10 then return end
 	local allowance=math.clamp(p:GetNetworkPing()+0.115,0.14,0.38)
 	if time<now-allowance or now<c.started then return end
-	local angle=(c.startAngle+c.sign*(time-c.started)/c.period*360)%360
+	local angle=needleAngle(c,time)
 	local errorAngle=math.abs((angle-c.center+180)%360-180)
 	if errorAngle>c.arc/2 then
-		issueChallenge(s,m,c.index,c.label,"MISSED")
+		issueChallenge(s,m,c.index,c.label,"MISSED",c,now)
 		return
 	end
 	s.cleanSites[c.index]=math.min(CUTS,s.cleanSites[c.index]+1)
-	if s.cleanSites[c.index]<CUTS then
-		issueChallenge(s,m,c.index,c.label,"GOOD CUT")
+	local cleared=s.cleanSites[c.index]==CUTS
+	if p.Parent then feed:FireClient(p,"CleanFeedback",if cleared then "Cleared" else "Cut") end
+	if not cleared then
+		issueChallenge(s,m,c.index,c.label,"GOOD CUT",c,now)
 		return
 	end
 	releaseGrip(m)
