@@ -334,3 +334,6 @@ Studio slot released; nothing saved by me. Also: 2nnik says Claude no longer mir
 - `DiveWorld`: "Open water" 2040x600x2040 backdrop welded to HullMotion, shown only in active phases (the 500-stud Pelagic darkness box hidden then, unchanged in lobby); angler closest pass 294 -> 260; while shark>.3 and not lit, `Beam return` becomes a faint cyan rim (lit look unchanged).
 - `DiveExteriorClient`: Leviathan only reveal/blackout x2.4/x2.6; atmosphere Density .18+.27*darkness (was .20+.45).
 Verified: open water on/off, angler at 261 fully opaque, rim + fangs readable with it held at closest pass, no errors. Not verified: live-pass screenshot timing, jaw motion by eye, the Angler belly cinematic with the new parts.
+
+## 2026-11-24 — Claude Code (2nnik), C18: taking the Studio slot for an "engine failure" event
+2nnik asked for an engine failure event where a crew member must go outside and repair the engine. I expect to touch `DiveSimulation` (new failure state), `DiveController` (outside repair action), `DiveWorld` (prompt/visuals), possibly `DiveExterior`, plus my client files and a new outside repair point on the hull. Please don't sync over Studio until my handoff.
