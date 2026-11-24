@@ -129,6 +129,93 @@ floorRay.FilterType=Enum.RaycastFilterType.Include
 floorRay.FilterDescendantsInstances={floor}
 local ground=workspace:Raycast(Vector3.new(cacheLocation.X,-305,cacheLocation.Z),Vector3.new(0,-90,0),floorRay)
 local cacheBase=Vector3.new(cacheLocation.X,ground and ground.Position.Y or -350,cacheLocation.Z)
+
+-- Fixed scenery gives the windows and exterior feeds parallax as the bell travels.
+-- All formations sit outside its swept hull and the hatch-to-artifact corridor.
+local function installWaterColumn()
+	local scenery=Instance.new("Model")
+	scenery.Name="Trench water column"
+	local rng=Random.new(72403)
+	local function dressing(name,frame,size,color,material,class)
+		local p=Instance.new(class or "Part")
+		p.Name,p.CFrame,p.Size,p.Color,p.Material=name,frame,size,color,material
+		p.Anchored,p.CanCollide,p.CanTouch,p.CanQuery=true,false,false,false
+		p.CastShadow=false
+		p.Parent=scenery
+		return p
+	end
+	local function socket(point,offset)
+		local a=Instance.new("Attachment")
+		a.Position=offset
+		a.Parent=point
+		return a
+	end
+	local rgb=Color3.fromRGB
+	local v=Vector3.new
+	local shaftAnchor=dressing("Shallow sunlight",CFrame.new(center),Vector3.one,rgb(8,20,24),Enum.Material.SmoothPlastic)
+	shaftAnchor.Transparency=1
+	for i=1,8 do
+		local angle=math.pi*2*i/8
+		local x,z=math.cos(angle)*49,math.sin(angle)*49
+		local ray=Instance.new("Beam")
+		ray.Name="Surface light shaft"
+		ray.Attachment0=socket(shaftAnchor,v(x+12,30,z-4))
+		ray.Attachment1=socket(shaftAnchor,v(x-9,-38,z+7))
+		ray.Width0,ray.Width1=rng:NextNumber(1.2,2.9),rng:NextNumber(5,9)
+		ray.Color=ColorSequence.new(rgb(186,231,207),rgb(76,149,160))
+		ray.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),
+			NumberSequenceKeypoint.new(.15,.93),NumberSequenceKeypoint.new(.63,.97),NumberSequenceKeypoint.new(1,1)})
+		ray.LightEmission,ray.LightInfluence,ray.FaceCamera=.57,.22,true
+		ray.Parent=shaftAnchor
+	end
+	-- Discontinuous shelves cross the sight lines of the four camera bearings.
+	for row,drop in {65,137,232,319,388} do
+		local angle=row*2.19
+		local shelf=CFrame.new(center+v(math.cos(angle)*69,-drop,math.sin(angle)*69))*CFrame.Angles(0,-angle,0)
+		for i=-2,2 do
+			local foot=shelf*CFrame.new(rng:NextNumber(-2.5,2.5),rng:NextNumber(-2,2),i*7)
+				*CFrame.Angles(math.rad(rng:NextNumber(-9,9)),math.rad(rng:NextNumber(-26,26)),.14)
+			local rock=rgb(37+row*2,61-row,66-row)
+			dressing("Fractured escarpment",foot,v(13+rng:NextNumber(2,8),12+rng:NextNumber(2,7),11),rock,Enum.Material.Slate,"WedgePart")
+			dressing("Sedimentary ledge",foot*CFrame.new(0,-4.2,0),v(17,.6,11),rgb(76,85,80),Enum.Material.Limestone)
+		end
+	end
+	for i,offset in {v(11,0,-9),v(16,0,13),v(-8,0,16)} do
+		local location=cacheBase+offset
+		local hit=workspace:Raycast(location+Vector3.yAxis*24,-Vector3.yAxis*55,floorRay)
+		local foot=hit and hit.Position or location
+		for j=1,3 do
+			local base=foot+v((j-1)*1.4,0,rng:NextNumber(-1.2,1.2))
+			local height=if j==1 then 5.7+i*.45 else rng:NextNumber(2.1,4.4)
+			local cf=CFrame.new(base+Vector3.yAxis*height*.42)*CFrame.Angles(0,j,.07*j)
+			local chimney=dressing("Mineral chimney",cf,v(1.55,height,1.45),rgb(53,54,50),Enum.Material.Basalt)
+			dressing("Sulfur rim",cf*CFrame.new(0,height*.49,0),v(1.66,.19,1.56),rgb(133,119,78),Enum.Material.Limestone)
+			if j==1 then
+				local plume=Instance.new("ParticleEmitter")
+				plume.Name="Vent plume"
+				plume.Texture="rbxasset://textures/particles/smoke_main.dds"
+				plume.Color=ColorSequence.new(rgb(55,66,68),rgb(72,92,96))
+				plume.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.58),NumberSequenceKeypoint.new(.45,.73),NumberSequenceKeypoint.new(1,1)})
+				plume.Size=NumberSequence.new(.65,3.3)
+				plume.Rate,plume.Lifetime,plume.Speed=2.2,NumberRange.new(2,3.3),NumberRange.new(1.5,2.4)
+				plume.Acceleration=v(.42,.25,-.21)
+				plume.Rotation,plume.RotSpeed=NumberRange.new(0,360),NumberRange.new(-12,12)
+				plume.Parent=socket(chimney,v(0,height*.5,0))
+			end
+		end
+		for j=1,7 do
+			local a=j*2.4
+			local cf=CFrame.new(foot+v(3.5*math.cos(a),.49,2.1*math.sin(a)))*CFrame.Angles(.13*math.sin(a),a,.24)
+			local tube=dressing("Vent tubeworm",cf,v(1.4,.18,.18),rgb(157,155,130),Enum.Material.Sandstone)
+			tube.Shape=Enum.PartType.Cylinder
+			tube.CFrame=cf*CFrame.Angles(0,0,math.pi/2)
+			local crown=dressing("Branchial crown",tube.CFrame*CFrame.new(.75,0,0),v(.3,.3,.31),rgb(139,61,49),Enum.Material.SmoothPlastic)
+			crown.Shape=Enum.PartType.Ball
+		end
+	end
+	scenery.Parent=ocean
+end
+installWaterColumn()
 local stand=Instance.new("Part")
 stand.Name="Survey cradle"
 stand.Size=Vector3.new(5,1.3,4)

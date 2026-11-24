@@ -45,8 +45,8 @@ local REVEAL_RANGE, BLACKOUT_RANGE = 25, 52
 local WINDOW_REVEAL_RANGE, WINDOW_BLACKOUT_RANGE = 74, 110
 local BEAM_REVEAL_RANGE, BEAM_BLACKOUT_RANGE = 122, 182
 local contactNames = {"Leviathan","GiantSquid","CrackCrawler","Pursuer"}
-local shallowWater, deepWater = Color3.fromRGB(136,211,222), Color3.fromRGB(18,47,56)
-local shallowDecay, deepDecay = Color3.fromRGB(53,112,131), Color3.fromRGB(8,21,31)
+local shallowWater, twilightWater, deepWater = Color3.fromRGB(143,218,207), Color3.fromRGB(58,112,143), Color3.fromRGB(18,42,55)
+local shallowDecay, twilightDecay, deepDecay = Color3.fromRGB(65,133,137), Color3.fromRGB(31,61,95), Color3.fromRGB(8,18,31)
 local invisible = NumberSequence.new(1)
 local footsteps, contacts = {}, {}
 local observedCharacter, footstepMode, footstepAdded
@@ -78,8 +78,11 @@ local function stepWater(dt)
 	Lighting.ExposureCompensation=originalExposure+.57*(1-darkness)-.18*darkness
 	Lighting.OutdoorAmbient=originalOutdoor:Lerp(Color3.fromRGB(102,158,173),(1-darkness)*.8)
 	if not atmosphere then return end
-	atmosphere.Color=shallowWater:Lerp(deepWater,darkness)
-	atmosphere.Decay=shallowDecay:Lerp(deepDecay,darkness)
+	-- A green shelf gives way to blue twilight before the last light drains from the trench.
+	local shelf=math.clamp(darkness/.48,0,1)
+	local trench=math.clamp((darkness-.48)/.52,0,1)
+	atmosphere.Color=shallowWater:Lerp(twilightWater,shelf):Lerp(deepWater,trench)
+	atmosphere.Decay=shallowDecay:Lerp(twilightDecay,shelf):Lerp(deepDecay,trench)
 	atmosphere.Density=.20+.45*darkness
 	atmosphere.Haze=.65+1.9*darkness
 	atmosphere.Glare=0

@@ -16,14 +16,15 @@ end
 -- A separate, client-only title scene keeps the lobby independent of the dive camera and lighting.
 local function titleScene(parent)
     gradient(parent,{
-        ColorSequenceKeypoint.new(0,color(17,74,83)),
-        ColorSequenceKeypoint.new(.42,color(6,35,44)),
-        ColorSequenceKeypoint.new(1,color(2,11,21)),
-    },110)
+        ColorSequenceKeypoint.new(0,color(72,137,140)),
+        ColorSequenceKeypoint.new(.32,color(20,79,89)),
+        ColorSequenceKeypoint.new(.72,color(5,37,52)),
+        ColorSequenceKeypoint.new(1,color(2,12,23)),
+    },86)
     local viewport=UI.make("ViewportFrame",parent,{
         Name="UnderwaterScene",BackgroundTransparency=1,Size=scale(1,1),
-        Ambient=color(39,81,92),LightColor=color(144,229,222),LightDirection=Vector3.new(-.6,-1,-.4),
-        ImageColor3=color(163,212,213),
+        Ambient=color(75,103,111),LightColor=color(232,232,203),LightDirection=Vector3.new(-.6,-1,-.4),
+        ImageColor3=color(223,236,231),
     })
     local world=UI.make("WorldModel",viewport)
     local camera=UI.make("Camera",viewport,{FieldOfView=43})
@@ -55,6 +56,23 @@ local function titleScene(parent)
     local vessel=UI.make("Model",world,{Name="Kestrel survey bell"})
     local steel,rim,light=color(77,113,110),color(20,46,51),color(128,247,212)
     oval(vessel,"Pressure hull",v(7.4,6.4,18),CFrame.new(),steel)
+    local ochre=color(217,124,56)
+    oval(vessel,"Rescue orange crown",v(6.95,3.15,15.25),CFrame.new(0,1.62,.4),ochre)
+    local collar=solid(vessel,"Part","Hatch coaming",v(.58,3.1,3.1),CFrame.new(0,3.28,.75)*CFrame.Angles(0,0,math.pi/2),rim,Enum.PartType.Cylinder)
+    solid(vessel,"Part","Rescue hatch",v(.15,2.7,2.7),collar.CFrame*CFrame.new(.35,0,0),ochre,Enum.PartType.Cylinder)
+    for _,x in {-1,1} do
+        bar(vessel,"Lifting eye",v(.92*x,3.25,2.7),v(.92*x,3.95,2.7),.19,rim)
+    end
+    bar(vessel,"Lift crossbar",v(-.92,3.95,2.7),v(.92,3.95,2.7),.19,rim)
+    for _,s in {-1,1} do
+        for i=0,3 do
+            local z=-3.5+i*2
+            local x=s*3.57*math.sqrt(1-(z/9)^2)
+            local pose=CFrame.new(x,.62,z)
+            oval(vessel,"Porthole collar",v(.44,1.3,1.4),pose,rim)
+            oval(vessel,"Lamp-lit porthole",v(.16,.92,1.03),pose*CFrame.new(.23*s,0,0),color(246,192,108))
+        end
+    end
     oval(vessel,"Forward window",v(6.25,5.2,4.5),CFrame.new(0,.18,-7.25),color(16,44,58))
     oval(vessel,"Window reflection",v(4.3,.28,2),CFrame.new(-.15,1.58,-8.5)*CFrame.Angles(.3,0,.14),color(117,204,201))
     for i=-2,2 do
@@ -80,6 +98,28 @@ local function titleScene(parent)
     end
     local origin=CFrame.new(0,.7,-4)*CFrame.Angles(0,-1.25,-.10)
     vessel:PivotTo(origin)
+    -- A disused mooring recedes behind the vessel. Its broken chain gives the bell a scale reference.
+    local footing=v(13,-7,-25)
+    for level=0,3 do
+        local a=footing+v(level*.86,level*4,0)
+        local b=a+v(.86,4,0)
+        for _,side in {-1,1} do
+            bar(world,"Mooring upright",a+v(2*side,0,0),b+v(2*side,0,0),.45,color(49,75,74))
+            bar(world,"Mooring lattice",a+v(2*side,0,0),b-v(2*side,0,0),.18,color(41,68,69))
+        end
+    end
+    local boom=footing+v(3.44,16,0)
+    bar(world,"Cantilever",boom-v(6,0,0),boom+v(2,0,0),.58,rim)
+    for i=1,10 do
+        local p=boom+v(-5.4+(i/10)^2*.7,-i*.56,0)
+        oval(world,"Chain link",v(if i%2==0 then .17 else .32,.7,.19),CFrame.new(p),rim)
+    end
+    local shoal=UI.make("Model",world,{Name="Lanternfish shoal"})
+    for i=1,13 do
+        local p=v(rng:NextNumber(-7,7),rng:NextNumber(-1.1,1.1),rng:NextNumber(-2,2))
+        oval(shoal,"Lanternfish",v(.8,.21,.22),CFrame.new(p),color(65,115,124))
+        solid(shoal,"WedgePart","Caudal fin",v(.12,.32,.32),CFrame.new(p-v(.42,0,0))*CFrame.Angles(0,math.pi/2,0),rim)
+    end
     local dust=UI.frame(parent,Color3.new(),nil,nil,1)
     local particles={}
     for _=1,39 do
@@ -91,7 +131,7 @@ local function titleScene(parent)
     gradient(shade,{ColorSequenceKeypoint.new(0,c.black),ColorSequenceKeypoint.new(1,color(3,19,25))},0,
         NumberSequence.new({
             NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.37,.13),
-            NumberSequenceKeypoint.new(.70,.73),NumberSequenceKeypoint.new(1,.27),
+            NumberSequenceKeypoint.new(.70,.9),NumberSequenceKeypoint.new(1,.64),
         }))
     local t=0
     local step
@@ -104,6 +144,7 @@ local function titleScene(parent)
         camera.CFrame=CFrame.lookAt(v(19+math.sin(t*.18)*.65,5,wide and 26 or 34),
             v(wide and -6.4 or -.2,wide and -.8 or 1.4,-4))
         vessel:PivotTo(origin*CFrame.new(0,math.sin(t*.62)*.38,0)*CFrame.Angles(0,math.sin(t*.23)*.09,math.sin(t*.36)*.025))
+        shoal:PivotTo(CFrame.new(4+math.sin(t*.1)*9,6+math.sin(t*.34)*.65,-22)*CFrame.Angles(0,t*.1,0))
         for _,p in ipairs(particles) do
             p[1].Position=scale((p[2]+t*p[4]*.7)%1,(p[3]-t*p[4])%1)
         end

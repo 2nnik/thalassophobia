@@ -32,14 +32,14 @@ end
 
 local function light(part, color, brightness, range)
 	local lamp = Instance.new("PointLight")
-	lamp.Color, lamp.Brightness, lamp.Range = color, brightness, range
+	lamp.Color, lamp.Brightness, lamp.Range = color, brightness*.23, range
 	lamp.Parent = part
 end
 
 local function stencil(part, text, color, face)
 	local gui = Instance.new("SurfaceGui")
 	gui.Face, gui.SizingMode, gui.PixelsPerStud = face or Enum.NormalId.Back, Enum.SurfaceGuiSizingMode.PixelsPerStud, 60
-	gui.LightInfluence = .4
+	gui.LightInfluence,gui.Brightness = .83,.55
 	gui.Parent = part
 	local label = Instance.new("TextLabel")
 	label.Size, label.BackgroundTransparency = UDim2.fromScale(1,1), 1
@@ -93,9 +93,28 @@ local function holdingBlock(parent)
 	for i=-3,3 do
 		build("Plot grid",0,7.8+i*1.12,-34.55,25,.022,.06,rgb(44,89,94),M.Neon)
 	end
-	local plot=build("Dive profile",0,8.25,-34.43,20,4,.04,rgb(34,66,71),M.SmoothPlastic)
-	plot.Transparency=1
-	stencil(plot,"KESTREL 04   /   TRENCH DESCENT",rgb(154,218,207))
+	-- Survey cross-section on the rear plotting wall. Keep the contour visible
+	-- around the general's shoulders in the kneeling shot.
+	local function trace(name,points,color,width)
+		for i=2,#points do
+			local a,b=points[i-1],points[i]
+			local delta=b-a
+			local bar=build(name,(a.X+b.X)/2,(a.Y+b.Y)/2,-34.42,delta.Magnitude,width,.06,color,M.Neon)
+			bar.CFrame*=CFrame.Angles(0,0,math.atan2(delta.Y,delta.X))
+		end
+	end
+	local seabed={Vector2.new(-13,8.72),Vector2.new(-10,8.4),Vector2.new(-8.4,7.98),Vector2.new(-6.3,8.13),
+		Vector2.new(-4.4,6.91),Vector2.new(-2.45,6.5),Vector2.new(-.8,4.7),Vector2.new(.95,4.24),
+		Vector2.new(2.65,5.46),Vector2.new(4.2,7.05),Vector2.new(6.12,7.35),Vector2.new(7.45,8.17),
+		Vector2.new(10.2,8.38),Vector2.new(13,9.12)}
+	trace("Sounding trace",seabed,rgb(98,181,171),.085)
+	trace("Survey track",{Vector2.new(-8.9,10.4),Vector2.new(-3.5,9.8),Vector2.new(.1,8.4),Vector2.new(.1,5)},amber,.065)
+	for _,x in {-8.9,-3.5,.1} do
+		local y=if x< -8 then 10.4 elseif x<0 then 9.8 else 5
+		build("Survey fix",x,y,-34.34,.19,.19,.08,bone,M.Neon).CFrame*=CFrame.Angles(0,0,math.pi/4)
+	end
+	local plot=build("Plot legend",-7.7,11.2,-34.43,9,.55,.06,tile,M.Metal)
+	stencil(plot,"KESTREL 04    /    SOUNDING PROFILE",bone)
 	for _,z in {-5,-16,-28} do
 		build("Ceiling crossbeam",0,15.3,z,44,.55,.85,steel,M.Metal)
 		for _,x in {-11,0,11} do
@@ -169,18 +188,91 @@ local function bend(arm, shoulder, elbow, wrist, handForward)
 end
 
 local uniforms = {
-	General = {body=rgb(52,70,53), legs=rgb(43,52,43), skin=rgb(190,144,109), cap=rgb(55,71,53)},
-	Guard = {body=rgb(46,60,65), legs=rgb(38,44,50), skin=rgb(168,124,91), cap=rgb(36,46,52)},
-	Operator = {body=rgb(58,93,91), legs=rgb(36,58,62), skin=rgb(128,89,69)},
-	Technician = {body=rgb(185,185,159), legs=rgb(56,75,81), skin=rgb(217,179,134)},
+	General = {body=rgb(57,73,65), legs=rgb(40,48,45), skin=rgb(190,144,109)},
+	Guard = {body=rgb(57,66,75), legs=rgb(39,49,57), skin=rgb(168,124,91)},
+	Operator = {body=rgb(57,82,87), legs=rgb(43,55,61), skin=rgb(128,89,69)},
+	Technician = {body=rgb(138,137,115), legs=rgb(66,74,70), skin=rgb(217,179,134)},
 }
+
+-- Uniform assemblies move with the three rigid body sections. Sleeve and leg meshes
+-- remain free to bend for the restraint choreography.
+local function dress(figure, role, uniform)
+	local jacket=model(figure,"Jacket fittings",CF(origin))
+	local belt=model(figure,"Web belt",CF(origin))
+	local hat=model(figure,"Headgear",CF(origin))
+	local leather=rgb(44,39,35)
+	local web=rgb(54,62,54)
+	local function sew(group,name,x,y,z,w,h,d,color,material,roll,oval)
+		local frame=CF(origin+V(x,y,z))*CFrame.Angles(0,0,math.rad(roll or 0))
+		local detail=piece(group,name,V(w,h,d),frame,color,material,oval)
+		detail.CastShadow=false
+		return detail
+	end
+	sew(belt,"Belt strap",0,0,0,1.64,.16,.86,if role=="General" then leather else web,M.Leather)
+	sew(belt,"Buckle",0,0,-.44,.24,.17,.06,if role=="General" then brass else trim,M.Metal)
+	if role=="General" then
+		local lapel=rgb(42,58,52)
+		sew(jacket,"Shirt front",0,.46,-.416,.45,.34,.052,bone,M.Fabric)
+		sew(jacket,"Tie",0,.39,-.46,.115,.43,.055,dark,M.Fabric)
+		for _,s in {-1,1} do
+			sew(jacket,"Folded lapel",s*.24,.39,-.449,.26,.56,.08,lapel,M.Fabric,-s*32)
+			sew(jacket,"Shoulder board",s*.62,.688,0,.39,.095,.62,brass,M.Fabric)
+			sew(jacket,"Pocket flap",s*.48,.02,-.438,.37,.13,.055,lapel,M.Fabric)
+			for row=0,2 do
+				sew(jacket,"Tunic button",s*.17,.04-row*.235,-.47,.092,.092,.05,brass,M.Metal,0,true)
+			end
+		end
+		for i,c in {rgb(148,56,52),bone,rgb(61,107,128),brass} do
+			sew(jacket,"Service ribbon",-.67+i*.085,.205,-.46,.085,.11,.055,c,M.Fabric)
+		end
+		sew(hat,"Peaked cap crown",0,.5,.025,1.14,.34,1.06,uniform.body,M.Fabric,0,true)
+		sew(hat,"Black cap band",0,.39,0,.98,.16,.96,dark,M.Leather,0,true)
+		sew(hat,"Polished peak",0,.34,-.42,.92,.09,.53,leather,M.Leather,0,true)
+		sew(hat,"Officer cord",0,.403,-.466,.65,.044,.05,brass,M.Metal)
+		sew(hat,"Cap cockade",0,.51,-.481,.16,.17,.05,brass,M.Metal,45)
+	elseif role=="Guard" then
+		local plate=rgb(43,52,54)
+		sew(jacket,"Carrier back",0,.03,.38,1.35,.98,.20,plate,M.Fabric)
+		sew(jacket,"Carrier front",0,-.02,-.40,1.39,1.03,.2,plate,M.Fabric)
+		for _,s in {-1,1} do
+			sew(jacket,"Carrier yoke",s*.49,.45,-.32,.24,.6,.27,web,M.Fabric,-s*7)
+			sew(jacket,"Equipment pouch",s*.43,-.34,-.54,.36,.36,.21,web,M.Fabric)
+			sew(jacket,"Pouch flap",s*.43,-.25,-.65,.37,.12,.045,plate,M.Fabric)
+		end
+		for row=0,2 do
+			sew(jacket,"Webbing",0,.18-row*.14,-.517,1.15,.06,.05,web,M.Fabric)
+		end
+		local tape=sew(jacket,"Unit tape",0,.35,-.53,.71,.17,.045,dark,M.Fabric)
+		stencil(tape,"KESTREL",bone,Enum.NormalId.Front)
+		sew(hat,"Patrol helmet",0,.30,.035,1.13,.67,1.08,plate,M.Metal,0,true)
+		sew(hat,"Helmet rim",0,.18,.01,1.14,.14,1.13,web,M.Fabric,0,true)
+		for _,s in {-1,1} do
+			sew(hat,"Ear guard",s*.47,.075,.03,.16,.36,.46,plate,M.Fabric,0,true)
+		end
+	else
+		local trimColor=if role=="Technician" then rgb(193,150,76) else rgb(110,158,155)
+		sew(jacket,"Storm placket",0,0,-.425,.13,1.2,.05,uniform.legs,M.Fabric)
+		for _,s in {-1,1} do
+			sew(jacket,"Stand collar",s*.22,.59,-.32,.29,.19,.2,uniform.legs,M.Fabric,s*20)
+			sew(jacket,"Chest pocket",s*.45,.06,-.415,.39,.32,.07,uniform.body,M.Fabric)
+			sew(jacket,"Branch tape",s*.45,.21,-.463,.40,.073,.04,trimColor,M.Fabric)
+		end
+		sew(hat,"Headset band",0,.39,.04,1,.15,.21,dark,M.Leather)
+		for _,s in {-1,1} do
+			sew(hat,"Headset cup",s*.48,.02,.055,.19,.45,.36,uniform.legs,M.SmoothPlastic,0,true)
+		end
+		sew(hat,"Microphone boom",-.4,-.13,-.2,.06,.06,.44,dark,M.Metal)
+		sew(hat,"Microphone",-.35,-.13,-.423,.17,.095,.12,dark,M.Fabric,0,true)
+	end
+	return jacket,belt,hat
+end
 
 local function makeOfficer(parent, name, role)
 	local figure = script:WaitForChild("CommandR15"):Clone()
+	figure.Humanoid.AutomaticScalingEnabled=false
 	local uniform = uniforms[role]
 	figure.Name = name
 	local torso, waist, head = figure.UpperTorso, figure.LowerTorso, figure.Head
-	local badge
 	for _,joint in figure:GetDescendants() do
 		if joint:IsA("JointInstance") or joint:IsA("Constraint") then joint.Enabled = false end
 	end
@@ -191,23 +283,18 @@ local function makeOfficer(parent, name, role)
 		local name = bodyPart.Name
 		bodyPart.Color = if name=="Head" or name:find("Hand") then uniform.skin
 			elseif name:find("Leg") then uniform.legs elseif name:find("Foot") then dark else uniform.body
+		if name:find("Torso") or name:find("Arm") or name:find("Leg") then bodyPart.Material=M.Fabric end
+		if name:find("Foot") then bodyPart.Material=M.Leather end
 	end
 	figure.Parent = parent
-	if role=="General" then
-		badge=piece(figure,"Command insignia",V(.3,.14,.045),CF(origin),brass,M.Metal)
-	end
-	local cap, peak
-	if uniform.cap then
-		cap=piece(figure,"Service cap",V(1.03,.24,.98),CF(origin),uniform.cap,M.Fabric)
-		peak=piece(figure,"Cap visor",V(.91,.07,.45),CF(origin),dark,M.Metal)
-	end
+	local jacket,belt,hat=dress(figure,role,uniform)
 	local arms,legs = {},{}
 	for _,side in {-1,1} do
 		local prefix=if side<0 then "Left" else "Right"
 		arms[side]={upper=figure[prefix.."UpperArm"],lower=figure[prefix.."LowerArm"],hand=figure[prefix.."Hand"]}
 		legs[side]={thigh=figure[prefix.."UpperLeg"],shin=figure[prefix.."LowerLeg"],boot=figure[prefix.."Foot"]}
 	end
-	return {torso=torso,waist=waist,head=head,cap=cap,peak=peak,badge=badge,arms=arms,legs=legs}
+	return {torso=torso,waist=waist,head=head,jacket=jacket,belt=belt,hat=hat,arms=arms,legs=legs}
 end
 
 local function poseSegment(part, a, b)
@@ -225,11 +312,9 @@ local function animateOfficer(officer, frame, stride, crouch, nod, reach)
 	officer.waist.CFrame=frame*CF(0,2.16-crouch,0)
 	local face=frame*CF(0,4.18-crouch,0)*CFrame.Angles(nod,0,0)
 	officer.head.CFrame=face
-	if officer.cap then
-		officer.cap.CFrame=face*CF(0,.47,.03)
-		officer.peak.CFrame=face*CF(0,.35,-.45)
-	end
-	if officer.badge then officer.badge.CFrame=officer.torso.CFrame*CF(.31,.27,-.422) end
+	officer.jacket:PivotTo(officer.torso.CFrame*CF(0,0,-.035))
+	officer.belt:PivotTo(officer.waist.CFrame)
+	officer.hat:PivotTo(face*CF(0,.055,-.025))
 	for _,side in {-1,1} do
 		local step=stride*side
 		local leg=officer.legs[side]
@@ -354,7 +439,8 @@ function PrisonScene.new(parent, skinColor)
 		local instrumentCenter = needleAt-axis*.60
 		for _,s in {-1,1} do
 			local settle = ease(t,4.62,6.95)
-			local guardAt = base+V(s*(1.79-.21*held),0,-1.45+1.8*ease(t,1.82,3.03)-1.3*settle)
+			local stepAside=ease(t,4.2,6.2)*(1-ease(t,11.3,13.1))
+			local guardAt = base+V(s*(1.79+.89*stepAside-.21*held),0,-1.45+1.8*ease(t,1.82,3.03)-1.3*settle)
 			local gaze = V(-s*.90,0,-.55+.96*settle)
 			local frame = CFrame.lookAt(guardAt,guardAt+gaze)
 			local walking = ease(t,2.14,2.72)*(1-ease(t,5.16,5.85))

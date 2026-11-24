@@ -493,6 +493,7 @@ function Cinematics.new(gui,onOwnershipChanged)
 			if p.Parent then p.LocalTransparencyModifier=value end
 		end
 		old.folder:Destroy()
+		if old.intakeExposure then Lighting.ExposureCompensation=old.intakeExposure end
 		if old.audio then old.audio:Destroy() end
 		if old.escapeAudio then old.escapeAudio:Destroy() end
 		if old.inputConnections then
@@ -521,6 +522,8 @@ function Cinematics.new(gui,onOwnershipChanged)
 	end
 
 	local function startIntake(current)
+		current.intakeExposure=Lighting.ExposureCompensation
+		Lighting.ExposureCompensation=-1.25
 		current.stage=PrisonScene.new(current.folder,armColor())
 		local function at(seconds,callback)
 			task.delay(seconds,function()

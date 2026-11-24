@@ -63,9 +63,9 @@ local function exterior(group, pose)
 	end
 
 	-- The rounded pressure case, raised bridge crown and stepped keel break up the flat roof silhouette.
-	pill(group,"Dorsal pressure case",V(31,9,57),pose*CFrame.new(0,6.05,-1.5),alloy)
+	pill(group,"Dorsal pressure case",V(31,9,57),pose*CFrame.new(0,10.3,-1.5),alloy) -- sits on the bridge roof; at 6.05 it bulged 3 studs into the cabin
 	pill(group,"Fore survey crown",V(24,6.2,21),pose*CFrame.new(0,8.3,-14),orange)
-	pill(group,"Keel compensation chamber",V(34,6.4,52),pose*CFrame.new(0,-6.05,1),dark)
+	pill(group,"Keel compensation chamber",V(34,6.4,52),pose*CFrame.new(0,-8.7,1),dark) -- below the deck; at -6.05 it rose 2 studs through the floor
 	pill(group,"Underwater survey transducer",V(16,5,18),pose*CFrame.new(0,-8.3,-13),alloy)
 	block("Recessed service platform",V(12,.25,14),0,10.15,6,dark,Enum.Material.DiamondPlate)
 	block("Transponder pedestal",V(5,2,7),0,11,9,alloy)
@@ -157,6 +157,95 @@ local function cabin(group, pose)
 	end
 end
 
+-- Flush graphics carry the fine detail without adding dozens of welded hull parts.
+local function trenchChart(group,frame)
+	local mount=part(group,"Trench survey chart",V(6.1,2.58,.16),frame,ash)
+	local face=Instance.new("SurfaceGui")
+	face.Name,face.Face,face.CanvasSize="Hydrographic chart",Enum.NormalId.Front,Vector2.new(600,250)
+	face.LightInfluence,face.MaxDistance=.48,48
+	face.Parent=mount
+	local function rect(x,y,w,h,color,angle)
+		local mark=Instance.new("Frame")
+		mark.AnchorPoint,mark.Position=Vector2.new(.5,.5),UDim2.fromOffset(x,y)
+		mark.Size,mark.BorderSizePixel=UDim2.fromOffset(w,h),0
+		mark.Rotation,mark.BackgroundColor3=angle or 0,color
+		mark.Parent=face
+	end
+	local function caption(x,y,w,h,value,color)
+		local text=Instance.new("TextLabel")
+		text.Position,text.Size=UDim2.fromOffset(x,y),UDim2.fromOffset(w,h)
+		text.BackgroundTransparency,text.Font,text.TextSize=1,Enum.Font.Code,h*.82
+		text.TextXAlignment,text.TextColor3,text.Text=Enum.TextXAlignment.Left,color,value
+		text.Parent=face
+	end
+	local paper=rgb(31,54,59)
+	local grid=rgb(62,86,87)
+	rect(300,125,600,250,paper)
+	caption(17,8,560,30,"KESTREL 04   /   TRENCH PROFILE",teal)
+	for i=0,4 do rect(262,55+i*38,476,1,grid) end
+	for i=0,8 do rect(24+i*59.5,131,1,152,grid) end
+	local points={Vector2.new(24,68),Vector2.new(90,75),Vector2.new(150,65),Vector2.new(210,100),
+		Vector2.new(246,106),Vector2.new(289,142),Vector2.new(321,149),Vector2.new(351,192),
+		Vector2.new(380,201),Vector2.new(419,164),Vector2.new(455,125),Vector2.new(500,110)}
+	for i=2,#points do
+		local delta=points[i]-points[i-1]
+		local mid=(points[i]+points[i-1])*.5
+		rect(mid.X,mid.Y,delta.Magnitude+1,3,ash,math.deg(math.atan2(delta.Y,delta.X)))
+	end
+	rect(380,201,9,9,amber,45)
+	caption(512,44,88,20,"0 m",ash)
+	caption(512,120,88,20,"5,000",ash)
+	caption(512,196,88,20,"10,000",amber)
+	caption(16,219,540,21,"SECTION A–A     /     BENTHIC SURVEY",ash)
+end
+
+local function expeditionFittings(group,pose)
+	local function localTube(name,a,b,d,color)
+		return tube(group,name,pose:PointToWorldSpace(a),pose:PointToWorldSpace(b),d,color)
+	end
+	-- A reinforced lifting arch and a guarded acoustic array stand clear of glass and cameras.
+	localTube("Port lifting post",V(-6,13.65,3.6),V(-4.1,16,3.6),.65,orange)
+	localTube("Starboard lifting post",V(6,13.65,3.6),V(4.1,16,3.6),.65,orange)
+	localTube("Lifting crosshead",V(-4.1,16,3.6),V(4.1,16,3.6),.74,orange)
+	localTube("Hydrophone pedestal",V(0,13.6,-7),V(0,16,-7),.53,gasket)
+	pill(group,"Ceramic hydrophone",V(1.5,1.75,1.5),pose*CFrame.new(0,16.1,-7),ash)
+	for _,side in {-1,1} do
+		local frame=pose*CFrame.new(side*25.45,-4.02,0)*CFrame.Angles(0,-side*math.pi/2,0)
+		part(group,"Ceramic flotation stripe",V(26,.8,.12),frame,orange)
+		for i=-1,1 do
+			part(group,"Hull draft graduation",V(.24,.66,.13),frame*CFrame.new(i*.58,.02,-.06),ash)
+		end
+		marking(group,"EVA hull number",frame*CFrame.new(8,.02,-.08),V(5.8,.73,.09),"K–04",ash,dark)
+		localTube("Thruster guard support",V(side*19,-1.5,25),V(side*21,-2.6,27.5),.24,ash)
+		localTube("Thruster guard support",V(side*21,-2.6,27.5),V(side*23,-1.5,24),.24,ash)
+	end
+	trenchChart(group,pose*CFrame.new(20.5,.82,-2.43))
+	for _,z in {-17,-7,4,15} do
+		-- Warm port and grey starboard stiffeners stay against the top corners.
+		for _,side in {-1,1} do
+			line(group,"Deckhead gusset",pose:PointToWorldSpace(V(side*24,3.2,z)),
+				pose:PointToWorldSpace(V(side*21.8,4.84,z)),.25,.31,if side<0 then orange else ash)
+		end
+	end
+	-- Color-coded pipework in the machinery room. Brackets clear the passage and wheel.
+	for i,color in {rgb(174,108,64),rgb(114,143,143)} do
+		local y=2.25+i*.46
+		localTube("Heat exchanger return",V(-24.2,y,-18),V(-24.2,y,-5),.27,color)
+		for _,z in {-16,-11,-6} do
+			localTube("Compression coupling",V(-24.2,y,z-.10),V(-24.2,y,z+.10),.41,gasket)
+		end
+	end
+	local pipe=pose*CFrame.new(-21.1,.55,-2.46)
+	part(group,"Machinery service cover",V(4.5,2.45,.24),pipe,dark,Enum.Material.DiamondPlate)
+	for i=-2,2 do
+		part(group,"Extractor louvre",V(3.6,.11,.21),pipe*CFrame.new(0,i*.34,-.19)*CFrame.Angles(-.25,0,0),ash)
+	end
+	-- Reflective direction bands run along the diver-service floor edge.
+	for _,x in {4.1,20.1} do
+		part(group,"Diver lane inlay",V(.10,.025,14),pose*CFrame.new(x,-4.77,9),teal,Enum.Material.SmoothPlastic)
+	end
+end
+
 function Refit.install(world)
 	local shell=world:WaitForChild("Pressure hull • Survey refit")
 	if shell:FindFirstChild("Kestrel expedition refit") then return end
@@ -165,6 +254,7 @@ function Refit.install(world)
 	group.Name="Kestrel expedition refit"
 	exterior(group,pose)
 	cabin(group,pose)
+	expeditionFittings(group,pose)
 	group.Parent=shell
 end
 
