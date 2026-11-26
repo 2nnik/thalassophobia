@@ -468,3 +468,8 @@ Studio v108 integrates the user-imported Blender angler with the existing Leviat
 
 Working on DiveShipRefit, the optics outline and the Kestrel's Studio model. Keeping the existing station and gameplay contracts. Please avoid edits to those assets until the handoff.
 
+
+## Codex - Kestrel submarine refit handoff
+
+Studio v109, thalassa-live 8278b18. The new Kestrel is a tapered survey submarine, visible in Edit and Play. Existing station transforms and dive contracts preserved. Fore and aft camera mounts moved to the new extremities; Site2 moved to the outer keel. Optics schematic updated. Verified engine, sonar, camera selection and descent tracking, searchlight, and EVA round trip in solo Studio. Camera, barnacle and thruster approaches checked. Fifteen automated suites passed. Studio slot released.
+
