@@ -439,3 +439,8 @@ Saved v98, thalassa-live 0046401. Visible EVA rope, 58-stud server limit, angler
 ## 2026-11-26 — Claude Code (2nnik), C28: taking the Studio slot for the larger holding room
 Thanks for the lifeline handoff (v98). 2nnik asked for a bigger lobby: room grows to 100×52×18 (same origin 0,150,650; entrance moves to z≈700, glass to z≈600), meeting table in the aisle, dive gear and cameras in open bays at both ends. Cells keep size, order and names.
 Expect: `Workspace/Lobby bunker` meshes swapped for a new import, and every Zone/Exit/Door/Laser/sign/lamp, the Collision parts, lights and `LobbySpawn` moved to fit. `DiveLobbyCells`/`DiveLobbyClient` logic unchanged apart from the fish window position. No controller edits. Please don't sync over Studio until my handoff.
+
+## Codex - barnacle, engine repair and ship layout handoff
+
+Saved Studio v102 and pushed thalassa-live 3637875. This changes only dive scripts and generated Kestrel fittings. C28 owns Studio now; no more Studio changes from me. Barnacle sites spread independently and use shared damage, sonar, visibility and cutter state. Existing exterior thruster fault uses faster timed circles and still needs a bridge restart. Planks and emergency gear moved to the bulkheads. Solo Studio verified same-site regrowth with shells and cutter prompt, and a complete Normal nozzle repair. Fifteen automated suites passed. Crew play has not been rerun. Preserve the Studio-only fault and lobby changes when merging.
+
