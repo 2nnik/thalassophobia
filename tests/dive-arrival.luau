@@ -24,6 +24,7 @@ local function player()
 end
 local host,guest=player(),player()
 local modules={
+	DiveJellyBloom={new=function() return {update=function() end} end},
 	DiveIntercom={start=function() return {wake=function() end,update=function() end,destroy=function() end} end},
 	DiveMedical={start=function() return {remove=function() end,destroy=function() end} end},
 	DiveParasite={start=function() return {step=function() end,destroy=function() end} end},

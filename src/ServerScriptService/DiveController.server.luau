@@ -19,9 +19,11 @@ local active, settling
 local Parasite=require(script.Parent:WaitForChild("DiveParasite"))
 local Medical=require(script.Parent:WaitForChild("DiveMedical"))
 local Intercom=require(script.Parent:WaitForChild("DiveIntercom"))
+local JellyBloom=require(script.Parent:WaitForChild("DiveJellyBloom"))
 local parasiteNet=Instance.new("RemoteEvent")
 parasiteNet.Name,parasiteNet.Parent="Parasite",net
 local parasite,medical,intercom
+local jellyBloom
 local members, receipts, throttles, held = {}, {}, {}, {}
 local sceneIdle = Dive.new("Normal", 1, {})
 sceneIdle.phase, sceneIdle.engine = "Lobby", false
@@ -155,6 +157,7 @@ local function sendSnapshot(p, m, s)
 	out.battery, out.hull = math.max(0,s.battery), math.max(0,s.hull)
 	out.alive, out.outside, out.maxOxygen = m.alive, m.outside, m.maxOxygen
 	out.intakeId = m.intakeId
+	out.jellyBloom=s.jellyBloom
 	if m.intakeId then
 		out.skipVotes,out.skipNeeded=intakeVotes()
 		out.skipVoted=m.skipIntake==true
@@ -224,6 +227,7 @@ local function start(party, difficulty)
 	if next(crew) == nil then return false end
 	members = crew
 	active = Dive.new(difficulty, #party, {})
+	jellyBloom=JellyBloom.new()
 	active.engine=false
 	active.warning,active.warningUntil="Start propulsion at the engine console.",12
 	intercom=Intercom.start(site)
@@ -292,6 +296,7 @@ end
 settle = function(s)
 	if active ~= s or settling then return end
 	settling=true
+	jellyBloom=nil
 	if intercom then intercom:destroy(); intercom=nil end
 	if parasite then parasite:destroy(); parasite=nil end
 	if medical then medical:destroy(); medical=nil end
@@ -589,7 +594,7 @@ local function handleCrew(s,dt)
 			Exterior.tick(p,m,s,dt)
 			m.oxygen -= dt
 			if m.oxygen <= 0 then down(p,"The diver exhausted their oxygen.")
-			elseif root then
+			elseif root and not s.jellyBloom then
 				s.squidTarget=root.Position
 				local actors=site.Contacts
 				local anglerNear=s.shark>0.82 and World.predatorNear(actors.Leviathan,root.Position,22)
@@ -781,7 +786,7 @@ RunService.Heartbeat:Connect(function(dt)
 		if waking and intercom then intercom:wake() end
 	end
 	carryCrew(World.travel(math.min(0.5,dt)))
-	if parasite and medical then
+	if not s.jellyBloom and parasite and medical then
 		parasite:step(math.min(dt,.1),s.depth,exposed,living,function(p) medical:wound(p) end)
 		if active~=s or settling then return end
 	end
@@ -790,13 +795,14 @@ RunService.Heartbeat:Connect(function(dt)
 	local step = accumulator
 	accumulator = 0
 	local hadSwarm = s.swarm > 0
+	if jellyBloom then jellyBloom:update(s,parasite) end
 	s.patrolSquidSide = World.squidBearing()
 	Dive.step(s,step)
 	if intercom then intercom:update(s.deepest) end
 	if s.swarm>0 and not hadSwarm then Exterior.newSwarm(s) end
 	if s.phase == "Results" then settle(s) return end
 	World.setDepth(s.depth)
-	updateCrawler(s)
+	if not s.jellyBloom then updateCrawler(s) end
 	handleCrew(s,step)
 	if active == s then sync(s) end
 end)

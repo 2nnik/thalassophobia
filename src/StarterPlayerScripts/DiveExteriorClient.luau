@@ -59,6 +59,7 @@ local steelStep, strideDistance = nil, 0
 local random = Random.new()
 local nextContactCheck, nextBubble, bubbleIndex = 0, 0, 0
 local inDive, searchlight, cabinSteps = false, false, false
+local jellyBloom=require(script.Parent:WaitForChild("DiveJellyBloomView"))
 
 local function beginWater()
 	originalExposure,originalOutdoor=Lighting.ExposureCompensation,Lighting.OutdoorAmbient
@@ -73,12 +74,14 @@ local function beginWater()
 end
 
 local function stepWater(dt)
+	local bloom=jellyBloom.render(dt)
 	darkness+=(targetDarkness-darkness)*(1-math.exp(-2.2*dt))
 	local now=os.clock()
 	if now<nextWaterUpdate then return end
 	nextWaterUpdate=now+.075
 	Lighting.ExposureCompensation=originalExposure+.57*(1-darkness)-.18*darkness
 	Lighting.OutdoorAmbient=originalOutdoor:Lerp(Color3.fromRGB(102,158,173),(1-darkness)*.8)
+		:Lerp(Color3.fromRGB(109,76,142),bloom*.54)
 	if not atmosphere then return end
 	-- A green shelf gives way to blue twilight before the last light drains from the trench.
 	local shelf=math.clamp(darkness/.48,0,1)
@@ -89,6 +92,12 @@ local function stepWater(dt)
 	atmosphere.Haze=.65+1.9*darkness
 	atmosphere.Glare=0
 	atmosphere.Offset=.19-.16*darkness
+	if bloom>0 then
+		atmosphere.Color=atmosphere.Color:Lerp(Color3.fromRGB(108,126,195),bloom*.67)
+		atmosphere.Decay=atmosphere.Decay:Lerp(Color3.fromRGB(119,46,123),bloom*.64)
+		atmosphere.Density*=1-.48*bloom
+		atmosphere.Haze*=1-.39*bloom
+	end
 end
 
 local function resetWater()
@@ -573,6 +582,7 @@ function Client.init(network,rootGui)
 end
 
 function Client.update(s)
+	jellyBloom.update(s)
 	local oldActive,oldChallenge=active,challenge~=nil
 	local previousId=challenge and challenge.id
 	targetDarkness=math.sqrt(math.clamp((s.depth or 0)/math.max(1,s.maxDepth or 10000),0,1))
@@ -601,6 +611,7 @@ end
 
 function Client.reset()
 	if not overlay then return end
+	jellyBloom.reset()
 	local oldActive,oldChallenge=active,challenge~=nil
 	inDive,searchlight,cabinSteps=false,false,false
 	resetWater()

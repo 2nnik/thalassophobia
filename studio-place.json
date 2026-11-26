@@ -13,6 +13,8 @@
     "ReplicatedStorage.DiveNet.Parasite"
   ],
   "scripts": [
+    {"group":"ServerScriptService","class":"ModuleScript","name":"DiveJellyBloom","path":"src/ServerScriptService/DiveJellyBloom.luau"},
+    {"group":"StarterPlayerScripts","class":"ModuleScript","name":"DiveJellyBloomView","path":"src/StarterPlayerScripts/DiveJellyBloomView.luau"},
     {"group":"ServerScriptService","class":"ModuleScript","name":"DiveIntercom","path":"src/ServerScriptService/DiveIntercom.luau"},
     {"group":"ServerScriptService","class":"ModuleScript","name":"DiveMedical","path":"src/ServerScriptService/DiveMedical.luau"},
     {"group":"ServerScriptService","class":"ModuleScript","name":"DiveParasite","path":"src/ServerScriptService/DiveParasite.luau"},

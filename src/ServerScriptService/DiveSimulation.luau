@@ -90,6 +90,7 @@ function Dive.isUnlocked(s, name)
 end
 
 function Dive.spawn(s, name)
+	if s.jellyBloom then return false end
 	if name == "crawler" and s.crawlerRetreat then return false end
 	if not firstDepth[name] or not Dive.isUnlocked(s, name) or s[name] > 0 then return false end
 	s[name] = 0.015
@@ -298,11 +299,14 @@ function Dive.step(s, dt)
 	end
 	local pace = s.rules.pace * (0.72 + 0.095 * (s.crewCount - 1)) * (ascent and 1.27 or 1)
 	local depthRatio = s.depth / TARGET_DEPTH
-	if s.elapsed >= s.nextThreat then
+	if s.jellyBloom then
+		s.nextThreat+=dt
+		s.nextInfestation+=dt
+	elseif s.elapsed >= s.nextThreat then
 		drawContact(s)
 		s.nextThreat = nextContact(s, pace)
 	end
-	if s.elapsed >= s.nextInfestation then
+	if not s.jellyBloom and s.elapsed >= s.nextInfestation then
 		local first = if s.rng:NextInteger(1, 2) == 1 then "crawler" else "swarm"
 		if not Dive.spawn(s, first) then Dive.spawn(s, if first == "crawler" then "swarm" else "crawler") end
 		s.nextInfestation = s.elapsed + s.rng:NextNumber(8, 12) / (1 + depthRatio * .25)
@@ -332,7 +336,7 @@ function Dive.step(s, dt)
 	end
 	-- A continuous round trip uses 52.8% at Normal before lighting, sonar and contacts.
 	s.battery -= dt * (0.012 + (s.engine and 0.028 or 0) + (s.light and 0.09 or 0) + (s.sonarOn and 0.008 or 0)) * s.rules.power / (s.traits.Battery and 1.15 or 1)
-	contacts(s, dt, pace)
+	if not s.jellyBloom then contacts(s, dt, pace) end
 	if s.phase == "Results" then return end
 	if s.battery <= 0 then Dive.endRun(s, false, "The cage lost its last reserve of power.") return end
 	if s.hull <= 0 then Dive.endRun(s, false, "The pressure hull collapsed.") return end

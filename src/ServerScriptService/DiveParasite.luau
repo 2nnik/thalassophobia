@@ -274,4 +274,13 @@ function Parasite:destroy()
 	table.clear(self.crew)
 	table.clear(self.released)
 end
+
+function Parasite:isBusy()
+	if next(self.hunts) or next(self.released) then return true end
+	for _,member in self.crew do
+		if member.sequence or member.hatch then return true end
+	end
+	return false
+end
+
 return Parasite
