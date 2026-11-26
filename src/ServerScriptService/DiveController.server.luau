@@ -138,12 +138,27 @@ local function tether(p, m)
 end
 
 local public = {"phase","difficulty","depth","maxDepth","battery","hull","engine","light","aim","cracks","shark","squid","crawler","swarm","pursuer","squidSide","crawlerSection","crawlerEntryWarning","boarded","warning","coast","artifact","breaches","systemsOffline","anglerStrikes","squidLatched"}
+local function intakeVotes()
+	local votes,crew=0,0
+	for p,m in members do
+		if m.alive and p.Parent==Players then
+			crew+=1
+			if m.skipIntake then votes+=1 end
+		end
+	end
+	return votes,math.max(1,math.ceil(crew/2))
+end
+
 local function sendSnapshot(p, m, s)
 	local out = {}
 	for _,key in public do out[key] = s[key] end
 	out.battery, out.hull = math.max(0,s.battery), math.max(0,s.hull)
 	out.alive, out.outside, out.maxOxygen = m.alive, m.outside, m.maxOxygen
 	out.intakeId = m.intakeId
+	if m.intakeId then
+		out.skipVotes,out.skipNeeded=intakeVotes()
+		out.skipVoted=m.skipIntake==true
+	end
 	out.oxygen = m.outside and m.oxygen or nil
 	out.carryingArtifact = s.artifactCarrier == p
 	out.charges, out.capacity = m.charges,m.capacity
@@ -655,6 +670,11 @@ net.Input.OnServerEvent:Connect(function(p, action, arg)
 				m.intakeStarted=now
 			elseif action=="IntakeFinished" and m.intakeStarted then
 				m.intakeFinished=true
+			elseif action=="IntakeSkip" and m.intakeStarted and not m.skipIntake then
+				m.skipIntake=true
+				for player,member in members do
+					if member.intakeId and player.Parent==Players then sendSnapshot(player,member,active) end
+				end
 			end
 		end
 		return
@@ -711,6 +731,8 @@ end)
 local accumulator = 0
 local function updateBoarding(s)
 	local now=os.clock()
+	local votes,needed=intakeVotes()
+	local skipped=votes>=needed
 	local waiting=false
 	local ready=false
 	for _,m in members do
@@ -725,11 +747,11 @@ local function updateBoarding(s)
 	s.firstAwake=if ready then s.firstAwake or now else nil
 	-- If one device hangs during the transfer, let its crewmates depart.
 	-- The late player keeps their own berth and receives the entire scene.
-	if s.boarding and waiting and (not s.firstAwake or now-s.firstAwake<CREW_GRACE_SECONDS) then return end
+	if not skipped and s.boarding and waiting and (not s.firstAwake or now-s.firstAwake<CREW_GRACE_SECONDS) then return end
 	s.boarding=false
-	s.pendingIntakes=waiting
+	s.pendingIntakes=waiting and not skipped
 	for p,m in members do
-		if m.intakeId and m.intakeFinished and now-m.intakeStarted>=OPENING_SECONDS then
+		if m.intakeId and (skipped or (m.intakeFinished and now-m.intakeStarted>=OPENING_SECONDS)) then
 			m.intakeId=nil
 			releaseBerth(m)
 			sendSnapshot(p,m,s)

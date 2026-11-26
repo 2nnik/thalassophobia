@@ -1,4 +1,5 @@
 local Players=game:GetService("Players")
+local Actions=game:GetService("ContextActionService")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local PromptService=game:GetService("ProximityPromptService")
 local InputService=game:GetService("UserInputService")
@@ -35,6 +36,24 @@ transferText.TextColor3=Color3.fromRGB(205,213,211)
 transferText.TextSize=15
 transferText.Text=""
 transferText.Parent=transfer
+local skipGui=Instance.new("ScreenGui")
+skipGui.Name="DiveIntakeVote"
+skipGui.IgnoreGuiInset=true
+skipGui.ResetOnSpawn=false
+skipGui.DisplayOrder=screen.DisplayOrder+41
+skipGui.Enabled=false
+skipGui.Parent=screen.Parent
+local skipButton=Instance.new("TextButton")
+skipButton.AnchorPoint=Vector2.new(1,1)
+skipButton.Position=UDim2.new(1,-24,1,-44)
+skipButton.Size=UDim2.fromOffset(226,38)
+skipButton.BackgroundColor3=Color3.fromRGB(9,28,34)
+skipButton.BackgroundTransparency=.14
+skipButton.BorderSizePixel=0
+skipButton.Font=Enum.Font.Code
+skipButton.TextColor3=Color3.fromRGB(174,235,217)
+skipButton.TextSize=14
+skipButton.Parent=skipGui
 local instruments=require(script.Parent:WaitForChild("DiveClientInstruments"))(screen)
 local optics=require(script.Parent:WaitForChild("DiveClientOptics"))(net,screen)
 local exterior=require(script.Parent:WaitForChild("DiveExteriorClient"))
@@ -50,6 +69,19 @@ local breach
 local promptEligible=false
 local showDiveNotices=false
 local intakeId=nil
+local skipVoted=false
+local skipBinding="DiveIntakeSkip"
+local function voteSkip()
+    if not intakeId or not skipGui.Enabled or skipVoted then return end
+    skipVoted=true
+    skipButton.Text="VOTE SENT"
+    input:FireServer("IntakeSkip",intakeId)
+end
+local function hideSkip()
+    skipGui.Enabled=false
+    Actions:UnbindAction(skipBinding)
+end
+skipButton.Activated:Connect(voteSkip)
 local parasiteUI
 local crewAlive=false
 local function dockControls()
@@ -87,6 +119,7 @@ terminal=require(script.Parent:WaitForChild("DiveClientTerminal"))(screen,send)
 terminal.show(false)
 local function beginIntake(id)
     intakeId=id
+    skipVoted=false
     terminal.show(false)
     screen.Enabled=false
     transfer.BackgroundTransparency=0
@@ -103,6 +136,11 @@ local function beginIntake(id)
         end
         if intakeId~=id then return end
         input:FireServer("IntakeStarted",id)
+        skipGui.Enabled=true
+        Actions:BindActionAtPriority(skipBinding,function(_,state)
+            if state==Enum.UserInputState.Begin and not InputService:GetFocusedTextBox() then voteSkip() end
+            return Enum.ContextActionResult.Sink
+        end,false,2500,Enum.KeyCode.Space,Enum.KeyCode.ButtonY)
         cinematics:play({kind="Intake",onComplete=function()
             if intakeId~=id then return end
             transfer.BackgroundTransparency=1
@@ -323,10 +361,16 @@ feed.OnClientEvent:Connect(function(kind,payload)
         end
         if payload.intakeId then
             if intakeId~=payload.intakeId then beginIntake(payload.intakeId) end
+            local ratio=("%d/%d"):format(payload.skipVotes or 0,payload.skipNeeded or 1)
+            local inputType=InputService:GetLastInputType()
+            local hint=if inputType==Enum.UserInputType.Touch then "TAP TO SKIP"
+                elseif inputType.Name:match("^Gamepad") then "Y  VOTE TO SKIP" else "SPACE  VOTE TO SKIP"
+            skipButton.Text=(if skipVoted or payload.skipVoted then "VOTED  " else hint.."  ")..ratio
             return
         end
         if intakeId then
             intakeId=nil
+            hideSkip()
             cinematics:reset()
         end
         arrival.Enabled=false
@@ -354,6 +398,7 @@ feed.OnClientEvent:Connect(function(kind,payload)
     elseif kind=="Results" and type(payload)=="table" then
         received=true
         mode="Results"
+        hideSkip()
         intakeId=nil
         arrival.Enabled=false
         screen.Enabled=true
