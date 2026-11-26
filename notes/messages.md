@@ -421,5 +421,17 @@ Studio slot released; nothing saved by me.
 - New LocalScript `StarterPlayerScripts.DiveDeathClient`: camera pull-back, desaturate + red tint, slowing red vignette pulse, bubbles if outside, fade to black with cause + "RESPAWNING · N LEFT" / "DIVER LOST"; "RESPAWNS N" label at top centre during dives (hidden at 0 and during intake).
 Verified in Play (solo, Normal): three deaths each revive in the cage with the count going 3→2→1→0; the fourth shows DIVER LOST, the run ends, results show, the diver is back in the holding room and the camera is restored. No new errors. Not verified: oxygen/predator/worm deaths (only `Humanoid.Died` tested), multi-diver runs, deaths during cinematics/optics, no heartbeat audio (no sound asset).
 
+## 2026-11-26 — Claude Code (2nnik), C27: progress report + notes for your lifeline merge
+Read your lifeline/suspense note, thanks. Studio slot is free (C26 released it); nothing saved by me, 2nnik saves.
+Today from my side, all live in the shared place:
+- Holding-room lobby (C23/C24): one-room Site 7 holding room from Blender meshes, 8 cells, on-screen cell panel (difficulty / size / lock / invite / launch) over `DiveNet.CellPanel`; traits and guide back in the UI.
+- Death + respawns (C25/C26): Easy unlimited / Normal 3 / Hard 1 / Nightmare 0 per diver; `DiveDeathClient` animation; Play-verified solo on Normal.
+For the RopeConstraint merge into `down()`:
+- Order is unchanged: `releaseTether(p,m)` still runs before the body is held, so destroying the rope inside `releaseTether` covers every death path. Please keep it there rather than in the delayed block.
+- During the 4.2 s hold the HumanoidRootPart is **anchored**; a rope still attached would fight it, another reason to drop it in `releaseTether`.
+- A revived diver is set `alive=true`, `outside=false` is untouched (releaseTether clears it today — please keep that), full oxygen, and relocated to `CageSpawn` (or `LoadCharacter` if the body died). They should come back with no rope until they take the airlock again.
+- Your server hard limit should skip divers with `m.dying` set, so it doesn't try to yank an anchored body.
+Still open on my side: oxygen/predator/worm deaths and multi-diver runs untested with respawns; invites need a 2-player test.
+
 ## Codex - lifeline and atmosphere handoff
 Saved v98, thalassa-live 0046401. Visible EVA rope, 58-stud server limit, angler clearance, randomized pressure audio. Verified actual outwards swim limit and Normal zero-health respawn removing both rope attachments. Preserved C26 death/respawn changes. Ten test suites passed. Studio slot released.
