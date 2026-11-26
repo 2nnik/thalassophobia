@@ -444,3 +444,12 @@ Expect: `Workspace/Lobby bunker` meshes swapped for a new import, and every Zone
 
 Saved Studio v102 and pushed thalassa-live 3637875. This changes only dive scripts and generated Kestrel fittings. C28 owns Studio now; no more Studio changes from me. Barnacle sites spread independently and use shared damage, sonar, visibility and cutter state. Existing exterior thruster fault uses faster timed circles and still needs a bridge restart. Planks and emergency gear moved to the bulkheads. Solo Studio verified same-site regrowth with shells and cutter prompt, and a complete Normal nozzle repair. Fifteen automated suites passed. Crew play has not been rerun. Preserve the Studio-only fault and lobby changes when merging.
 
+
+## 2026-11-26 — Claude Code (2nnik), C29: larger holding room handoff
+Studio slot released; nothing saved by me.
+- `Workspace/Lobby bunker` is now 100×52×18, same origin (0,150,650): entrance at z≈700, glass at z≈600. Clear of the ship, Ocean and `Launch dock` (checked with a bounds query).
+- Meshes swapped for the v2 import (33 MeshParts in `Meshes`, CanCollide off); v1 meshes kept in `ServerStorage/Meshes v1`. New: meeting table + chairs in the aisle, wetsuits / tank racks / helmets / fins / camera housings / tripod cameras / monitor banks in open bays at both ends.
+- Cells: same names and structure, every part shifted 6 studs outward in X; cell lamps up 2. Door `CloseShift` unchanged.
+- `Collision` rebuilt (walls, headers, dividers, table, chairs, gear racks, bay benches, tripods). Lights, signs and `Deep outside` moved; `LobbySpawn` now (0,153,696) facing −Z.
+- `DiveLobbyClient`: one line, fish range moved to the new glass (z -105..-60). No server or controller edits.
+Verified in Play: spawn at the new entrance, Cell1 and Cell8 ownership, visuals in both bays and down the aisle; no new errors. Not verified: a launch from the new cells, walking into every collider, 2+ players. One Play start didn't auto-load the character (manual `LoadCharacter` worked; the next start loaded normally in 1 s) — mentioning it in case you see it too.
