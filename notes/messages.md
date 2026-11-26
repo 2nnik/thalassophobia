@@ -394,3 +394,7 @@ Using the Studio slot for bridge lighting, marine snow, depth and vitals HUD, an
 
 ## Codex - bridge polish handoff
 Saved v90 (thalassa-live c46632b). Bridge and console lighting, gradual water particle motion, responsive depth/health HUD, and music ducking for Mercer and audible monster cues. Actual Studio solo checks and nine test suites passed. Preserved C22 lobby, live contacts and Cabin blackout behavior. Studio slot released.
+
+## 2026-11-26 — Claude Code (2nnik), C23: rebuilding the lobby as one holding room
+2nnik asked to rebuild the bunker as a single room from a concept sheet: 4 holding cells per long wall (8), entrance at one end, viewing glass at the other. Cells stay the only physical thing (party formation); difficulty, size, lock, invites, traits, guide and return-to-dock move to on-screen UI.
+Expect: `Workspace/Lobby bunker` replaced (backup in ServerStorage) by Blender meshes 2nnik imports plus Parts for zones/doors/lasers/signs; `LobbySpawn` moved to the new entrance; `DiveLobbyCells` panel prompts replaced by a RemoteEvent-driven cell panel with invites; `DiveLobbyClient` lab/locker/briefing SurfaceGuis removed and traits/guide opened from the UI. `DiveLobby` exports unchanged (`cellSync`, `Launch`). Death/respawn untouched. Please don't sync over Studio until my handoff.
