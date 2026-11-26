@@ -85,10 +85,10 @@ end
 
 local function releaseTether(p,m)
 	Exterior.stopSwim(p,m)
-	if m.beam then m.beam:Destroy() end
+	if m.rope then m.rope:Destroy() end
 	if m.anchor then m.anchor:Destroy() end
 	if m.attach then m.attach:Destroy() end
-	m.beam, m.anchor, m.attach, m.tetherMarker, m.outside = nil, nil, nil, nil, false
+	m.rope, m.anchor, m.attach, m.outside = nil, nil, nil, false
 end
 
 local function clearExtinguisher(m)
@@ -125,21 +125,17 @@ local function tether(p, m)
 	if not root then return end
 	local anchor = Instance.new("Attachment")
 	anchor.Name = "DiveLifelineAnchor"
-	anchor.Parent = workspace.Terrain
-	anchor.WorldPosition = site.TetherAnchor.Position
+	anchor.Parent = site.TetherAnchor
 	local attach = Instance.new("Attachment")
-	attach.Parent = root
-	local beam = Instance.new("Beam")
-	beam.Attachment0, beam.Attachment1 = anchor, attach
-	beam.Width0, beam.Width1 = 0.09, 0.09
-	beam.Color = ColorSequence.new(Color3.fromRGB(237, 145, 56))
-	beam.FaceCamera = true
-	beam.Parent = attach
-	m.beam, m.anchor, m.attach, m.outside = beam, anchor, attach, true
-	m.tetherMarker = site.TetherAnchor
+	attach.Name,attach.Position,attach.Parent="EVA harness",Vector3.new(0,-.38,.35),root
+	local rope=Instance.new("RopeConstraint")
+	rope.Name,rope.Attachment0,rope.Attachment1="Kestrel lifeline",anchor,attach
+	rope.Length,rope.Restitution,rope.Thickness=Exterior.TETHER_LENGTH,0,.115
+	rope.Color,rope.Visible,rope.Parent=BrickColor.new("Bright orange"),true,attach
+	m.rope, m.anchor, m.attach, m.outside = rope, anchor, attach, true
 	m.oxygen = m.maxOxygen
 	relocate(p, "OutsideSpawn")
-	Exterior.startSwim(p,m,active)
+	if not Exterior.startSwim(p,m,active) then releaseTether(p,m) end
 end
 
 local public = {"phase","difficulty","depth","maxDepth","battery","hull","engine","light","aim","cracks","shark","squid","crawler","swarm","pursuer","squidSide","crawlerSection","crawlerEntryWarning","boarded","warning","coast","artifact","breaches","systemsOffline","anglerStrikes","squidLatched"}
@@ -779,14 +775,11 @@ local function updateBoarding(s)
 end
 
 local function carryCrew(delta)
-	if delta.Y == 0 then return end
-	if active.crawlerGrip then active.crawlerGrip += delta end
+	if active.crawlerGrip and delta.Y~=0 then active.crawlerGrip += delta end
 	for p,m in members do
 		if not m.alive then continue end
-		if m.tetherMarker and m.anchor then m.anchor.WorldPosition = m.tetherMarker.Position end
 		if m.outside then
 			Exterior.followShip(m,delta)
-		else
 		end
 	end
 end

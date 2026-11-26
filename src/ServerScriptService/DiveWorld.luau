@@ -4,6 +4,7 @@ local world = workspace:WaitForChild("Thalassa")
 local stations = world.Stations
 local actors = world.Contacts
 local Dive = require(script.Parent:WaitForChild("DiveSimulation"))
+local tetherLength=require(script.Parent:WaitForChild("DiveExterior")).TETHER_LENGTH
 require(script.Parent:WaitForChild("DiveShipRefit")).install(world)
 local Breach = require(script.Parent:WaitForChild("DiveBreach"))
 local breachEffects = Breach.install(stations)
@@ -413,6 +414,26 @@ local function face(model,cf)
  if model.PrimaryPart and runService:IsRunning() then model.PrimaryPart.CFrame=cf else model:PivotTo(cf) end
 end
 local dormant={}
+local anglerSurfaces={}
+for _,part in leviathan:GetDescendants() do
+ if part:IsA("BasePart") and part.Transparency<.98 then table.insert(anglerSurfaces,part) end
+end
+
+local function outsideLifeline(pose,radial)
+ local anchor=world.TetherAnchor.Position
+ local nearest=math.huge
+ local current=leviathan.PrimaryPart.CFrame
+ for _,part in anglerSurfaces do
+  local predicted=pose*current:ToObjectSpace(part.CFrame)
+  local axis=predicted:VectorToObjectSpace(radial)
+  local half=part.Size*.5
+  local surface=(predicted.Position-anchor):Dot(radial)
+   -math.abs(axis.X)*half.X-math.abs(axis.Y)*half.Y-math.abs(axis.Z)*half.Z
+  nearest=math.min(nearest,surface)
+ end
+ return pose+radial*math.max(0,tetherLength+16-nearest)
+end
+
 local function megafauna(model,unlocked,angle,radius,height,clock,heading,aim,lit,target,turn)
  local fill=lighting[model]
  if not unlocked then
@@ -433,6 +454,7 @@ local function megafauna(model,unlocked,angle,radius,height,clock,heading,aim,li
  local cf=CFrame.lookAt(pos,pos+forward)
  if target then cf=cf:Lerp(CFrame.lookAt(pos,target),turn) end
  cf*=CFrame.Angles(0,0,.042*math.sin(clock*.21))
+ if model==leviathan then cf=outsideLifeline(cf,radial) end
  face(model,cf)
  model:SetAttribute("Detectable",true)
  local illuminated=lit and (bearing(pos)==aim or dirs[aim]:Dot(radial)>.68)

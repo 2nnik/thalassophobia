@@ -440,6 +440,11 @@ local function travelStatus(s)
 		end
 		text=string.format("HULL   %d/4",completed)..(near and "   •   "..string.upper(near:GetAttribute("Label") or near.Name).."   "..math.round(distance).." st" or "").."\n"..text
 	end
+	local range,used=s.tetherRange,s.tetherUsed
+	if range and used then
+		local remaining=math.max(0,math.floor(range-used+.5))
+		text..="\n"..(if remaining<=3 then "LIFELINE TAUT" else "LIFELINE   "..remaining.." ST LEFT")
+	end
 	travel.Text=text
 end
 
@@ -506,7 +511,7 @@ function Client.init(network,rootGui)
 	end
 	UIS:GetPropertyChangedSignal("PreferredInput"):Connect(deviceText)
 	deviceText()
-	travel=label(holder,"",UDim2.new(.5,0,1,-12),UDim2.new(.94,0,0,44),Enum.Font.Code,13,color.paper,24)
+	travel=label(holder,"",UDim2.new(.5,0,1,-12),UDim2.new(.94,0,0,57),Enum.Font.Code,13,color.paper,24)
 	travel.AnchorPoint=Vector2.new(.5,1)
 	travel.TextStrokeTransparency=.35
 	travel.Visible=false

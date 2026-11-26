@@ -5,6 +5,7 @@ local random = Random.new()
 local TOTAL_SITES = 4
 local CUTS = 3
 local SWIM_SPEED = 13
+Exterior.TETHER_LENGTH = 58
 local nextId = 0
 
 function Exterior.init(world, remote)
@@ -48,10 +49,11 @@ local function setMotion(m)
 	local offset = position - swim.anchor
 	local direction = swim.direction
 	local distance = offset.Magnitude
-	if distance > swim.radius - 3 then
+	if distance > swim.radius - 5 then
 		local normal = offset.Unit
 		local outward = direction:Dot(normal)
-		if outward > 0 then direction -= normal * outward end
+		local tension=math.clamp((distance-(swim.radius-5))/5,0,1)
+		if outward > 0 then direction -= normal * outward * tension end
 		if distance > swim.radius then
 			direction -= normal * math.min(1, (distance-swim.radius)*0.3)
 		end
@@ -108,12 +110,10 @@ function Exterior.startSwim(p,m,s)
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local h = character and character:FindFirstChildOfClass("Humanoid")
 	if not root or not h or h.Health <= 0 then return false end
-	local envelope = site:FindFirstChild("ShipEnvelope",true)
 	local anchor = anchorPosition()
-	local radius = envelope and (envelope.Position-anchor).Magnitude + envelope.Size.Magnitude*0.5 + 13 or 82
 	local swim = {root=root, humanoid=h, wasAnchored=root.Anchored, originalCollide=root.CanCollide,
 		speed=h.WalkSpeed, autoRotate=h.AutoRotate, stateMachine=h.EvaluateStateMachine,
-		anchor=anchor, radius=radius, direction=Vector3.zero, look=root.CFrame.LookVector,
+		anchor=anchor, radius=Exterior.TETHER_LENGTH, direction=Vector3.zero, look=root.CFrame.LookVector,
 		heading=Vector3.new(0,0,-1), lastPacket=0, lastInput=0}
 	m.swim = swim
 	claim(root)
@@ -285,6 +285,10 @@ function Exterior.snapshot(p,m,s,out)
 	if m.outside then
 		out.cleaning=m.cleaning
 		out.tetherRange=m.swim and m.swim.radius
+		local swim=m.swim
+		if swim and swim.root.Parent then
+			out.tetherUsed=math.min(swim.radius, (swim.root.Position-swim.anchor).Magnitude)
+		end
 	end
 end
 
@@ -294,7 +298,19 @@ function Exterior.followShip(m,delta)
 	swim.anchor=anchorPosition()
 	-- A diver holding the hull travels with it. Free swimmers keep their
 	-- position in the water until they move or the lifeline pulls them.
-	if m.cleaning then swim.root.CFrame += delta end
+	if m.cleaning then
+		if delta.Y~=0 then swim.root.CFrame+=delta end
+		return
+	end
+	local root=swim.root
+	local offset=root.Position-swim.anchor
+	local distance=offset.Magnitude
+	if distance<=swim.radius then return end
+	local normal=offset.Unit
+	root.CFrame+=normal*(swim.radius-distance)
+	local velocity=root.AssemblyLinearVelocity
+	root.AssemblyLinearVelocity=velocity-normal*math.max(0,velocity:Dot(normal))
+	setMotion(m)
 end
 
 return Exterior

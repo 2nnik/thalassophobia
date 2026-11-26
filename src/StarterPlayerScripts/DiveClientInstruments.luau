@@ -77,8 +77,8 @@ return function(gui)
     UI.make("ReverbSoundEffect",groan,{DecayTime=2,DryLevel=-4,WetLevel=-10})
     local cable=sound("TetherCreak","action_footsteps_plastic.mp3",.38,false,-7,1,-15)
     UI.make("EchoSoundEffect",cable,{Delay=.17,Feedback=.3,DryLevel=-5,WetLevel=-12})
-    local bulkhead=sound("BulkheadRing","action_jump_land.mp3",.83,false,2,4,-10)
-    UI.make("ReverbSoundEffect",bulkhead,{DecayTime=1.7,DryLevel=-3,WetLevel=-8})
+    local bulkhead=sound("PressureFlex",9116831290,.66,false,4,-7,-20)
+    UI.make("ReverbSoundEffect",bulkhead,{DecayTime=2.6,DryLevel=-3,WetLevel=-9})
     local driveShift=sound("DriveShift","action_get_up.mp3",.55,false,7,-2,-12)
     local distant=sound("DeepRumble","impact_water.mp3",.45,false,5,-11,-32)
     local scrape=sound("MetalScrape","impact_explosion_03.mp3",.59,false,0,-12,-23)
@@ -89,6 +89,12 @@ return function(gui)
     UI.make("EchoSoundEffect",recoveryAlarm,{Delay=.28,Feedback=.58,DryLevel=0,WetLevel=-5})
     UI.make("ReverbSoundEffect",distant,{DecayTime=3,DryLevel=-8,WetLevel=-12})
     UI.make("EchoSoundEffect",scrape,{Delay=.23,Feedback=.29,DryLevel=-7,WetLevel=-15})
+    local tensionSource=UI.make("Part",workspace,{Name="LocalPressureSource",Anchored=true,CanCollide=false,
+        CanQuery=false,CanTouch=false,CastShadow=false,Transparency=1,Size=Vector3.one})
+    for _,s in {cable,bulkhead,distant,scrape} do
+        s.Parent=tensionSource
+        s.RollOffMinDistance,s.RollOffMaxDistance=6,29
+    end
     local angler=sound("AnglerGroan",9113980319,.77,false,3,-1,-17)
     UI.make("FlangeSoundEffect",angler,{Depth=.23,Mix=.19,Rate=.28})
     UI.make("ReverbSoundEffect",angler,{DecayTime=3.6,DryLevel=-1,WetLevel=-8})
@@ -132,17 +138,28 @@ return function(gui)
     haze.ZIndex=0
     haze.Visible=false
     local previous
+    local baselineBrightness,pressureDip=0,nil
     local shownDepth,targetDepth,renderedDepth=0,0,nil
     local maxDepth=10000
     local nextAnglerCue=0
     local nextContact=0
     local nextGroan=0
     local nextScare=nil
+    local nextTension=0
     local nextWormCue=0
     local previousLeaks=0
     local rng=Random.new()
     local nextCall=0
     local bearings={"FORE","STARBOARD","AFT","PORT"}
+    local function placeTensionSource(outside)
+        local camera=workspace.CurrentCamera
+        if not camera then return end
+        local angle=rng:NextNumber(math.pi*.36,math.pi*1.64)
+        local distance=if outside then rng:NextNumber(12,18) else rng:NextNumber(7,11)
+        local cf=camera.CFrame
+        tensionSource.Position=cf.Position+(cf.RightVector*math.sin(angle)+cf.LookVector*math.cos(angle))*distance
+            +Vector3.new(0,if outside then -3 else 2,0)
+    end
     local function aimAnglerAudio()
         local camera=workspace.CurrentCamera
         local world=workspace:FindFirstChild("Thalassa")
@@ -210,6 +227,14 @@ return function(gui)
                 if target==0 and s.Volume<.004 then s:Stop() end
             end
         end
+        if grade.Enabled then
+            local dip=0
+            if pressureDip then
+                local progress=(os.clock()-pressureDip)/2.1
+                if progress>=1 then pressureDip=nil else dip=math.sin(math.pi*progress)^2*.031 end
+            end
+            grade.Brightness=baselineBrightness-dip
+        end
         if not frame.Visible then return end
         shownDepth+=(targetDepth-shownDepth)*(1-math.exp(-dt*9))
         local value=math.floor(shownDepth+.5)
@@ -225,7 +250,8 @@ return function(gui)
         previous=nil
         shownDepth,targetDepth,renderedDepth=0,0,nil
         table.clear(gains)
-        nextScare=nil
+        nextScare,nextTension=nil,0
+        pressureDip=nil
         nextCall,nextContact,nextGroan,previousLeaks,nextAnglerCue,nextWormCue=0,0,0,0,0,0
         clearNotice()
         for _,call in calls do call.due=nil call.audio:Stop() end
@@ -273,7 +299,8 @@ return function(gui)
         status.Visible=status.Text~=""
         grade.Enabled=true
         local darkness=math.sqrt(math.clamp(at/math.max(1,s.maxDepth or 10000),0,1))
-        grade.Brightness=outside and (-.012-.035*darkness) or -.006
+        baselineBrightness=if outside then -.012-.035*darkness else -.006
+        if outside or s.jellyBloom or s.systemsOffline or s.cameraView or s.searchlightView then pressureDip=nil end
         grade.Contrast=outside and .07 or .025
         grade.Saturation=outside and -.30 or -.12
         grade.TintColor=outside and Color3.fromRGB(207,235,235):Lerp(Color3.fromRGB(160,200,215),darkness)
@@ -361,18 +388,33 @@ return function(gui)
                 end
             end
         end
-        if not nextScare then nextScare=now+rng:NextNumber(7,14) end
-        if s.alive~=false and at>20 and now>=nextScare and not anglerPresent and not s.jellyBloom and not s.knockbackSonar then
+        local taut=outside and (s.tetherRange or 0)>0 and (s.tetherUsed or 0)>s.tetherRange-2
+        local wasTaut=previous and previous.outside and (previous.tetherRange or 0)>0
+            and (previous.tetherUsed or 0)>previous.tetherRange-2
+        if taut and not wasTaut and now>=nextTension then
+            placeTensionSource(true)
+            play(cable,.35,.52)
+            nextTension=now+4
+        end
+        local quiet=s.alive~=false and at>850 and not anglerPresent and not s.jellyBloom
+            and not s.knockbackSonar and not s.sonarOn and not s.cameraView and not s.searchlightView
+        if not quiet then
+            nextScare=nil
+        elseif not nextScare then
+            nextScare=now+rng:NextNumber(13,26)
+        elseif now>=nextScare then
+            placeTensionSource(outside)
             if outside then
-                if rng:NextNumber()<.46 then play(cable,.24,rng:NextNumber(.35,.51))
-                else play(distant,.27,rng:NextNumber(.45,.61)) end
+                play(distant,.34,rng:NextNumber(.4,.56))
             else
                 local roll=rng:NextNumber()
                 if roll<.34 then play(distant,.22,rng:NextNumber(.40,.57))
-                elseif roll<.61 then play(bulkhead,.36,rng:NextNumber(.70,.99))
-                else play(scrape,.16,rng:NextNumber(.48,.67)) end
+                elseif roll<.81 then
+                    play(bulkhead,.44,rng:NextNumber(.56,.72))
+                    if at>2300 and not s.systemsOffline then pressureDip=now end
+                else play(scrape,.21,rng:NextNumber(.48,.67)) end
             end
-            nextScare=now+rng:NextNumber(8,16)
+            nextScare=now+rng:NextNumber(17,35)
         end
         if previous and (s.hull or 100)<(previous.hull or 100)-4 then play(impact,.55) end
         local otherThreat=math.max(s.squid or 0,s.crawler or 0,s.pursuer or 0)
