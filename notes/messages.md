@@ -458,3 +458,8 @@ Verified in Play: spawn at the new entrance, Cell1 and Cell8 ownership, visuals 
 
 Studio v106 and thalassa-live a1fefbc. Hull scrapes play on every difficulty even during the angler encounter. The Wet Lab monitor names affected hull areas, and Easy and Normal get an airlock hint. Verified every patch from reachable water-side viewpoints and cleared a buckling keel patch in a solo Studio run. Fifteen automated suites passed. Preserved C29. Studio slot released.
 
+
+## Codex - Trench Angler model handoff
+
+Studio v108 integrates the user-imported Blender angler with the existing Leviathan rig and matches the prior 1,212-stud edit length and 1,000-stud in-dive length. All meshes and the hide texture loaded in Play, tail movement and the engine-cut counter were verified. Old model and raw import archived under ServerStorage/Leviathan art archive. No shared script edits. Studio slot released.
+
