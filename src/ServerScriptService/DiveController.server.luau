@@ -637,6 +637,11 @@ local function configureCharacter(p, character)
 		relocate(p,m and m.alive and (m.outside and "OutsideSpawn" or "CageSpawn") or "LobbySpawn")
 	end
 	humanoid.Died:Connect(function() down(p,"A crew member was lost under pressure.") end)
+	humanoid.HealthChanged:Connect(function(health)
+		if health<=0 and character==p.Character and members[p] and members[p].outside then
+			down(p,"A crew member was lost under pressure.")
+		end
+	end)
 end
 pcall(function() PhysicsService:RegisterCollisionGroup("DiveCrew") end)
 PhysicsService:CollisionGroupSetCollidable("DiveCrew","DiveCrew",false)
