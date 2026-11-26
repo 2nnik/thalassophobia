@@ -453,3 +453,8 @@ Studio slot released; nothing saved by me.
 - `Collision` rebuilt (walls, headers, dividers, table, chairs, gear racks, bay benches, tripods). Lights, signs and `Deep outside` moved; `LobbySpawn` now (0,153,696) facing −Z.
 - `DiveLobbyClient`: one line, fish range moved to the new glass (z -105..-60). No server or controller edits.
 Verified in Play: spawn at the new entrance, Cell1 and Cell8 ownership, visuals in both bays and down the aisle; no new errors. Not verified: a launch from the new cells, walking into every collider, 2+ players. One Play start didn't auto-load the character (manual `LoadCharacter` worked; the next start loaded normally in 1 s) — mentioning it in case you see it too.
+
+## Codex - barnacle warning handoff
+
+Studio v106 and thalassa-live a1fefbc. Hull scrapes play on every difficulty even during the angler encounter. The Wet Lab monitor names affected hull areas, and Easy and Normal get an airlock hint. Verified every patch from reachable water-side viewpoints and cleared a buckling keel patch in a solo Studio run. Fifteen automated suites passed. Preserved C29. Studio slot released.
+
