@@ -18,9 +18,10 @@ Exterior.init(site,feed)
 local active, settling
 local Parasite=require(script.Parent:WaitForChild("DiveParasite"))
 local Medical=require(script.Parent:WaitForChild("DiveMedical"))
+local Intercom=require(script.Parent:WaitForChild("DiveIntercom"))
 local parasiteNet=Instance.new("RemoteEvent")
 parasiteNet.Name,parasiteNet.Parent="Parasite",net
-local parasite,medical
+local parasite,medical,intercom
 local members, receipts, throttles, held = {}, {}, {}, {}
 local sceneIdle = Dive.new("Normal", 1, {})
 sceneIdle.phase, sceneIdle.engine = "Lobby", false
@@ -208,6 +209,9 @@ local function start(party, difficulty)
 	if next(crew) == nil then return false end
 	members = crew
 	active = Dive.new(difficulty, #party, {})
+	active.engine=false
+	active.warning,active.warningUntil="Start propulsion at the engine console.",12
+	intercom=Intercom.start(site)
 	active.repairOwners={}
 	runNumber+=1
 	active.boarding=true
@@ -273,6 +277,7 @@ end
 settle = function(s)
 	if active ~= s or settling then return end
 	settling=true
+	if intercom then intercom:destroy(); intercom=nil end
 	if parasite then parasite:destroy(); parasite=nil end
 	if medical then medical:destroy(); medical=nil end
 	local kind=s.sequence
@@ -426,6 +431,8 @@ local function interact(p, action)
 	elseif action == "Engine" then
 		s.engine = not s.engine
 		Dive.warn(s,s.engine and "Propulsion restored." or "Propulsion offline.",2)
+	elseif action == "SecurityIntercom" and intercom then
+		intercom:answer()
 	elseif action == "Light" or action == "Camera" then
 		if action=="Camera" and s.systemsOffline then return end
 		local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
@@ -746,8 +753,10 @@ RunService.Heartbeat:Connect(function(dt)
 	local s = active
 	if not s or settling then accumulator=0 return end
 	if s.boarding or s.pendingIntakes then
+		local waking=s.boarding
 		updateBoarding(s)
 		if s.boarding then accumulator=0 return end
+		if waking and intercom then intercom:wake() end
 	end
 	carryCrew(World.travel(math.min(0.5,dt)))
 	if parasite and medical then
@@ -761,6 +770,7 @@ RunService.Heartbeat:Connect(function(dt)
 	local hadSwarm = s.swarm > 0
 	s.patrolSquidSide = World.squidBearing()
 	Dive.step(s,step)
+	if intercom then intercom:update(s.deepest) end
 	if s.swarm>0 and not hadSwarm then Exterior.newSwarm(s) end
 	if s.phase == "Results" then settle(s) return end
 	World.setDepth(s.depth)

@@ -24,6 +24,7 @@ local function player()
 end
 local host,guest=player(),player()
 local modules={
+	DiveIntercom={start=function() return {wake=function() end,update=function() end,destroy=function() end} end},
 	DiveMedical={start=function() return {remove=function() end,destroy=function() end} end},
 	DiveParasite={start=function() return {step=function() end,destroy=function() end} end},
 	DiveSimulation={
@@ -57,6 +58,7 @@ local boot=luau.load(fs.readFile("src/ServerScriptService/DiveController.server.
 boot()
 assert(start({host,guest},"Easy"))
 local id=snapshots[host].intakeId
+assert(snapshots[host].engine==false,"propulsion must be off at the start of a new dive")
 assert(type(id)=="number" and snapshots[guest].intakeId==id,"crew must receive a run-specific opening")
 local function heartbeat(seconds)
 	now+=seconds
