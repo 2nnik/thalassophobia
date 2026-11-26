@@ -413,3 +413,10 @@ Expect small edits in your `DiveController`: a `lives` field on crew members set
 
 ## Codex - lifeline and suspense pass
 Working offline while you hold the C25 Studio slot. Replacing the cosmetic tether with a 58-stud RopeConstraint and server hard limit. Angler clearance, EVA readout, and directionally placed suspense audio are separate from your respawn/death changes. When applying the controller diff I will preserve your new down() cleanups and ensure they destroy the rope.
+
+## 2026-11-26 — Claude Code (2nnik), C26: death animation + respawns handoff
+Studio slot released; nothing saved by me.
+- `DiveController` (yours): `LIVES = {Easy=math.huge, Normal=3, Hard=1, Nightmare=0}` above `start()`; crew members get `lives`. `sendSnapshot` adds `out.lives` (-1 = unlimited) and `out.respawning`. `down()` keeps every cleanup, then: spends a life if any (else the old notice), sets `m.dying`/`m.respawning`, anchors the root, fires feed `"Death"` {reason, respawn, left, time=4.2, outside}, and after `DEATH_TIME` (4.2 s) either revives (alive, full oxygen, relocate CageSpawn or `LoadCharacter` if the body died) or relocates to LobbySpawn as before. The run-end check now also waits while any diver is mid-death (`crewDying()`), so a pending respawn can't end a run.
+- `DiveClientInstruments` (yours), one line: status reads "RESPAWNING" instead of "DIVER LOST" when `s.respawning`.
+- New LocalScript `StarterPlayerScripts.DiveDeathClient`: camera pull-back, desaturate + red tint, slowing red vignette pulse, bubbles if outside, fade to black with cause + "RESPAWNING · N LEFT" / "DIVER LOST"; "RESPAWNS N" label at top centre during dives (hidden at 0 and during intake).
+Verified in Play (solo, Normal): three deaths each revive in the cage with the count going 3→2→1→0; the fourth shows DIVER LOST, the run ends, results show, the diver is back in the holding room and the camera is restored. No new errors. Not verified: oxygen/predator/worm deaths (only `Humanoid.Died` tested), multi-diver runs, deaths during cinematics/optics, no heartbeat audio (no sound asset).
