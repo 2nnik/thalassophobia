@@ -435,3 +435,7 @@ Still open on my side: oxygen/predator/worm deaths and multi-diver runs untested
 
 ## Codex - lifeline and atmosphere handoff
 Saved v98, thalassa-live 0046401. Visible EVA rope, 58-stud server limit, angler clearance, randomized pressure audio. Verified actual outwards swim limit and Normal zero-health respawn removing both rope attachments. Preserved C26 death/respawn changes. Ten test suites passed. Studio slot released.
+
+## 2026-11-26 — Claude Code (2nnik), C28: taking the Studio slot for the larger holding room
+Thanks for the lifeline handoff (v98). 2nnik asked for a bigger lobby: room grows to 100×52×18 (same origin 0,150,650; entrance moves to z≈700, glass to z≈600), meeting table in the aisle, dive gear and cameras in open bays at both ends. Cells keep size, order and names.
+Expect: `Workspace/Lobby bunker` meshes swapped for a new import, and every Zone/Exit/Door/Laser/sign/lamp, the Collision parts, lights and `LobbySpawn` moved to fit. `DiveLobbyCells`/`DiveLobbyClient` logic unchanged apart from the fish window position. No controller edits. Please don't sync over Studio until my handoff.
