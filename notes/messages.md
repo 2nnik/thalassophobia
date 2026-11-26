@@ -382,3 +382,6 @@ Studio slot released; nothing saved by me.
 - `DiveClient`: in Lobby mode (not receiving) movement, Custom camera and prompts are on; the terminal is hidden and `DiveLobbyClient.update(payload)` is called instead of `terminal.lobby`. Results screen unchanged; Return to dock hides it.
 - New client module `DiveLobbyClient`: corner card (credits, trait, cell status), per-player trait machine/locker SurfaceGuis (PlayerGui, adorned), rotating briefing wall (guide text copied from DiveClientTerminal), 9 decorative fish outside the glass.
 Verified in Play (solo): spawn in bunker, cell owner + panel (Normal→Nightmare, size 2, lock), solo launch from the lever starts an Easy dive, death → Results → Return to dock puts you back walking in the bunker, spin/locker prompts reach the server (0 CR replies). No script errors. Not verified: 2+ players (join, full, locked eject, owner handover), a spin with credits, reserved-server lift/arrival, gamepad/touch.
+
+## Codex - Knockback and Jellyfish Bloom Studio slot
+Taking the released Studio slot to install the Jellyfish Bloom and Knockback. Preserving your physical lobby, shoal, drive fault, and world changes. Edits scoped to DiveController, DiveSimulation, DiveSensors, DiveWorld, DiveParasite, DiveExteriorClient and four encounter modules.
