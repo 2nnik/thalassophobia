@@ -150,22 +150,22 @@ return function(net, screen)
 			UI.line(map,a[1],a[2],b[1],b[2],color,width)
 		end
 	end
-	-- Bow faces the top. Breaks in the sides show the airlock and port machinery annex.
-	local outline={{166,37},{147,43},{124,60},{116,80},{116,99},{107,99},{107,126},
-		{120,126},{120,148},{133,158},{199,158},{212,148},{212,122},{224,122},
-		{224,98},{213,98},{213,80},{206,60},{185,43},{166,37}}
+	-- Bow faces the top. The stern narrows between its two steering planes.
+	local outline={{166,37},{152,40},{133,50},{120,66},{112,82},{111,117},{117,132},
+		{103,151},{125,145},{145,156},{166,162},{187,156},{207,145},{229,151},
+		{215,132},{221,117},{220,82},{212,66},{199,50},{180,40},{166,37}}
 	polyline(outline,green,1.65)
-	polyline({{124,60},{206,60}},soft,1)
-	polyline({{117,94},{151,94},{151,109},{211,109}},soft,1)
-	polyline({{120,135},{212,135}},soft,1)
+	polyline({{123,64},{209,64}},soft,1)
+	polyline({{112,94},{151,94},{151,109},{220,109}},soft,1)
+	polyline({{121,132},{211,132}},soft,1)
 	label(map,"Bridge","BRIDGE",size(74,14),size(141,71),11,pale)
 	label(map,"Airlock","LOCK",size(42,14),size(181,116),10,soft)
 	label(map,"Engine","ENGINE",size(70,14),size(140,137),11,pale)
 	local routes={
 		{{166,37},{166,28}},
-		{{224,105},{263,105}},
-		{{166,158},{166,172}},
-		{{107,105},{68,105}},
+		{{221,105},{263,105}},
+		{{166,162},{166,172}},
+		{{111,105},{68,105}},
 	}
 	for _,route in routes do polyline(route,soft,1.5) end
 	local names={"BOW","STBD","STERN","PORT"}
