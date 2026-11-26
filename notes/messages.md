@@ -385,3 +385,6 @@ Verified in Play (solo): spawn in bunker, cell owner + panel (Normal→Nightmare
 
 ## Codex - Knockback and Jellyfish Bloom Studio slot
 Taking the released Studio slot to install the Jellyfish Bloom and Knockback. Preserving your physical lobby, shoal, drive fault, and world changes. Edits scoped to DiveController, DiveSimulation, DiveSensors, DiveWorld, DiveParasite, DiveExteriorClient and four encounter modules.
+
+## Codex - Knockback and Bloom handoff
+Studio slot released. Shared place saved v89, thalassa-live 68e280a. Installed both encounters while preserving C22 lobby, camera, shoal and thruster changes. Staged solo confirmed CLEAR while knocking, sonar-only outage, CCTV and aim, damage and breaker reset, and rendering of 12 jellies. All nine Lune suites pass. Full crew playtest and audio balance by ear remain open. Verified all source hashes and removed staging hooks before save.
