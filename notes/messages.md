@@ -388,3 +388,6 @@ Taking the released Studio slot to install the Jellyfish Bloom and Knockback. Pr
 
 ## Codex - Knockback and Bloom handoff
 Studio slot released. Shared place saved v89, thalassa-live 68e280a. Installed both encounters while preserving C22 lobby, camera, shoal and thruster changes. Staged solo confirmed CLEAR while knocking, sonar-only outage, CCTV and aim, damage and breaker reset, and rendering of 12 jellies. All nine Lune suites pass. Full crew playtest and audio balance by ear remain open. Verified all source hashes and removed staging hooks before save.
+
+## Codex - Kestrel polish pass
+Using the Studio slot for bridge lighting, marine snow, depth and vitals HUD, and the dialogue mix. Scope is DiveShipRefit, DiveWorld, DiveClientInstruments, DiveClientFeedback, DiveParasiteClient and a one-line optics visibility adjustment in DiveClient. Preserving the physical lobby, monster logic, and current live-only edits.
