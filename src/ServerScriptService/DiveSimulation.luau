@@ -111,7 +111,7 @@ function Dive.spawn(s, name)
 		s.crawlerSection = #open>0 and open[s.rng:NextInteger(1,#open)] or s.rng:NextInteger(1,3)
 		Dive.warn(s, string.format("Worms outside section %02d. Check the window seal.",s.crawlerSection), 7)
 	elseif name == "swarm" then
-		s.foulingExposure, s.floodWarned = 0, false
+		s.foulingExposure, s.floodWarned, s.foulingCriticalAt = 0, false, nil
 		s.cleanSites={-1,-1,-1,-1}
 		s.foulingCandidates={1,2,3,4}
 		local first=table.remove(s.foulingCandidates,s.rng:NextInteger(1,4))
@@ -270,12 +270,13 @@ local function contacts(s, dt, pace)
 		s.battery -= dt * remaining * s.swarm * 0.09 * s.rules.power
 		s.hull -= dt * remaining * s.swarm * 0.17 * s.rules.damage
 		s.foulingExposure = (s.foulingExposure or 0) + dt * remaining * s.swarm * pace
-		if s.foulingExposure >= 36 then
+		if s.foulingExposure >= 24 and not s.floodWarned then
+			s.floodWarned, s.foulingCriticalAt = true, s.elapsed
+			Dive.warn(s,"Hull buckling under growth. Clear the colonies before it ruptures.",12)
+		end
+		if s.foulingExposure >= 36 and s.elapsed-(s.foulingCriticalAt or s.elapsed)>=12 then
 			Dive.endRun(s,false,"Barnacle growth tore open the hull. The angler followed the wreck.","Flood")
 			return
-		elseif s.foulingExposure >= 24 and not s.floodWarned then
-			s.floodWarned = true
-			Dive.warn(s,"Hull buckling under growth. Clear the colonies before it ruptures.",8)
 		elseif s.hull <= 0 then
 			Dive.endRun(s,false,"The fouled hull ruptured. The angler followed the wreck.","Flood")
 			return

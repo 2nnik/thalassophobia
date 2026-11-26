@@ -313,12 +313,25 @@ return function(screen, blocked)
 
 	-- Wet lab hull status monitor: every client fills it from its own snapshot, so all players see the same values.
 	local readout
+	local foulingStatus
+	local plating={"STBD", "KEEL", "PORT", "STERN"}
 	local function gauge(key, n)
 		-- Looked up lazily: with streaming on, the Wet lab may not be loaded yet (or may stream out and back).
 		if not (readout and readout:IsDescendantOf(site)) then
 			local monitor = site:FindFirstChild("Hull status monitor", true)
 			readout = monitor and monitor:FindFirstChild("Readout", true)
 			if not readout then return end
+			local panel=readout:FindFirstChildWhichIsA("Frame")
+			if panel then
+				foulingStatus=Instance.new("TextLabel")
+				foulingStatus.Name="FoulingStatus"
+				foulingStatus.Size=UDim2.fromScale(1,.16)
+				foulingStatus.Position=UDim2.fromScale(0,.84)
+				foulingStatus.BackgroundTransparency=1
+				foulingStatus.Font=Enum.Font.Code
+				foulingStatus.TextScaled=true
+				foulingStatus.Parent=panel
+			end
 		end
 		n = math.clamp(n or 0, 0, 100)
 		local color = if n <= 20 then Color3.fromRGB(255, 84, 74) elseif n < 45 then AMBER else GREEN
@@ -355,6 +368,14 @@ return function(screen, blocked)
 		musicMode = "Dive"
 		gauge("Power", p.battery)
 		gauge("Hull", p.hull)
+		if foulingStatus and foulingStatus.Parent then
+			local areas={}
+			for i,cuts in p.cleanSites or {} do
+				if cuts>=0 and cuts<3 then table.insert(areas,plating[i]) end
+			end
+			foulingStatus.Text=if #areas==0 then "NO HULL GROWTH" else (if p.floodWarned then "BUCKLING  " else "FOULING  ")..table.concat(areas," / ")
+			foulingStatus.TextColor3=if #areas==0 then GREEN elseif p.floodWarned then Color3.fromRGB(255,84,74) else AMBER
+		end
 		if was.engine ~= p.engine then
 			local lever = partOf(find("ENGINE/EngineLever"))
 			play(if p.engine then "engineOn" else "engineOff", lever)

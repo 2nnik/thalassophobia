@@ -338,19 +338,26 @@ for i=1,4 do
  local target=patch.PrimaryPart
  local tag=Instance.new("Attachment")
  tag.Name="Growth marker"
- tag.Position=target.CFrame:VectorToObjectSpace((target.Position-envelope.Position).Unit*.72)
+ tag.Position=Vector3.new(0,0,-1.15)
  tag.Parent=target
  local point=Instance.new("PointLight")
- point.Color,point.Range,point.Brightness,point.Enabled=Color3.fromRGB(255,177,107),8,.53,false
+ point.Color,point.Range,point.Brightness,point.Enabled=Color3.fromRGB(255,177,107),12,1.35,false
  point.Parent=tag
  local gui=Instance.new("BillboardGui")
- gui.Name,gui.Size,gui.MaxDistance="Barnacle colony",UDim2.fromOffset(124,24),21
+ gui.Name,gui.Size,gui.MaxDistance="Barnacle colony",UDim2.fromOffset(142,26),34
  gui.AlwaysOnTop,gui.Enabled,gui.Parent=false,false,tag
  local label=Instance.new("TextLabel")
- label.Size,label.BackgroundTransparency,label.Text=UDim2.fromScale(1,1),1,"BARNACLE GROWTH"
+ label.Size,label.BackgroundTransparency,label.Text=UDim2.fromScale(1,1),.17,"BARNACLES  /  CUT"
+ label.BackgroundColor3=Color3.fromRGB(30,22,18)
  label.Font,label.TextSize,label.TextColor3,label.TextStrokeTransparency=Enum.Font.Code,13,point.Color,.25
  label.Parent=gui
- growthMarkers[i]={point=point,gui=gui}
+ local outline=Instance.new("Highlight")
+ outline.Name,outline.Adornee,outline.Enabled="Barnacle shell outline",patch,false
+ outline.DepthMode=Enum.HighlightDepthMode.Occluded
+ outline.FillColor,outline.OutlineColor=point.Color,point.Color
+ outline.FillTransparency,outline.OutlineTransparency=.84,.21
+ outline.Parent=patch
+ growthMarkers[i]={point=point,gui=gui,outline=outline}
 end
 for i=1,3 do
  local window=world:WaitForChild("WormWindow"..i)
@@ -510,7 +517,8 @@ function World.update(state)
   local progress=state.cleanSites and state.cleanSites[i]
   local show=active and swarm>0 and progress~=nil and progress>=0 and progress<3
   showPrompt("Clean"..i,show)
-  growthMarkers[i].point.Enabled,growthMarkers[i].gui.Enabled=show,show
+  local marker=growthMarkers[i]
+  marker.point.Enabled,marker.gui.Enabled,marker.outline.Enabled=show,show,show
   for _,item in parts do
    local faded=show and item.rest or 1
    if item.part.Transparency~=faded then item.part.Transparency=faded end

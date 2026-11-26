@@ -109,14 +109,17 @@ return function(gui)
     local wormIngress=sound("WormIngress","impact_water.mp3",.84,false,0,-1,-13)
     UI.make("EchoSoundEffect",wormScrape,{Delay=.15,Feedback=.48,DryLevel=0,WetLevel=-6})
     UI.make("EchoSoundEffect",wormAlarm,{Delay=.25,Feedback=.57,DryLevel=0,WetLevel=-5})
+    local shellScrape=sound("BarnacleHullScrape","action_footsteps_plastic.mp3",.48,false,-9,5,-5)
+    UI.make("DistortionSoundEffect",shellScrape,{Level=.32})
+    UI.make("EchoSoundEffect",shellScrape,{Delay=.13,Feedback=.6,DryLevel=0,WetLevel=-6})
+    local shellCreak=sound("BarnacleHullStrain",9116831290,.91,false,-7,3,-11)
+    local nextFoulingCue=0
     local calls={
         {field="squid", audio=sound("SquidGurgle","impact_water.mp3",.88,false,1,-5,-13), pitch=.88, volume=.26},
-        {field="swarm", audio=sound("BarnacleTick","action_jump_land.mp3",1.32,false,-9,-1,-12), pitch=1.32, volume=.24},
         {field="pursuer", audio=sound("PursuerPulse","impact_explosion_03.mp3",.36,false,6,-15,-28), pitch=.36, volume=.27},
     }
     UI.make("EchoSoundEffect",calls[1].audio,{Delay=.11,Feedback=.32,DryLevel=-4,WetLevel=-12})
-    UI.make("EchoSoundEffect",calls[2].audio,{Delay=.08,Feedback=.37,DryLevel=-4,WetLevel=-10})
-    UI.make("ReverbSoundEffect",calls[3].audio,{DecayTime=3.4,DryLevel=-4,WetLevel=-13})
+    UI.make("ReverbSoundEffect",calls[2].audio,{DecayTime=3.4,DryLevel=-4,WetLevel=-13})
     local beds={noise,pressure,sea,leak}
     local gains={}
     local function loop(s,volume)
@@ -253,6 +256,7 @@ return function(gui)
         nextScare,nextTension=nil,0
         pressureDip=nil
         nextCall,nextContact,nextGroan,previousLeaks,nextAnglerCue,nextWormCue=0,0,0,0,0,0
+        nextFoulingCue=0
         clearNotice()
         for _,call in calls do call.due=nil call.audio:Stop() end
         frame.Visible=false
@@ -260,7 +264,7 @@ return function(gui)
         blur.Enabled=false
         haze.Visible=false
         for _,s in {noise,pressure,sea,ping,impact,groan,cable,bulkhead,driveShift,distant,scrape,leak,splash,bell,
-            recoveryAlarm,angler,anglerEcho,wormScrape,wormAlarm,wormIngress} do s:Stop() end
+            recoveryAlarm,angler,anglerEcho,wormScrape,wormAlarm,wormIngress,shellScrape,shellCreak} do s:Stop() end
     end
     local function update(s)
         frame.Visible=not (s.cameraView or s.searchlightView)
@@ -275,18 +279,21 @@ return function(gui)
         local outside=s.outside
         local tutorial=s.difficulty=="Easy"
         local insideWarning=tutorial and s.warning
+        local fouling=(s.swarm or 0)>0 and s.alive~=false
+        local guidedFouling=fouling and (tutorial or s.difficulty=="Normal") and not outside
         local sonar=s.sonar
         local hint=""
         if s.alive==false then hint=tutorial and "Your crew is still on the dive." or ""
         elseif outside then hint=""
+        elseif guidedFouling then hint=if s.floodWarned then "Hull buckling. Clear the barnacles outside." else "Barnacles on the hull. Take the airlock and use the cutter."
         elseif sonar and sonar~="" then hint=sonar
         elseif insideWarning and insideWarning~="" then hint=insideWarning
         elseif tutorial and s.phase=="Bottom" then hint="Take the airlock and follow the salvage beacon."
         end
         panel.Visible=hint~=""
-        signal.Text=outside and "TETHER LINK" or sonar and sonar~="" and "SONAR RETURN" or "CAGE TELEMETRY"
+        signal.Text=if guidedFouling then "HULL FOULING" elseif outside then "TETHER LINK" elseif sonar and sonar~="" then "SONAR RETURN" else "CAGE TELEMETRY"
         message.Text=hint
-        local alert=insideWarning and insideWarning~=""
+        local alert=guidedFouling or (insideWarning and insideWarning~="")
         signal.TextColor3=alert and c.orange or c.green
         rail.BackgroundColor3=signal.TextColor3
         if s.alive==false then status.Text="DIVER LOST"
@@ -308,6 +315,21 @@ return function(gui)
         blur.Enabled=outside==true
         haze.Visible=outside==true
         local now=os.clock()
+        if not fouling then
+            nextFoulingCue=0
+        else
+            local newPatch=false
+            for i,cuts in s.cleanSites or {} do
+                local old=previous and previous.cleanSites and previous.cleanSites[i]
+                if cuts==0 and old~=0 then newPatch=true break end
+            end
+            local buckling=s.floodWarned and not (previous and previous.floodWarned)
+            if newPatch or buckling or now>=nextFoulingCue then
+                play(shellScrape,outside and .61 or .78,if s.floodWarned then .65 else rng:NextNumber(.43,.54))
+                if newPatch or s.floodWarned then play(shellCreak,outside and .33 or .49) end
+                nextFoulingCue=now+(if s.floodWarned then rng:NextNumber(3.5,4.5) else rng:NextNumber(7,10))
+            end
+        end
         local proximity=s.shark or 0
         local before=previous and previous.shark or 0
         local anglerPresent=s.alive~=false and proximity>0

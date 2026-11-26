@@ -101,6 +101,10 @@ s.depth,s.deepest=3000,3000
 Dive.spawn(s,"swarm")
 s.swarm, s.foulingExposure, s.cleanSites = 1,35.98,{0,0,0,0}
 Dive.step(s,.25)
+assert(s.phase=="Descent" and s.floodWarned,"the crew must receive a critical fouling warning before exposure can end a run")
+Dive.step(s,11.75)
+assert(s.phase=="Descent","the critical warning must leave at least twelve seconds")
+Dive.step(s,.25)
 assert(s.phase=="Results" and s.sequence=="Flood")
 s = fresh()
 s.swarm, s.foulingExposure, s.cleanSites = 1,35.98,{3,3,3,3}

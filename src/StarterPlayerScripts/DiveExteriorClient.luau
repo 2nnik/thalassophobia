@@ -428,10 +428,7 @@ local function travelStatus(s)
 	else
 		text="Swim where you look  ·  Space rise  /  C dive"
 	end
-	if s.difficulty=="Easy" and s.phase=="Bottom" then
-		local destination=if s.carryingArtifact then "RETURN TO THE AIRLOCK" else "FOLLOW THE SALVAGE BEACON"
-		text=destination.."\n"..text
-	elseif s.swarm and s.swarm>0 and s.cleanSites then
+	if remaining>0 then
 		local origin=Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 		local near,distance=nil,math.huge
 		for i,point in travelPoints do
@@ -442,6 +439,9 @@ local function travelStatus(s)
 			end
 		end
 		text=string.format("HULL   %d/%d CLEARED",completed,completed+remaining)..(near and "   •   "..string.upper(near:GetAttribute("Label") or near.Name).."   "..math.round(distance).." st" or "").."\n"..text
+	elseif s.difficulty=="Easy" and s.phase=="Bottom" then
+		local destination=if s.carryingArtifact then "RETURN TO THE AIRLOCK" else "FOLLOW THE SALVAGE BEACON"
+		text=destination.."\n"..text
 	end
 	local range,used=s.tetherRange,s.tetherUsed
 	if range and used then

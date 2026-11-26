@@ -299,6 +299,7 @@ end
 
 function Exterior.snapshot(p,m,s,out)
 	out.cleanSites=s.cleanSites
+	out.floodWarned=(s.swarm or 0)>0 and s.floodWarned==true
 	if m.outside then
 		out.cleaning=m.cleaning
 		out.tetherRange=m.swim and m.swim.radius
