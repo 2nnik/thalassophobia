@@ -29,7 +29,7 @@ local positions = {}
 local meterColor = Color3.fromHex("72E8D0")
 local offColor = Color3.fromHex("445556")
 local amber = Color3.fromHex("F2B650")
-local lastDirection, lastRender = nil, -math.huge
+local snowMotion, lastRender = 0, -math.huge
 local activePhase = {Descent=true, Bottom=true, Ascent=true}
 local dockCRT = world["Launch dock"]:FindFirstChild("Mission CRT")
 local missionFace = dockCRT and dockCRT:FindFirstChild("Face")
@@ -43,7 +43,7 @@ for _,item in world:GetDescendants() do
  elseif item:IsA("ParticleEmitter") and item.Name=="Suspended sediment" then
   table.insert(snow,item)
  elseif item:IsA("PointLight") and item.Parent.Name=="Work lamp" then
-  table.insert(lamps,{light=item,color=item.Color})
+  table.insert(lamps,{light=item,color=item.Color,output=item:GetAttribute("OutputScale") or 1})
  end
 end
 for i=1,3 do leaks[i] = stations["Section"..i].Fracture:GetChildren() end
@@ -518,17 +518,6 @@ function World.update(state)
  head.CFrame=CFrame.lookAt(pos,pos+d)
  spot.Enabled=lit scatter.Enabled=lit
  local moving=active and phase~="Bottom" and (state.engine or (phase=="Ascent" and (state.coast or 0)>.2))
- if lastDirection~=phase..tostring(moving) then
-  lastDirection=phase..tostring(moving)
-  local vertical=phase=="Ascent" and -1 or 1
-  for _,em in snow do
-   local slip=if not moving then .15 elseif phase=="Ascent" then 5 else 2.4
-   em.Acceleration=Vector3.new(.08,vertical*slip,.03)
-   em.Speed=if not moving then NumberRange.new(.12,.4) elseif phase=="Ascent" then NumberRange.new(3.5,6) else NumberRange.new(1.6,2.8)
-   em.EmissionDirection=vertical==1 and Enum.NormalId.Top or Enum.NormalId.Bottom
-   em.Rate=if not active then .35 elseif not moving then 1.2 elseif phase=="Ascent" then 6 else 4
-  end
- end
  local now=os.clock()
  if now-lastRender<.10 and active then return end
  lastRender=now
@@ -540,6 +529,15 @@ function World.update(state)
  end
  local dt=math.clamp(elapsed-(oldElapsed or elapsed),0,.75)
  oldElapsed=active and elapsed or nil
+ local desired=if not moving then 0 elseif phase=="Ascent" then -1 else .64
+ snowMotion=if active then snowMotion+(desired-snowMotion)*(1-math.exp(-dt*1.6)) else 0
+ local slip=math.abs(snowMotion)
+ for _,em in snow do
+  em.Acceleration=Vector3.new(.14,snowMotion*4.8,.10)
+  em.Speed=NumberRange.new(.12+2.5*slip,.42+4.8*slip)
+  em.EmissionDirection=if snowMotion<0 then Enum.NormalId.Bottom else Enum.NormalId.Top
+  em.Rate=if active then 1.2+5.5*slip else .35
+ end
  phaseAngle.angler+=(shark>0 and .022 or .011)*dt
  anglerRange=approach(anglerRange,anglerCruise-(anglerCruise-294)*math.clamp(shark*1.4,0,1),48,dt)
  if squid>0 then
@@ -604,7 +602,7 @@ function World.update(state)
  local pulse=.5+.5*math.cos(elapsed*math.pi*1.7)
  for _,fixture in lamps do
   fixture.light.Color=if emergency then Color3.fromRGB(255,43,30) else fixture.color
-  fixture.light.Brightness=if emergency then .3+pulse*1.65 else dim
+  fixture.light.Brightness=if emergency then .3+pulse*1.65 else dim*fixture.output
  end
 end
 return World

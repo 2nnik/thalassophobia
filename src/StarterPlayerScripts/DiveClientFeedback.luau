@@ -27,7 +27,7 @@ local SFX = {
 }
 -- Background music, APM library tracks (Roblox-licensed). Played in turn, ducked under the angler and cinematics.
 local MUSIC = {1843018526, 113239382558168} -- "The Uninvited", "Lying In Wait"
-local MUSIC_VOLUME = {Lobby = .16, Dive = .26, Duck = .05}
+local MUSIC_VOLUME = {Lobby = .16, Dive = .20, Duck = .045}
 
 local AMBER = Color3.fromRGB(255, 176, 74)
 local GREEN = Color3.fromRGB(111, 238, 192)
@@ -285,10 +285,30 @@ return function(screen, blocked)
 	end
 	music.Ended:Connect(nextTrack)
 	nextTrack()
+	local function nearbyAudio(sound)
+		local camera=workspace.CurrentCamera
+		local source=sound and sound.Parent
+		return source and source:IsA("BasePart") and sound.IsPlaying and camera
+			and (camera.CFrame.Position-source.Position).Magnitude<sound.RollOffMaxDistance*.86
+	end
 	RunService.Heartbeat:Connect(function(dt)
 		local goal = MUSIC_VOLUME[musicMode]
-		if musicMode == "Dive" and (blocked() or (prev and (prev.shark or 0) > 0)) then goal = MUSIC_VOLUME.Duck end
-		music.Volume += (goal - music.Volume) * math.min(1, dt * 1.5)
+		if musicMode=="Dive" then
+			local intercom=stations:FindFirstChild("Surface Security intercom")
+			local cabinet=intercom and intercom:FindFirstChild("Cabinet")
+			local voice=cabinet and cabinet:FindFirstChild("Mercer")
+			local breaker=stations:FindFirstChild("Sonar isolation breaker")
+			local hull=breaker and breaker:FindFirstChild("Keel audio")
+			local whine=breaker and breaker:FindFirstChild("Breaker box")
+			local cue=nearbyAudio(voice) or nearbyAudio(hull and hull:FindFirstChild("Knockback double knock"))
+				or nearbyAudio(whine and whine:FindFirstChild("Damaged sonar head"))
+			if blocked() or cue or (prev and (prev.shark or 0)>0) then
+				goal=MUSIC_VOLUME.Duck
+			elseif prev and prev.jellyBloom then
+				goal=.10
+			end
+		end
+		music.Volume+=(goal-music.Volume)*(1-math.exp(-dt*(if goal<music.Volume then 8 else 1.65)))
 	end)
 
 	-- Wet lab hull status monitor: every client fills it from its own snapshot, so all players see the same values.

@@ -86,7 +86,7 @@ local parasiteUI
 local crewAlive=false
 local function dockControls()
     local sequence=intakeId~=nil or (cinematics and cinematics:isPlaying())
-    if parasiteUI then parasiteUI:setDiveActive(mode=="Dive" and crewAlive and not sequence) end
+    if parasiteUI then parasiteUI:setDiveActive(mode=="Dive" and crewAlive and not sequence and not viewing) end
     local patching=(breach and breach:isActive()) or (parasiteUI and parasiteUI:isActive())
     player.CameraMode=if mode=="Dive" then Enum.CameraMode.LockFirstPerson else Enum.CameraMode.Classic
     local camera=workspace.CurrentCamera

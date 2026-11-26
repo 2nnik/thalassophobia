@@ -55,6 +55,7 @@ local function lamp(parent, color, range, power)
 	local source = Instance.new("PointLight")
 	source.Color, source.Range, source.Brightness = color, range, power
 	source.Parent = parent
+	return source
 end
 
 local function exterior(group, pose)
@@ -119,17 +120,33 @@ end
 
 local function cabin(group, pose)
 	for _,zone in {
-		{x=13,z=-11,color=teal}, {x=-13,z=-12,color=amber},
-		{x=12,z=10,color=teal}, {x=-13,z=10,color=rgb(172,210,184)},
+		{x=13,z=-11,color=rgb(161,209,218)}, {x=-13,z=-12,color=rgb(230,173,107)},
+		{x=12,z=10,color=rgb(150,207,207)}, {x=-13,z=10,color=rgb(195,224,202)},
 	} do
 		local frame=pose*CFrame.new(zone.x,4.46,zone.z)
 		part(group,"Overhead cold rail casing",V(1.5,.48,12.3),frame,dark)
-		for _,dz in {-4,0,4} do
-			part(group,"Recessed ceiling strip",V(.73,.10,3.45),frame*CFrame.new(0,-.285,dz),
-				zone.color,Enum.Material.Neon)
+		for _,side in {-1,1} do
+			part(group,"Lamp guard channel",V(.13,.21,12.2),frame*CFrame.new(side*.60,-.24,0),ash)
 		end
-		local bulb=part(group,"Work lamp",V(.22,.11,.26),frame*CFrame.new(0,-.34,0),zone.color,Enum.Material.Neon)
-		lamp(bulb,zone.color,15,.68)
+		for _,dz in {-4,0,4} do
+			local strip=part(group,"Recessed ceiling strip",V(.68,.07,3.45),frame*CFrame.new(0,-.269,dz),
+				zone.color,Enum.Material.SmoothPlastic)
+			strip.Reflectance=.10
+		end
+		local bulb=part(group,"Work lamp",V(.45,.09,2.0),frame*CFrame.new(0,-.309,0),zone.color,Enum.Material.Neon)
+		lamp(bulb,zone.color,16,.87)
+	end
+
+	-- Low service lighting distinguishes the bow-facing controls from the colder overhead lights.
+	for _,x in {7.4,20.3} do
+		local frame=pose*CFrame.new(x,-3.95,-19.73)
+		part(group,"Service spill guard",V(3.2,.46,.35),frame,dark)
+		local bulb=part(group,"Work lamp",V(2.65,.105,.12),frame*CFrame.new(0,-.14,.205),
+			rgb(251,191,126),Enum.Material.Neon)
+		lamp(bulb,rgb(246,180,109),10,.36):SetAttribute("OutputScale",.43)
+		for _,side in {-1,1} do
+			part(group,"Service cover captive fastener",V(.23,.24,.17),frame*CFrame.new(side*1.42,0,.207),ash)
+		end
 	end
 
 	for _,entry in {

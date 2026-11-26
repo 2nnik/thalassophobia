@@ -19,11 +19,26 @@ function Client.start(remote,onActiveChanged)
         Name="DiveVitals", ResetOnSpawn=false, Enabled=false, DisplayOrder=11,
         ZIndexBehavior=Enum.ZIndexBehavior.Sibling
     })
-    local vitals = UI.frame(gui,c.sea,UDim2.new(0,12,.55,0),off(124,39),.15)
+    local vitals = UI.frame(gui,c.sea,UDim2.new(0,14,1,-94),off(146,38),.15)
+    vitals.AnchorPoint=Vector2.new(0,1)
     UI.edge(vitals)
-    local reading = UI.label(vitals,"",14,c.white,UI.mono,off(8,0),off(112,25))
-    local healthTrack = UI.frame(vitals,c.line,off(8,27),off(108,4))
+    local reading = UI.label(vitals,"",13,c.white,UI.mono,off(9,0),off(128,25))
+    local healthTrack = UI.frame(vitals,c.line,off(9,26),off(128,4))
     local healthBar = UI.frame(healthTrack,c.green)
+    local function placeVitals()
+        local camera=workspace.CurrentCamera
+        local compact=camera and camera.ViewportSize.X<670
+        vitals.Position=if compact then UDim2.new(0,7,.59,0) else UDim2.new(0,14,1,-94)
+    end
+    local viewportConnection
+    local function watchViewport()
+        if viewportConnection then viewportConnection:Disconnect() end
+        local camera=workspace.CurrentCamera
+        if camera then viewportConnection=camera:GetPropertyChangedSignal("ViewportSize"):Connect(placeVitals) end
+        placeVitals()
+    end
+    workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchViewport)
+    watchViewport()
     local card = UI.frame(gui,c.sea,UDim2.fromScale(.5,.56),UDim2.new(.88,0,0,182),.03)
     card.AnchorPoint = Vector2.new(.5,.5)
     UI.make("UISizeConstraint",card,{MaxSize=Vector2.new(520,182)})
@@ -132,7 +147,9 @@ function Client.start(remote,onActiveChanged)
     local function refreshHealth()
         if not observed then vitals.Visible=false return end
         vitals.Visible=observed.Health>0
-        reading.Text=if player:GetAttribute("DiveBleeding") then "BLEEDING  "..math.ceil(observed.Health) else "VITALS  "..math.ceil(observed.Health)
+        local bleeding=player:GetAttribute("DiveBleeding")
+        reading.Text=(if bleeding then "BLEEDING  " else "HEALTH  ")..math.ceil(observed.Health)
+        reading.TextColor3=if bleeding then c.red else c.white
         healthBar.Size=UDim2.fromScale(math.clamp(observed.Health/math.max(1,observed.MaxHealth),0,1),1)
         healthBar.BackgroundColor3=if player:GetAttribute("DiveBleeding") or observed.Health<=30 then c.red else c.green
         if observed.Health<=0 then finish() end

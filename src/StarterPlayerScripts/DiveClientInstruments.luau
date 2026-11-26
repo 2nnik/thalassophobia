@@ -1,4 +1,5 @@
 local Lighting=game:GetService("Lighting")
+local RunService=game:GetService("RunService")
 local SoundService=game:GetService("SoundService")
 local UI=require(script.Parent.DiveClientStyle)
 local c=UI.c
@@ -15,11 +16,13 @@ return function(gui)
     frame.Name="DiveInstruments"
     frame.Visible=false
     -- Power and hull live on the Wet lab "Hull status monitor" (DiveClientFeedback fills it), not on the HUD.
-    local top=UI.frame(frame,c.sea,off(14,9),off(223,48),.13)
+    local top=UI.frame(frame,c.sea,off(14,9),off(252,53),.13)
     UI.edge(top)
-    local depth=UI.label(top,"",30,c.white,UI.bold,off(12,5),off(116,41))
+    local depth=UI.label(top,"",29,c.white,UI.mono,off(12,3),off(153,42))
     depth.RichText=true
-    local phase=UI.label(top,"DESCENT",13,c.green,UI.mono,off(129,14),off(84,25),Enum.TextXAlignment.Right)
+    local phase=UI.label(top,"DESCENT",13,c.green,UI.mono,UDim2.new(1,-89,0,12),off(77,23),Enum.TextXAlignment.Right)
+    local trenchTrack=UI.frame(top,c.line,UDim2.new(0,12,1,-8),UDim2.new(1,-24,0,2),.24)
+    local trenchDepth=UI.frame(trenchTrack,c.green,nil,UDim2.fromScale(0,1))
     local panel=UI.frame(frame,c.sea,nil,nil,.15)
     UI.edge(panel)
     local rail=UI.frame(panel,c.orange,nil,UDim2.new(0,3,1,0))
@@ -31,6 +34,7 @@ return function(gui)
     UI.edge(strip)
     local engine=UI.label(strip,"",13,c.white,UI.mono,off(10,6),off(208,20))
     local flood=UI.label(strip,"",13,c.soft,UI.mono,off(10,29),off(208,22))
+    local stripScale=UI.make("UIScale",strip,{Scale=1})
     local status=UI.label(frame,"",14,c.orange,UI.bold,nil,nil,Enum.TextXAlignment.Center)
     status.BackgroundColor3=c.sea
     status.BackgroundTransparency=.12
@@ -107,10 +111,14 @@ return function(gui)
     UI.make("EchoSoundEffect",calls[1].audio,{Delay=.11,Feedback=.32,DryLevel=-4,WetLevel=-12})
     UI.make("EchoSoundEffect",calls[2].audio,{Delay=.08,Feedback=.37,DryLevel=-4,WetLevel=-10})
     UI.make("ReverbSoundEffect",calls[3].audio,{DecayTime=3.4,DryLevel=-4,WetLevel=-13})
+    local beds={noise,pressure,sea,leak}
+    local gains={}
     local function loop(s,volume)
-        s.Volume=volume
-        if volume>0 and not s.IsPlaying then s:Play()
-        elseif volume==0 and s.IsPlaying then s:Stop() end
+        gains[s]=volume
+        if volume>0 and not s.IsPlaying then
+            s.Volume=0
+            s:Play()
+        end
     end
     local function play(s,volume,pitch)
         if pitch then s.PlaybackSpeed=pitch end
@@ -124,6 +132,8 @@ return function(gui)
     haze.ZIndex=0
     haze.Visible=false
     local previous
+    local shownDepth,targetDepth,renderedDepth=0,0,nil
+    local maxDepth=10000
     local nextAnglerCue=0
     local nextContact=0
     local nextGroan=0
@@ -147,22 +157,38 @@ return function(gui)
         local w=frame.AbsoluteSize.X
         local compact=w<670
         if compact then
+            local topWidth=math.clamp(math.floor(w*.55),160,252)
+            local stripWidth=math.clamp(w-topWidth-20,112,197)
             top.Position=off(7,4)
+            top.Size=off(topWidth,53)
+            depth.TextSize=if topWidth<200 then 22 else 26
+            depth.Size=off(topWidth-72,42)
+            phase.TextSize=if topWidth<200 then 10 else 12
+            phase.Position=UDim2.new(1,-67,0,12)
+            phase.Size=off(57,23)
             panel.Position=off(7,60)
             panel.Size=off(math.min(math.max(w-14,180),335),70)
             strip.AnchorPoint=Vector2.new(1,0)
             strip.Position=UDim2.new(1,-7,0,4)
-            strip.Size=off(math.max(118,math.min(w-242,197)),65)
+            stripScale.Scale=if stripWidth<145 then .83 else .95
+            strip.Size=off(stripWidth/stripScale.Scale,53/stripScale.Scale)
             engine.Size=UDim2.new(1,-14,0,21)
             flood.Size=UDim2.new(1,-14,0,22)
             engine.TextSize=11
             flood.TextSize=11
         else
             top.Position=off(14,9)
+            top.Size=off(252,53)
+            depth.TextSize=29
+            depth.Size=off(153,42)
+            phase.TextSize=13
+            phase.Position=UDim2.new(1,-89,0,12)
+            phase.Size=off(77,23)
             panel.AnchorPoint=Vector2.new(0,0)
             panel.Position=UDim2.new(1,-335,0,9)
             panel.Size=off(320,66)
             strip.AnchorPoint=Vector2.new(0,1)
+            stripScale.Scale=1
             strip.Position=UDim2.new(0,14,1,-16)
             strip.Size=off(226,65)
             engine.Size=off(206,21)
@@ -176,8 +202,29 @@ return function(gui)
     end
     frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize)
     resize()
+    RunService.RenderStepped:Connect(function(dt)
+        for _,s in beds do
+            if s.IsPlaying then
+                local target=gains[s] or 0
+                s.Volume+=(target-s.Volume)*(1-math.exp(-dt*(if target<s.Volume then 5.5 else 2.8)))
+                if target==0 and s.Volume<.004 then s:Stop() end
+            end
+        end
+        if not frame.Visible then return end
+        shownDepth+=(targetDepth-shownDepth)*(1-math.exp(-dt*9))
+        local value=math.floor(shownDepth+.5)
+        if value~=renderedDepth then
+            renderedDepth=value
+            local reading=if value<1000 then string.format("%03d",value)
+                else string.format("%d,%03d",math.floor(value/1000),value%1000)
+            depth.Text=reading..' <font size="13">M</font>'
+        end
+        trenchDepth.Size=UDim2.fromScale(math.clamp(shownDepth/maxDepth,0,1),1)
+    end)
     local function reset()
         previous=nil
+        shownDepth,targetDepth,renderedDepth=0,0,nil
+        table.clear(gains)
         nextScare=nil
         nextCall,nextContact,nextGroan,previousLeaks,nextAnglerCue,nextWormCue=0,0,0,0,0,0
         clearNotice()
@@ -192,8 +239,11 @@ return function(gui)
     local function update(s)
         frame.Visible=not (s.cameraView or s.searchlightView)
         local at=math.max(0,math.floor((s.depth or 0)+.5))
-        depth.Text=string.format('%03d <font size="14">M</font>',at)
+        targetDepth,maxDepth=at,math.max(1,s.maxDepth or 10000)
+        if not previous or math.abs(shownDepth-at)>90 then shownDepth=at end
         phase.Text=string.upper(s.phase=="Bottom" and "SEAFLOOR" or s.phase)
+        phase.TextColor3=if s.phase=="Ascent" then c.orange else c.green
+        trenchDepth.BackgroundColor3=phase.TextColor3
         engine.Text=s.engine and "ENGINE   RUNNING" or (s.coast or 0)>.2 and "ENGINE   COASTING" or "ENGINE   SILENT"
         flood.Text="LIGHT    "..(s.light and (bearings[s.aim] or "FORE") or "OFF")
         local outside=s.outside
@@ -234,9 +284,9 @@ return function(gui)
         local proximity=s.shark or 0
         local before=previous and previous.shark or 0
         local anglerPresent=s.alive~=false and proximity>0
-        local ambience=anglerPresent and .38 or 1
-        loop(noise,s.alive~=false and s.engine and (outside and .27 or .7)*ambience or 0)
-        loop(pressure,s.alive~=false and (.27+.52*darkness)*ambience or 0)
+        local ambience=if anglerPresent then .38 elseif s.knockbackSonar or s.jellyBloom then .53 else 1
+        loop(noise,s.alive~=false and s.engine and (outside and .25 or .51)*ambience or 0)
+        loop(pressure,s.alive~=false and (.20+.35*darkness)*ambience or 0)
         loop(sea,outside and .20*ambience or 0)
         if anglerPresent then
             aimAnglerAudio()
@@ -312,7 +362,7 @@ return function(gui)
             end
         end
         if not nextScare then nextScare=now+rng:NextNumber(7,14) end
-        if s.alive~=false and at>20 and now>=nextScare and not anglerPresent then
+        if s.alive~=false and at>20 and now>=nextScare and not anglerPresent and not s.jellyBloom and not s.knockbackSonar then
             if outside then
                 if rng:NextNumber()<.46 then play(cable,.24,rng:NextNumber(.35,.51))
                 else play(distant,.27,rng:NextNumber(.45,.61)) end
