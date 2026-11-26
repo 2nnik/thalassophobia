@@ -2,8 +2,8 @@ local Intercom={}
 Intercom.__index=Intercom
 
 local calls={
-	{depth=0,id="97627395015655",label="OPENING"},
-	{depth=500,id="91294398637751",label="500 M"},
+	{depth=0,id="91294398637751",label="OPENING"},
+	{depth=500,id="97627395015655",label="500 M"},
 	{depth=3000,id="95418885953543",label="3,000 M"},
 }
 local metal=Color3.fromRGB(27,51,55)
