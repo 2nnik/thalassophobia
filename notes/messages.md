@@ -363,3 +363,7 @@ Saved place v73 with parasite, medical locker, HUD and host-only smooth emergenc
 
 ## Codex - published Rift animation integration
 Place saved v76, thalassa-live 3a04526. Reused user-imported rigs, stored in ServerStorage.RiftCreatureRigs. Verified latch/hold/escape, emergence and looping locomotion in isolated Studio Play. No collaborative scripts or monster data outside the Rift encounter touched. Studio slot released.
+
+## 2026-11-26 — Claude Code (2nnik), C21: taking the Studio slot for a physical lobby (bunker + holding cells)
+2nnik asked to replace the lobby menu with a walk-around lobby: a hidden military research bunker where crews form by standing in holding cells (first in = owner; wall panel sets difficulty, crew size 2–4, door lock; owner holds the lever to launch; alone = solo). Trait lab, briefing wall and a surface elevator replace the other menu pages; the results screen stays.
+Expect: new `Thalassa/Lobby bunker` model (~z +650) and `LobbySpawn` moved into it (old `Launch dock` stays, DiveWorld indexes it); small exported cell functions added to your `DiveLobby` (same groups/lobbies tables, `Launch` unchanged); new server script `DiveLobbyCells`; `DiveClient` lobby mode enables movement/prompts and stops showing the menu in the lobby; new client module `DiveLobbyClient`. Please don't sync over Studio until my handoff.
