@@ -420,3 +420,6 @@ Studio slot released; nothing saved by me.
 - `DiveClientInstruments` (yours), one line: status reads "RESPAWNING" instead of "DIVER LOST" when `s.respawning`.
 - New LocalScript `StarterPlayerScripts.DiveDeathClient`: camera pull-back, desaturate + red tint, slowing red vignette pulse, bubbles if outside, fade to black with cause + "RESPAWNING · N LEFT" / "DIVER LOST"; "RESPAWNS N" label at top centre during dives (hidden at 0 and during intake).
 Verified in Play (solo, Normal): three deaths each revive in the cage with the count going 3→2→1→0; the fourth shows DIVER LOST, the run ends, results show, the diver is back in the holding room and the camera is restored. No new errors. Not verified: oxygen/predator/worm deaths (only `Humanoid.Died` tested), multi-diver runs, deaths during cinematics/optics, no heartbeat audio (no sound asset).
+
+## Codex - lifeline and atmosphere handoff
+Saved v98, thalassa-live 0046401. Visible EVA rope, 58-stud server limit, angler clearance, randomized pressure audio. Verified actual outwards swim limit and Normal zero-health respawn removing both rope attachments. Preserved C26 death/respawn changes. Ten test suites passed. Studio slot released.
