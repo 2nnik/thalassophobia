@@ -20,7 +20,8 @@ exterior.init({FindFirstChild=function()
 end},{FireClient=function(_,_,name,payload) table.insert(events,{name,payload}) end})
 local p={Parent=true,GetNetworkPing=function() return .08 end}
 local m={alive=true,outside=true,swim={root=root,velocity={},wasAnchored=false}}
-local s={difficulty="Normal",swarm=.1,elapsed=0}
+local s={difficulty="Normal",swarm=.1,elapsed=0,cleanSites={0,-1,-1,-1},foulingCandidates={2,3,4}}
+assert(not exterior.beginClean(p,m,s,2),"empty areas cannot start a challenge")
 assert(exterior.beginClean(p,m,s,1))
 local function angle(c,t)
 	return (c.startAngle+c.sign*math.max(0,t-c.started)*360/c.period)%360
@@ -47,5 +48,6 @@ assert(events[1][1]=="CleanFeedback" and events[1][2]=="Cut")
 strike(true)
 strike(true)
 assert(not m.cleaning and s.cleanSites[1]==3 and not root.Anchored)
+assert(s.swarm==0 and not s.foulingCandidates,"clearing the only colony ends the event")
 assert(events[3][1]=="CleanFeedback" and events[3][2]=="Cleared","the final cut needs its own sound")
 print("PASS: barnacle cutter reverses in place and confirms only accepted cuts")

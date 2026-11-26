@@ -28,8 +28,8 @@ end
 function Breach.install(stations)
 	local rack=Instance.new("Model")
 	rack.Name="Breach repair supplies"
-	-- Mount against the aft bridge bulkhead, with open floor on the approach side.
-	local at=CFrame.new(-8.6,122.1,9.15)*CFrame.Angles(0,math.pi,0)
+	-- The forward bulkhead keeps planks reachable from the central passage.
+	local at=stations.Parent.ShipEnvelope.CFrame*CFrame.new(.8,-3,-20.05)
 	local amber=Color3.fromRGB(232,170,70)
 	local metal=Enum.Material.Metal
 	local plate=panelPart(rack,"Supply placard",Vector3.new(3.1,.64,.15),at*CFrame.new(0,2.12,-.25),amber,metal,0)
@@ -86,10 +86,12 @@ function Breach.render(effect,severity)
 	effect.water.Transparency=if wet then .53-severity*.07 else 1
 end
 
-function Breach.newChallenge(difficulty,section)
+function Breach.newChallenge(difficulty,section,kind)
 	local count=targetsByLevel[difficulty] or targetsByLevel.Normal
 	local interval=spacing[difficulty] or spacing.Normal
-	local start=workspace:GetServerTimeNow()+1.45
+	local thruster=kind=="Thruster"
+	if thruster then interval*=.83 end
+	local start=workspace:GetServerTimeNow()+(if thruster then 1.25 else 1.45)
 	local sequence={}
 	local x,y
 	for i=1,count do
@@ -99,7 +101,7 @@ function Breach.newChallenge(difficulty,section)
 		x,y=u,v
 		sequence[i]={x=x,y=y,at=start+(i-1)*interval}
 	end
-	return {id=Http:GenerateGUID(false),section=section,targets=sequence,completed=0,
+	return {id=Http:GenerateGUID(false),section=section,kind=kind,targets=sequence,completed=0,
 		window=hitWindow[difficulty] or hitWindow.Normal}
 end
 

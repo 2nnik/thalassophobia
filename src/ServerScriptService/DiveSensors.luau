@@ -39,7 +39,8 @@ function Sensors.pulse(s, crew)
 	if s.swarm>0 and s.cleanSites then
 		for i=1,4 do
 			local patch=site.BarnacleSites:FindFirstChild("Site"..i)
-			if patch and patch.PrimaryPart and (s.cleanSites[i] or 0)<3 then
+			local cuts=s.cleanSites[i]
+			if patch and patch.PrimaryPart and cuts and cuts>=0 and cuts<3 then
 				echo(patch.PrimaryPart.Position,"patch","•",patch:GetAttribute("Label") or "HULL","FOULING")
 			end
 		end

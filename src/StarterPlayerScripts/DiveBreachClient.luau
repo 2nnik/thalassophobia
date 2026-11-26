@@ -6,7 +6,6 @@ local UI = require(script.Parent.DiveClientStyle)
 local BreachClient = {}
 local c = UI.c
 local center = Enum.TextXAlignment.Center
-local lookAhead = 1.05
 local hitAction = "ThalassaRepairStrike"
 local cancelAction = "ThalassaRepairCancel"
 
@@ -93,11 +92,14 @@ function BreachClient.new(gui,send,onOwnershipChanged)
 		if not challenge then return end
 		local now=workspace:GetServerTimeNow()
 		local targets=challenge.targets
+		local thruster=challenge.kind=="Thruster"
+		local lookAhead=if thruster then .87 else 1.05
 		local deadline=challenge.expiresAt or (targets[#targets].at+challenge.window)
 		local remaining=math.max(0,deadline-now)
 		bar.Size=UDim2.fromScale(math.clamp(remaining/math.max(deadline-started,.01),0,1),1)
-		progress.Text=("%d / %d  •  %d plank%s  •  %.1fs"):format(
-			math.min(peerProgress-1,#targets),#targets,planks,planks==1 and "" or "s",remaining)
+		local done=math.min(peerProgress-1,#targets)
+		progress.Text=if thruster then ("%d / %d  •  %.1fs"):format(done,#targets,remaining)
+			else ("%d / %d  •  %d plank%s  •  %.1fs"):format(done,#targets,planks,planks==1 and "" or "s",remaining)
 		local gamepad=Input.PreferredInput==Enum.PreferredInput.Gamepad
 		local touch=Input.PreferredInput==Enum.PreferredInput.Touch
 		hint.Text=if gamepad then "Press A as the ring meets the active circle"
@@ -107,7 +109,7 @@ function BreachClient.new(gui,send,onOwnershipChanged)
 		if cancelText~=label then cancel.Text=label cancelText=label end
 
 		local active=targets[peerProgress]
-		local default=if not active then "Securing plank…"
+		local default=if not active then (if thruster then "Calibrating drive…" else "Securing plank…")
 			elseif now>active.at+challenge.window then "Timing missed"
 			elseif math.abs(now-active.at)<=challenge.window then "NOW"
 			else "Wait for the ring"
@@ -169,7 +171,7 @@ function BreachClient.new(gui,send,onOwnershipChanged)
 			if nextIndex>peerProgress then
 				peerProgress=nextIndex
 				pendingIndex=nil
-				flash("Fastener set")
+				flash(if nextChallenge.kind=="Thruster" then "Calibration set" else "Fastener set")
 			end
 			challenge=nextChallenge
 			return
@@ -178,7 +180,8 @@ function BreachClient.new(gui,send,onOwnershipChanged)
 		challenge=nextChallenge
 		peerProgress=math.clamp(nextIndex,1,#challenge.targets+1)
 		started=workspace:GetServerTimeNow()
-		title.Text=string.format("Seal breach  %02d",challenge.section)
+		title.Text=if challenge.kind=="Thruster" then (if challenge.section==1 then "Calibrate port thruster" else "Calibrate starboard thruster")
+			else string.format("Seal breach  %02d",challenge.section)
 		for index,target in challenge.targets do
 			local anchor=UI.frame(pad,c.black,targetPosition(target),UDim2.fromOffset(0,0),1)
 			local ring=UI.frame(anchor,c.black,nil,nil,1)

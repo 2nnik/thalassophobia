@@ -99,7 +99,12 @@ end
 local function stopPatch(s,p,m)
 	local repair=m.breachRepair
 	if not repair then return end
-	if s.repairOwners[repair.section]==p then s.repairOwners[repair.section]=nil end
+	if repair.kind=="Thruster" then
+		m.repairPart=nil
+		Exterior.releaseBrace(m)
+	elseif s.repairOwners[repair.section]==p then
+		s.repairOwners[repair.section]=nil
+	end
 	m.breachRepair=nil
 end
 
@@ -107,6 +112,15 @@ local function atBreach(p,section)
 	local root=p.Character and p.Character:FindFirstChild("HumanoidRootPart")
 	local part=site.Stations["Section"..section]["Breach patch point"]
 	return root and (root.Position-part.Position).Magnitude<=8
+end
+
+local function atRepair(p,m,s,repair)
+	if repair.kind~="Thruster" then return not m.outside and atBreach(p,repair.section) end
+	local root=p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+	local part=m.repairPart
+	if not m.outside or not root or not part or not part:IsDescendantOf(site) then return false end
+	local position=if part:IsA("Attachment") then part.WorldPosition else part.Position
+	return (s.fault or 0)>0 and s.faultSide==repair.section and (root.Position-position).Magnitude<=9
 end
 
 local function releaseGrab(p,m,s)
@@ -434,12 +448,13 @@ local function discharge(p,direction)
 	sync(s)
 end
 
-local function interact(p, action)
+local function interact(p, action, prompt)
 	local m,s = members[p],active
 	if not m or not s or settling or not m.alive or m.grab or m.breachRepair then return end
 	if m.cleaning or m.opticsMode then return end
 	local cleanIndex = tonumber(action:match("^Clean([1-4])$"))
-	local exterior = cleanIndex ~= nil or action == "Return" or action == "Artifact"
+	local thrusterSide=tonumber(action:match("^Thruster([12])$"))
+	local exterior = cleanIndex ~= nil or thrusterSide ~= nil or action == "Return" or action == "Artifact"
 	if exterior ~= m.outside then return end
 	if (m.lastAction[action] or -2) + 0.35 > s.elapsed then return end
 	m.lastAction[action] = s.elapsed
@@ -454,6 +469,12 @@ local function interact(p, action)
 		if s.repairOwners[patchSection] then notice(p,"A crewmate is fitting a plank here.") return end
 		m.breachRepair=Breach.newChallenge(s.difficulty,patchSection)
 		s.repairOwners[patchSection]=p
+	elseif thrusterSide then
+		if (s.fault or 0)<=0 or s.faultSide~=thrusterSide or not prompt then return end
+		local part=if prompt.Parent:IsA("Attachment") then prompt.Parent else prompt:FindFirstAncestorWhichIsA("BasePart")
+		if not part or not Exterior.brace(m) then return end
+		m.repairPart=part
+		m.breachRepair=Breach.newChallenge(s.difficulty,thrusterSide,"Thruster")
 	elseif action == "Engine" then
 		s.engine = not s.engine
 		Dive.warn(s,s.engine and "Propulsion restored." or "Propulsion offline.",2)
@@ -574,7 +595,7 @@ end
 
 local function usePrompt(prompt,p)
 	local action = validPrompt(p,prompt)
-	if action then interact(p,action) end
+	if action then interact(p,action,prompt) end
 end
 Prompts.PromptTriggered:Connect(usePrompt)
 World.bindOpticsClick(usePrompt)
@@ -595,9 +616,10 @@ local function handleCrew(s,dt)
 		if not m.alive or m.intakeId then continue end
 		local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
 		local repair=m.breachRepair
-		if repair and (not atBreach(p,repair.section) or Breach.hasExpired(repair,workspace:GetServerTimeNow())) then
+		if repair and (not atRepair(p,m,s,repair) or Breach.hasExpired(repair,workspace:GetServerTimeNow())) then
 			stopPatch(s,p,m)
-			notice(p,"Patch was interrupted. Try again with the same plank.")
+			notice(p,if repair.kind=="Thruster" then "Thruster calibration interrupted. Try again at the nozzle."
+				else "Patch was interrupted. Try again with the same plank.")
 		end
 		if m.opticsMode and not atOptics(m,root) then closeOptics(m) end
 		if m.outside then
@@ -703,18 +725,22 @@ net.Input.OnServerEvent:Connect(function(p, action, arg)
 	if action=="BreachHit" or action=="BreachCancel" then
 		local s,m=active,members[p]
 		local repair=m and m.breachRepair
-		if not s or settling or not repair or not m.alive or m.outside or m.grab then return end
-		local result=if action=="BreachCancel" then "Cancel" elseif not atBreach(p,repair.section) then "Miss"
+		if not s or settling or not repair or not m.alive or m.grab then return end
+		local thruster=repair.kind=="Thruster"
+		local result=if action=="BreachCancel" then "Cancel" elseif not atRepair(p,m,s,repair) then "Miss"
 			else Breach.hit(repair,arg,workspace:GetServerTimeNow(),p:GetNetworkPing())
 		if result=="Complete" then
-			if m.planks>0 and Dive.patchBreach(s,repair.section) then
+			if thruster then
+				if Dive.repairThruster(s,repair.section) then notice(p,"Thruster repaired. Restart propulsion at the bridge.") end
+			elseif m.planks>0 and Dive.patchBreach(s,repair.section) then
 				m.planks-=1
 				notice(p,if s.systemsOffline then "Plank fitted. Other leaks are still open." else "Hull sealed. Sonar and cameras are available.")
 			end
 			stopPatch(s,p,m)
 		elseif result=="Miss" or result=="Cancel" then
 			stopPatch(s,p,m)
-			notice(p,if result=="Miss" then "Timing missed. Your plank is still available." else "Patch cancelled.")
+			notice(p,if thruster then (if result=="Miss" then "Timing missed. Try the thruster again." else "Calibration cancelled.")
+				elseif result=="Miss" then "Timing missed. Your plank is still available." else "Patch cancelled.")
 		elseif result~="Hit" then return end
 		sync(s)
 		return
@@ -807,7 +833,6 @@ RunService.Heartbeat:Connect(function(dt)
 	if accumulator < 0.25 then return end
 	local step = accumulator
 	accumulator = 0
-	local hadSwarm = s.swarm > 0
 	if jellyBloom then jellyBloom:update(s,parasite) end
 	if knockback then
 		local kind=knockback:update(s,parasite)
@@ -817,7 +842,6 @@ RunService.Heartbeat:Connect(function(dt)
 	s.patrolSquidSide = World.squidBearing()
 	Dive.step(s,step)
 	if intercom then intercom:update(s.deepest) end
-	if s.swarm>0 and not hadSwarm then Exterior.newSwarm(s) end
 	if s.phase == "Results" then settle(s) return end
 	World.setDepth(s.depth)
 	if not s.jellyBloom then updateCrawler(s) end

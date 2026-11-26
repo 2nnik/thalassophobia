@@ -123,7 +123,7 @@ function Medical.start(playerList,difficulty,site,onStrike)
 	end
 	local locker=Instance.new("Model")
 	locker.Name,locker.Parent="Emergency locker",site.Stations
-	local cf=site.HullMotion.CFrame*CFrame.new(-8,-2.4,12)
+	local cf=site.HullMotion.CFrame*CFrame.new(-11,-2.4,20.35)
 	local case=piece(locker,"Locker",V(6,4.7,.55),cf,steel,site.HullMotion)
 	local medPrompt
 	local function update()

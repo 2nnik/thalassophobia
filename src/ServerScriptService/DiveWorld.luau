@@ -40,7 +40,11 @@ if missionText and missionText:IsA("TextLabel") and missionText.Text:find("600 M
 end
 for _,item in world:GetDescendants() do
  if item:IsA("ProximityPrompt") and item:GetAttribute("Action") then
-  prompts[item:GetAttribute("Action")] = item
+  local action=item:GetAttribute("Action")
+  prompts[action]=item
+  if action:match("^Thruster[12]$") then
+   item.ActionText,item.HoldDuration="Calibrate thruster",.18
+  end
  elseif item:IsA("ParticleEmitter") and item.Name=="Suspended sediment" then
   table.insert(snow,item)
  elseif item:IsA("PointLight") and item.Parent.Name=="Work lamp" then
@@ -313,7 +317,7 @@ function World.resetDepth()
 	driver.AssemblyLinearVelocity=Vector3.zero
 	setShipY(0)
 end
-local cameraHeads, windows, sites, joints, lighting, crawlerLamps = {}, {}, {}, {}, {}, {}
+local cameraHeads, windows, sites, joints, lighting, crawlerLamps, growthMarkers = {}, {}, {}, {}, {}, {}, {}
 local pursuerPosition
 local labels={Leviathan="ANGLER",GiantSquid="GIANT SQUID",CrackCrawler="HULL CRAWLER",Pursuer="DEEP PURSUER"}
 local runService=game:GetService("RunService")
@@ -322,13 +326,31 @@ for i=1,4 do
  local lens=cameraHeads[i].CFrame*CFrame.new(0,0,-1.2)
  cameraHeads[i]:SetAttribute("HullMount",envelope.CFrame:ToObjectSpace(lens))
  local patch=barnacles:WaitForChild("Site"..i)
+ patch.ModelStreamingMode=Enum.ModelStreamingMode.Atomic
  sites[i]={}
  for _,part in patch:GetDescendants() do
   if part:IsA("BasePart") then
    local rest=part:GetAttribute("RestTransparency")
-   table.insert(sites[i],{part=part,rest=rest or part.Transparency})
+   if rest==nil then rest=if part==patch.PrimaryPart then 1 else math.min(part.Transparency,.5) end
+   table.insert(sites[i],{part=part,rest=rest})
   end
  end
+ local target=patch.PrimaryPart
+ local tag=Instance.new("Attachment")
+ tag.Name="Growth marker"
+ tag.Position=target.CFrame:VectorToObjectSpace((target.Position-envelope.Position).Unit*.72)
+ tag.Parent=target
+ local point=Instance.new("PointLight")
+ point.Color,point.Range,point.Brightness,point.Enabled=Color3.fromRGB(255,177,107),8,.53,false
+ point.Parent=tag
+ local gui=Instance.new("BillboardGui")
+ gui.Name,gui.Size,gui.MaxDistance="Barnacle colony",UDim2.fromOffset(124,24),21
+ gui.AlwaysOnTop,gui.Enabled,gui.Parent=false,false,tag
+ local label=Instance.new("TextLabel")
+ label.Size,label.BackgroundTransparency,label.Text=UDim2.fromScale(1,1),1,"BARNACLE GROWTH"
+ label.Font,label.TextSize,label.TextColor3,label.TextStrokeTransparency=Enum.Font.Code,13,point.Color,.25
+ label.Parent=gui
+ growthMarkers[i]={point=point,gui=gui}
 end
 for i=1,3 do
  local window=world:WaitForChild("WormWindow"..i)
@@ -485,9 +507,10 @@ function World.update(state)
  showPrompt("ClearSwarm",false)
  local recovering=phase=="Bottom" and state.recoveryDeadline~=nil
  for i,parts in sites do
-  local progress=state.cleanSites and state.cleanSites[i] or 0
-  local show=active and swarm>0 and progress<3
+  local progress=state.cleanSites and state.cleanSites[i]
+  local show=active and swarm>0 and progress~=nil and progress>=0 and progress<3
   showPrompt("Clean"..i,show)
+  growthMarkers[i].point.Enabled,growthMarkers[i].gui.Enabled=show,show
   for _,item in parts do
    local faded=show and item.rest or 1
    if item.part.Transparency~=faded then item.part.Transparency=faded end

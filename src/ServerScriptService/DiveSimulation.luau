@@ -19,6 +19,7 @@ local rules = {
 }
 local names = {"shark", "squid", "crawler", "swarm"}
 local firstDepth = {shark = 500, squid = 1250, crawler = 2000, swarm = 3000}
+local patchChance={Easy=.23,Normal=.33,Hard=.43,Nightmare=.53}
 local bearings = {"FORE", "STARBOARD", "AFT", "PORT"}
 local squidSections = {1, 3, 3, 2}
 
@@ -92,6 +93,7 @@ end
 function Dive.spawn(s, name)
 	if s.jellyBloom or s.knockbackActive then return false end
 	if name == "crawler" and s.crawlerRetreat then return false end
+	if name=="swarm" and s.elapsed<(s.nextFoulingAt or 0) then return false end
 	if not firstDepth[name] or not Dive.isUnlocked(s, name) or s[name] > 0 then return false end
 	s[name] = 0.015
 	if name == "shark" then
@@ -110,7 +112,12 @@ function Dive.spawn(s, name)
 		Dive.warn(s, string.format("Worms outside section %02d. Check the window seal.",s.crawlerSection), 7)
 	elseif name == "swarm" then
 		s.foulingExposure, s.floodWarned = 0, false
-		Dive.warn(s, "Barnacles spreading across four hull faces. Check sonar before exiting.", 6)
+		s.cleanSites={-1,-1,-1,-1}
+		s.foulingCandidates={1,2,3,4}
+		local first=table.remove(s.foulingCandidates,s.rng:NextInteger(1,4))
+		s.cleanSites[first]=0
+		s.nextFoulingPatch=s.elapsed+s.rng:NextNumber(11,20)
+		Dive.warn(s, "Barnacle growth detected. Check sonar for its location.", 6)
 	end
 	return true
 end
@@ -243,9 +250,23 @@ local function contacts(s, dt, pace)
 		end
 	end
 	if s.swarm > 0 then
+		local candidates=s.foulingCandidates
+		if candidates and #candidates>0 and s.elapsed>=s.nextFoulingPatch then
+			local index=table.remove(candidates,s.rng:NextInteger(1,#candidates))
+			if s.rng:NextNumber(0,1)<(patchChance[s.difficulty] or patchChance.Normal) then
+				s.cleanSites[index]=0
+			end
+			s.nextFoulingPatch=s.elapsed+s.rng:NextNumber(11,20)
+		end
+		local remaining=0
+		for _,cuts in s.cleanSites or {} do
+			if cuts>=0 and cuts<3 then remaining+=(3-cuts)/12 end
+		end
+		if remaining==0 then
+			s.swarm,s.foulingCandidates=0,nil
+			return
+		end
 		s.swarm = math.min(1, s.swarm + dt * pace / 18)
-		local remaining = 1
-		for _,cuts in s.cleanSites or {} do remaining -= cuts/12 end
 		s.battery -= dt * remaining * s.swarm * 0.09 * s.rules.power
 		s.hull -= dt * remaining * s.swarm * 0.17 * s.rules.damage
 		s.foulingExposure = (s.foulingExposure or 0) + dt * remaining * s.swarm * pace

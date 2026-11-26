@@ -414,9 +414,11 @@ local function needleAngle(c,time)
 end
 
 local function travelStatus(s)
-	local completed=0
+	local remaining,completed=0,0
 	if s.cleanSites and s.swarm>0 then
-		for _,count in s.cleanSites do if count>=3 then completed+=1 end end
+		for _,count in s.cleanSites do
+			if count>=3 then completed+=1 elseif count>=0 then remaining+=1 end
+		end
 	end
 	local text
 	if UIS.PreferredInput==Enum.PreferredInput.Touch then
@@ -433,12 +435,13 @@ local function travelStatus(s)
 		local origin=Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 		local near,distance=nil,math.huge
 		for i,point in travelPoints do
-			if origin and point.Parent and (s.cleanSites[i] or 0)<3 then
+			local cuts=s.cleanSites[i]
+			if origin and point.Parent and cuts and cuts>=0 and cuts<3 then
 				local d=(origin.Position-point.Position).Magnitude
 				if d<distance then near,distance=point.Parent,d end
 			end
 		end
-		text=string.format("HULL   %d/4",completed)..(near and "   •   "..string.upper(near:GetAttribute("Label") or near.Name).."   "..math.round(distance).." st" or "").."\n"..text
+		text=string.format("HULL   %d/%d CLEARED",completed,completed+remaining)..(near and "   •   "..string.upper(near:GetAttribute("Label") or near.Name).."   "..math.round(distance).." st" or "").."\n"..text
 	end
 	local range,used=s.tetherRange,s.tetherUsed
 	if range and used then

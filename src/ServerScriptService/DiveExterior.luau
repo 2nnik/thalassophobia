@@ -12,10 +12,6 @@ function Exterior.init(world, remote)
 	site, feed = world, remote
 end
 
-function Exterior.newSwarm(s)
-	s.cleanSites = table.create(TOTAL_SITES, 0)
-end
-
 local function notify(p, message)
 	if p.Parent then feed:FireClient(p, "Notice", message) end
 end
@@ -42,9 +38,13 @@ local function limitVector(v)
 	return v.Magnitude > 1 and v.Unit or v
 end
 
+local function braced(m)
+	return m.cleaning or (m.breachRepair and m.breachRepair.kind=="Thruster")
+end
+
 local function setMotion(m)
 	local swim = m.swim
-	if not swim or not swim.root.Parent or m.cleaning then return end
+	if not swim or not swim.root.Parent or braced(m) then return end
 	local position = swim.root.Position
 	local offset = position - swim.anchor
 	local direction = swim.direction
@@ -67,14 +67,30 @@ local function setMotion(m)
 	swim.orientation.CFrame = CFrame.lookAt(Vector3.zero,swim.heading) * CFrame.Angles(pitch + tilt,0,0)
 end
 
-local function releaseGrip(m)
-	m.cleaning = nil
+function Exterior.releaseBrace(m)
 	local swim = m.swim
 	if not swim or not swim.root.Parent then return end
 	swim.root.Anchored = swim.wasAnchored
 	swim.direction = Vector3.zero
 	swim.velocity.VectorVelocity = Vector3.zero
 	claim(swim.root)
+end
+
+function Exterior.brace(m)
+	local swim=m.swim
+	if not swim or not swim.root.Parent then return false end
+	local root=swim.root
+	swim.direction=Vector3.zero
+	swim.velocity.VectorVelocity=Vector3.zero
+	root.AssemblyLinearVelocity=Vector3.zero
+	root.AssemblyAngularVelocity=Vector3.zero
+	root.Anchored=true
+	return true
+end
+
+local function releaseGrip(m)
+	m.cleaning=nil
+	Exterior.releaseBrace(m)
 end
 
 function Exterior.stopSwim(p,m)
@@ -173,6 +189,11 @@ local function getPatch(index)
 	return model, model and (model.PrimaryPart or model:FindFirstChild("Target"))
 end
 
+local function colonized(s,index)
+	local cuts=s.cleanSites and s.cleanSites[index]
+	return cuts~=nil and cuts>=0 and cuts<CUTS
+end
+
 local function needleAngle(c,time)
 	return (c.startAngle+c.sign*(time-c.started)/c.period*360)%360
 end
@@ -194,20 +215,15 @@ local function issueChallenge(s,m,index,label,feedback,previous,now)
 end
 
 function Exterior.beginClean(p,m,s,index)
-	if not m or not m.outside or not m.alive or not m.swim or m.cleaning or s.swarm<=0 then return false end
+	if not m or not m.outside or not m.alive or not m.swim or braced(m) or s.swarm<=0 then return false end
 	if type(index)~="number" or index%1~=0 or index<1 or index>TOTAL_SITES then return false end
-	if not s.cleanSites then Exterior.newSwarm(s) end
-	if s.cleanSites[index]>=CUTS then return false end
+	if not colonized(s,index) then return false end
 	local model,target=getPatch(index)
 	local root=m.swim.root
 	if not target or not root.Parent or (root.Position-target.Position).Magnitude>9.75 then return false end
 	local prompt=target:FindFirstChildWhichIsA("ProximityPrompt",true)
 	if not prompt or not prompt.Enabled then return false end
-	m.swim.direction=Vector3.zero
-	m.swim.velocity.VectorVelocity=Vector3.zero
-	root.AssemblyLinearVelocity=Vector3.zero
-	root.AssemblyAngularVelocity=Vector3.zero
-	root.Anchored=true
+	if not Exterior.brace(m) then return false end
 	issueChallenge(s,m,index,model:GetAttribute("Label") or model.Name)
 	return true
 end
@@ -215,7 +231,7 @@ end
 local function strike(p,m,s,arg)
 	local c=m.cleaning
 	if not c or typeof(arg)~="table" or arg.id~=c.id or not m.swim then return end
-	if s.swarm<=0 or not s.cleanSites then releaseGrip(m) return end
+	if s.swarm<=0 or not colonized(s,c.index) then releaseGrip(m) return end
 	local _,target=getPatch(c.index)
 	if not target or (m.swim.root.Position-target.Position).Magnitude>10 then releaseGrip(m) return end
 	local now=workspace:GetServerTimeNow()
@@ -237,14 +253,15 @@ local function strike(p,m,s,arg)
 		return
 	end
 	releaseGrip(m)
-	local completed=0
-	for _,cuts in s.cleanSites do if cuts>=CUTS then completed+=1 end end
-	if completed==TOTAL_SITES then
-		s.swarm=0
-		s.warning="Hull clear. All four patches removed."
+	local remaining=0
+	for i=1,TOTAL_SITES do if colonized(s,i) then remaining+=1 end end
+	if remaining==0 then
+		s.swarm,s.foulingCandidates=0,nil
+		s.nextFoulingAt=s.elapsed+18
+		s.warning="Hull clear. All growth removed."
 		s.warningUntil=s.elapsed+5
 	else
-		notify(p,c.label.." cleared. "..completed.." / "..TOTAL_SITES.." hull patches clean.")
+		notify(p,c.label.." cleared. "..remaining.." active hull patches left.")
 	end
 end
 
@@ -255,7 +272,7 @@ function Exterior.input(p,m,s,action,arg)
 		if m.cleaning then releaseGrip(m) end
 	elseif action=="CleanStrike" then
 		strike(p,m,s,arg)
-	elseif not m.cleaning and typeof(arg)=="table" and finite(arg.direction) and finite(arg.look) then
+	elseif not braced(m) and typeof(arg)=="table" and finite(arg.direction) and finite(arg.look) then
 		local swim=m.swim
 		local now=os.clock()
 		if now-swim.lastPacket >= 0.07 then
@@ -271,8 +288,8 @@ end
 function Exterior.tick(p,m,s,dt)
 	local swim=m.swim
 	if not swim or not swim.root.Parent then return end
-	if m.cleaning then
-		if s.swarm<=0 or not s.cleanSites or s.cleanSites[m.cleaning.index]>=CUTS then releaseGrip(m) end
+	if braced(m) then
+		if m.cleaning and (s.swarm<=0 or not colonized(s,m.cleaning.index)) then releaseGrip(m) end
 		return
 	end
 	if os.clock()-swim.lastInput>0.6 then swim.direction=Vector3.zero end
@@ -298,7 +315,7 @@ function Exterior.followShip(m,delta)
 	swim.anchor=anchorPosition()
 	-- A diver holding the hull travels with it. Free swimmers keep their
 	-- position in the water until they move or the lifeline pulls them.
-	if m.cleaning then
+	if braced(m) then
 		if delta.Y~=0 then swim.root.CFrame+=delta end
 		return
 	end
