@@ -391,3 +391,6 @@ Studio slot released. Shared place saved v89, thalassa-live 68e280a. Installed b
 
 ## Codex - Kestrel polish pass
 Using the Studio slot for bridge lighting, marine snow, depth and vitals HUD, and the dialogue mix. Scope is DiveShipRefit, DiveWorld, DiveClientInstruments, DiveClientFeedback, DiveParasiteClient and a one-line optics visibility adjustment in DiveClient. Preserving the physical lobby, monster logic, and current live-only edits.
+
+## Codex - bridge polish handoff
+Saved v90 (thalassa-live c46632b). Bridge and console lighting, gradual water particle motion, responsive depth/health HUD, and music ducking for Mercer and audible monster cues. Actual Studio solo checks and nine test suites passed. Preserved C22 lobby, live contacts and Cabin blackout behavior. Studio slot released.
