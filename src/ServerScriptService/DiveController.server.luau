@@ -20,10 +20,13 @@ local Parasite=require(script.Parent:WaitForChild("DiveParasite"))
 local Medical=require(script.Parent:WaitForChild("DiveMedical"))
 local Intercom=require(script.Parent:WaitForChild("DiveIntercom"))
 local JellyBloom=require(script.Parent:WaitForChild("DiveJellyBloom"))
+local Knockback=require(script.Parent:WaitForChild("DiveKnockback"))
+local KnockbackRig=require(script.Parent:WaitForChild("DiveKnockbackRig"))
 local parasiteNet=Instance.new("RemoteEvent")
 parasiteNet.Name,parasiteNet.Parent="Parasite",net
 local parasite,medical,intercom
 local jellyBloom
+local knockback,knockbackRig
 local members, receipts, throttles, held = {}, {}, {}, {}
 local sceneIdle = Dive.new("Normal", 1, {})
 sceneIdle.phase, sceneIdle.engine = "Lobby", false
@@ -158,6 +161,7 @@ local function sendSnapshot(p, m, s)
 	out.alive, out.outside, out.maxOxygen = m.alive, m.outside, m.maxOxygen
 	out.intakeId = m.intakeId
 	out.jellyBloom=s.jellyBloom
+	out.knockbackSonar=s.knockbackSonar
 	if m.intakeId then
 		out.skipVotes,out.skipNeeded=intakeVotes()
 		out.skipVoted=m.skipIntake==true
@@ -196,7 +200,11 @@ local function sync(s)
 		end
 	end
 	World.update(s)
-	Sensors.pulse(s,members)
+	if Sensors.pulse(s,members) and knockback then
+		local kind,count=knockback:pulse(s)
+		if kind then knockbackRig:cue(kind,count) end
+		if kind=="Strike" then World.update(s) end
+	end
 	for p,m in members do
 		if p.Parent == Players then sendSnapshot(p,m,s) end
 	end
@@ -228,6 +236,7 @@ local function start(party, difficulty)
 	members = crew
 	active = Dive.new(difficulty, #party, {})
 	jellyBloom=JellyBloom.new()
+	knockback,knockbackRig=Knockback.new(),KnockbackRig.start(site)
 	active.engine=false
 	active.warning,active.warningUntil="Start propulsion at the engine console.",12
 	intercom=Intercom.start(site)
@@ -297,6 +306,7 @@ settle = function(s)
 	if active ~= s or settling then return end
 	settling=true
 	jellyBloom=nil
+	if knockbackRig then knockbackRig:destroy(); knockbackRig,knockback=nil,nil end
 	if intercom then intercom:destroy(); intercom=nil end
 	if parasite then parasite:destroy(); parasite=nil end
 	if medical then medical:destroy(); medical=nil end
@@ -498,10 +508,14 @@ local function interact(p, action)
 		if not Dive.pickup(s) then return end
 		s.artifactCarrier=p
 	elseif action == "Sonar" then
-		if s.systemsOffline then return end
+		if s.systemsOffline or s.knockbackSonar then return end
 		s.sonarOn = not s.sonarOn
 		s.echoes = nil
 		s.nextPing = 0
+	elseif action == "KnockbackBreaker" and knockback then
+		local kind=knockback:breaker(s)
+		if not kind then return end
+		knockbackRig:cue(kind)
 	else
 		return
 	end
@@ -786,7 +800,8 @@ RunService.Heartbeat:Connect(function(dt)
 		if waking and intercom then intercom:wake() end
 	end
 	carryCrew(World.travel(math.min(0.5,dt)))
-	if not s.jellyBloom and parasite and medical then
+	if knockbackRig then knockbackRig:move() end
+	if not s.jellyBloom and not s.knockbackActive and parasite and medical then
 		parasite:step(math.min(dt,.1),s.depth,exposed,living,function(p) medical:wound(p) end)
 		if active~=s or settling then return end
 	end
@@ -796,6 +811,11 @@ RunService.Heartbeat:Connect(function(dt)
 	accumulator = 0
 	local hadSwarm = s.swarm > 0
 	if jellyBloom then jellyBloom:update(s,parasite) end
+	if knockback then
+		local kind=knockback:update(s,parasite)
+		if kind then knockbackRig:cue(kind) end
+		if kind=="FirstRam" or kind=="Ram" then Dive.knockbackRam(s,kind=="FirstRam") end
+	end
 	s.patrolSquidSide = World.squidBearing()
 	Dive.step(s,step)
 	if intercom then intercom:update(s.deepest) end

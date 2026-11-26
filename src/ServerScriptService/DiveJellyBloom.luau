@@ -25,7 +25,7 @@ function Bloom:update(s,parasite)
 		self.start=nil
 		return
 	end
-	if not s.engine or s.boarded then return end
+	if not s.engine or s.boarded or s.knockbackActive then return end
 	for _,name in threats do
 		if (s[name] or 0)>0 then return end
 	end

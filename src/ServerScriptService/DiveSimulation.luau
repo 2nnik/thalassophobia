@@ -90,7 +90,7 @@ function Dive.isUnlocked(s, name)
 end
 
 function Dive.spawn(s, name)
-	if s.jellyBloom then return false end
+	if s.jellyBloom or s.knockbackActive then return false end
 	if name == "crawler" and s.crawlerRetreat then return false end
 	if not firstDepth[name] or not Dive.isUnlocked(s, name) or s[name] > 0 then return false end
 	s[name] = 0.015
@@ -130,6 +130,16 @@ local function drawContact(s)
 			Dive.spawn(s, table.remove(s.bag, i))
 			return
 		end
+	end
+end
+
+function Dive.knockbackRam(s,first)
+	if s.jellyBloom or s.knockbackSonar~="Damaged" then return end
+	if first then
+		crack(s)
+	else
+		s.hull=math.max(0,s.hull-9*s.rules.damage)
+		if s.hull<=0 then Dive.endRun(s,false,"Repeated impacts collapsed the pressure hull.","Flood") end
 	end
 end
 
@@ -299,14 +309,14 @@ function Dive.step(s, dt)
 	end
 	local pace = s.rules.pace * (0.72 + 0.095 * (s.crewCount - 1)) * (ascent and 1.27 or 1)
 	local depthRatio = s.depth / TARGET_DEPTH
-	if s.jellyBloom then
+	if s.jellyBloom or s.knockbackActive then
 		s.nextThreat+=dt
 		s.nextInfestation+=dt
 	elseif s.elapsed >= s.nextThreat then
 		drawContact(s)
 		s.nextThreat = nextContact(s, pace)
 	end
-	if not s.jellyBloom and s.elapsed >= s.nextInfestation then
+	if not s.jellyBloom and not s.knockbackActive and s.elapsed >= s.nextInfestation then
 		local first = if s.rng:NextInteger(1, 2) == 1 then "crawler" else "swarm"
 		if not Dive.spawn(s, first) then Dive.spawn(s, if first == "crawler" then "swarm" else "crawler") end
 		s.nextInfestation = s.elapsed + s.rng:NextNumber(8, 12) / (1 + depthRatio * .25)

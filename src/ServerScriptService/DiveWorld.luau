@@ -15,6 +15,8 @@ local head = ocean.SearchlightHead
 local spot = head["Search beam"]
 local scatter = head["Particle scatter"]
 local screen = stations.SONAR.SonarScreen.Face.Legend
+local sonarGlass=stations.SONAR.SonarScreen
+local sonarColor=sonarGlass.Color
 local engineLabel = stations.ENGINE.EngineStatus.Face.Legend
 local engineLever = stations.ENGINE.EngineLever
 local lampSwitch = stations.OPTICS.Light
@@ -456,7 +458,7 @@ function World.update(state)
  for _,id in {"Engine","Light","Extinguisher","Airlock","Return","Planks"} do showPrompt(id,active) end
  showPrompt("AimLeft",false)
  showPrompt("AimRight",false)
- showPrompt("Sonar",active and not state.systemsOffline)
+ showPrompt("Sonar",active and not state.systemsOffline and not state.knockbackSonar)
  showPrompt("Camera",active and not state.systemsOffline)
  showPrompt("ClearSwarm",false)
  local recovering=phase=="Bottom" and state.recoveryDeadline~=nil
@@ -503,8 +505,9 @@ function World.update(state)
  local message="CLEAR"
  if shark>0 then message="LARGE WAKE" elseif squid>0 then message="MASS / "..bearings[sqSide] elseif crawler>0 then message="HULL BREACH" elseif swarm>0 then message="HULL FOULING" elseif pursuer>.12 then message="WAKE BELOW" end
  if state.systemsOffline then message="OFFLINE / HULL BREACHED"
- elseif not state.sonarOn then message="PASSIVE" elseif message=="CLEAR" then message="PELAGIC RETURNS" end
- screen.Text=string.format("%03d M    %02d%%\n%s   •   %s",math.floor(depth+.5),math.max(0,math.floor(state.battery or 100)),bearings[aim],message)
+ elseif not state.sonarOn then message="PASSIVE" end
+ sonarGlass.Color=if state.knockbackSonar then Color3.fromRGB(2,5,6) else sonarColor
+ screen.Text=if state.knockbackSonar then "" else string.format("%03d M    %02d%%\n%s   •   %s",math.floor(depth+.5),math.max(0,math.floor(state.battery or 100)),bearings[aim],message)
  engineLabel.Text=state.engine and "• RUN" or "○ STOP"
  engineLabel.TextColor3=state.engine and meterColor or amber
  engineLever.Color=state.engine and amber or offColor

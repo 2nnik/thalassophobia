@@ -14,7 +14,7 @@ local targets = {
 	{"Pursuer", "P", "PURSUER", "pursuer"},
 }
 function Sensors.pulse(s, crew)
-	if not s.sonarOn then s.echoes=nil return end
+	if not s.sonarOn or s.knockbackSonar then s.echoes=nil return end
 	if s.echoes and s.elapsed < s.nextPing then return end
 	s.nextPing = s.elapsed + INTERVAL
 	local center = site.ShipEnvelope.Position
@@ -47,6 +47,7 @@ function Sensors.pulse(s, crew)
 	for i=1,#rocks,3 do echo(rocks[i].Position,"terrain","","BASALT","") end
 	s.echoes=echoes
 	s.pingAt=workspace:GetServerTimeNow()
+	return true
 end
 Sensors.range = RANGE
 return Sensors
