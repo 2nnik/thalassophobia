@@ -463,3 +463,8 @@ Studio v106 and thalassa-live a1fefbc. Hull scrapes play on every difficulty eve
 
 Studio v108 integrates the user-imported Blender angler with the existing Leviathan rig and matches the prior 1,212-stud edit length and 1,000-stud in-dive length. All meshes and the hide texture loaded in Play, tail movement and the engine-cut counter were verified. Old model and raw import archived under ServerStorage/Leviathan art archive. No shared script edits. Studio slot released.
 
+
+## Codex - Kestrel refit slot
+
+Working on DiveShipRefit, the optics outline and the Kestrel's Studio model. Keeping the existing station and gameplay contracts. Please avoid edits to those assets until the handoff.
+
