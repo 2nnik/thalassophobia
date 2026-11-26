@@ -7,7 +7,7 @@ local shell = Color3.fromRGB(48,84,83)
 local underside = Color3.fromRGB(165,148,103)
 local glow = Color3.fromRGB(102,218,190)
 local clips = {Latch="115590488647349", Emergence="135649605245917", Move="135813245187045"}
-local modelScale = {Limpet=.008, Skater=.010}
+local modelScale = {Limpet=.008, Skater=.0065}
 local latchOffset = CFrame.new(0,-1.63,-.31)
 
 local function play(model, name, looped)
@@ -45,6 +45,9 @@ local function creature(parent,adult)
 	if template then
 		local rig=template:Clone()
 		rig:ScaleTo(modelScale[kind])
+		for _,part in rig:GetDescendants() do
+			if part:IsA("BasePart") then part.Anchored=part==rig.PrimaryPart end
+		end
 		rig.Parent=parent
 		return rig
 	end
@@ -161,8 +164,18 @@ function Parasite:step(dt,depth,isOutside,isAlive,wound)
 				model:PivotTo(root.CFrame*CFrame.new(0,-.05,-.25))
 				local track=play(model,"Emergence",false)
 				if track then track:AdjustSpeed(1.25) end
-				model:ScaleTo(if track then .002 else .28)
-				self.hunts[model]={host=p,born=now,health=3,bite=now+9,track=track}
+				local hidden={}
+				if track then
+					for _,part in model:GetDescendants() do
+						if part:IsA("MeshPart") then
+							hidden[part]={part.Transparency,part.CanQuery}
+							part.Transparency,part.CanQuery=1,false
+						end
+					end
+				else
+					model:ScaleTo(.28)
+				end
+				self.hunts[model]={host=p,born=now,health=3,bite=now+9,track=track,hidden=hidden}
 				self.remote:FireClient(p,"Emergence",now)
 				if wound then wound(p) end
 			end
@@ -177,27 +190,33 @@ function Parasite:step(dt,depth,isOutside,isAlive,wound)
 	for model,h in self.hunts do
 		local hostRoot=body(h.host)
 		local age=now-h.born
+		if age>=1.10 and h.hidden then
+			for part,original in h.hidden do part.Transparency,part.CanQuery=original[1],original[2] end
+			h.hidden=nil
+		end
 		if age<4 and hostRoot then
-			local t=math.min(1,age/1.6)
 			if h.track then
-				model:ScaleTo(.002+.004*t)
-				model:PivotTo(hostRoot.CFrame*CFrame.new(0,-.12,-.3-t*.74))
+				model:PivotTo(hostRoot.CFrame*CFrame.new(0,-.28,-.53))
 			else
+				local t=math.min(1,age/1.6)
 				model:ScaleTo(.28+.7*t)
 				model:PivotTo(hostRoot.CFrame*CFrame.new(0,-.1,-.25-t*.95)*CFrame.Angles(-.45*t,.17*math.sin(age*12),0))
 			end
 		else
 			if not h.loose then
 				if h.track then
+					local head=model:FindFirstChild("Segment_00",true)
+					local pose=model:GetPivot()
+					if head then model:PivotTo(CFrame.new(head.TransformedWorldCFrame.Position)*pose.Rotation) end
 					h.track:Stop(.16)
-					model:ScaleTo(modelScale.Skater)
 					h.track=play(model,"Move",true)
 				else
 					model:ScaleTo(1.9)
 				end
 				h.loose=true
 			end
-			local pos=model:GetPivot().Position
+			local pose=model:GetPivot()
+			local pos=pose.Position
 			local target,hum,dist=nil,nil,math.huge
 			for p in self.crew do
 				local r,human=body(p)
@@ -207,12 +226,15 @@ function Parasite:step(dt,depth,isOutside,isAlive,wound)
 				end
 			end
 			if target then
-				local aim=target.Position+Vector3.new(0,-1.3,0)
-				local delta=aim-pos
-				if delta.Magnitude>.1 then
-					local nextPos=pos+delta.Unit*math.min(dt*8,delta.Magnitude*.85)
-					model:PivotTo(CFrame.lookAt(nextPos,aim)*CFrame.Angles(0,0,.09*math.sin(age*9)))
+				local delta=target.Position-pos
+				local flat=Vector3.new(delta.X,0,delta.Z)
+				local nextPos=pos+Vector3.new(0,math.clamp(delta.Y,-dt*2,dt*2),0)
+				local facing=pose.Rotation
+				if flat.Magnitude>2.7 then
+					nextPos+=flat.Unit*math.min(dt*7,flat.Magnitude-2.7)
+					facing=facing:Lerp(CFrame.lookAt(Vector3.zero,flat),1-math.exp(-dt*5))
 				end
+				model:PivotTo(CFrame.new(nextPos)*facing)
 				if dist<4 and now>=h.bite then hum:TakeDamage(12); h.bite=now+3 end
 			end
 		end

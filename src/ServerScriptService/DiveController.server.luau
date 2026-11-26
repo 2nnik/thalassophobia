@@ -750,6 +750,10 @@ RunService.Heartbeat:Connect(function(dt)
 		if s.boarding then accumulator=0 return end
 	end
 	carryCrew(World.travel(math.min(0.5,dt)))
+	if parasite and medical then
+		parasite:step(math.min(dt,.1),s.depth,exposed,living,function(p) medical:wound(p) end)
+		if active~=s or settling then return end
+	end
 	accumulator += math.min(0.5,dt)
 	if accumulator < 0.25 then return end
 	local step = accumulator
@@ -762,8 +766,5 @@ RunService.Heartbeat:Connect(function(dt)
 	World.setDepth(s.depth)
 	updateCrawler(s)
 	handleCrew(s,step)
-	if active==s and parasite and medical then
-		parasite:step(step,s.depth,exposed,living,function(p) medical:wound(p) end)
-	end
 	if active == s then sync(s) end
 end)
